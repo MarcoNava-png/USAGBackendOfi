@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  api:
+    image: usag-api:latest
+    build:
+      context: ./WebApplication2
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection}
+      - Jwt__Key=${Jwt__Key}
+      - Jwt__Issuer=${Jwt__Issuer:-https://saciusag.com.mx}
+      - Jwt__Audience=${Jwt__Audience:-saciusag-api}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - Azure__AzureBlobStorageConnectionString=${Azure__AzureBlobStorageConnectionString:-}
+      - FrontendUrl=${FrontendUrl}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - usag-network
+
+  # Opcional: SQL Server en Docker (para desarrollo/testing)
+  # mssql:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   environment:
+  #     - ACCEPT_EULA=Y
+  #     - SA_PASSWORD=${SA_PASSWORD}
+  #   ports:
+  #     - "1433:1433"
+  #   volumes:
+  #     - mssql-data:/var/opt/mssql
+  #   networks:
+  #     - usag-network
+
+networks:
+  usag-network:
+    driver: bridge
+
+# volumes:
+#   mssql-data:
