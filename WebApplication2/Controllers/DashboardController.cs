@@ -36,6 +36,12 @@ namespace WebApplication2.Controllers
                     return BadRequest(new { message = "El usuario no tiene un rol asignado" });
                 }
 
+                // Si tiene superadmin y también admin, usar admin para el dashboard
+                if (roleClaim == "superadmin" && User.IsInRole("admin"))
+                {
+                    roleClaim = "admin";
+                }
+
                 var dashboard = await _dashboardService.GetDashboardAsync(userId, roleClaim);
 
                 var response = new Response<DashboardResponseDto>
