@@ -64,9 +64,10 @@ namespace WebApplication2.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            var role = roles.FirstOrDefault() ?? "Usuario";
+            // Priorizar admin como rol principal para el frontend
+            var role = roles.Contains("admin") ? "admin" : roles.FirstOrDefault() ?? "Usuario";
 
-            var userLoginTokenDto = GetUserLoginToken(user, role);
+            var userLoginTokenDto = GetUserLoginToken(user, role, roles.ToList());
 
             return userLoginTokenDto;
 
@@ -233,20 +234,25 @@ namespace WebApplication2.Services
                 ?? throw new Exception("Usuario no encontrado.");
 
             var roles = await _userManager.GetRolesAsync(user);
-            var role = roles.FirstOrDefault() ?? "alumno";
+            var role = roles.Contains("admin") ? "admin" : roles.FirstOrDefault() ?? "alumno";
 
-            return GetUserLoginToken(user, role);
+            return GetUserLoginToken(user, role, roles.ToList());
         }
 
-        private UserLoginInfoDto GetUserLoginToken(ApplicationUser user, string role)
+        private UserLoginInfoDto GetUserLoginToken(ApplicationUser user, string primaryRole, List<string> allRoles)
         {
             var claims = new List<Claim>
             {
                 new Claim("userId", user.Id),
                 new Claim(ClaimTypes.Name, $"{user.Nombres} {user.Apellidos}".Trim()),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Role, role)
             };
+
+            // Agregar TODOS los roles al JWT
+            foreach (var r in allRoles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, r));
+            }
 
             var expiration = DateTime.UtcNow.AddHours(1);
 
@@ -260,7 +266,7 @@ namespace WebApplication2.Services
                 Apellidos = user.Apellidos,
                 Telefono = user.Telefono,
                 Biografia = user.Biografia,
-                Role = role,
+                Role = primaryRole,
                 Token = token,
                 Expiration = expiration,
                 PhotoUrl = user.PhotoUrl,
