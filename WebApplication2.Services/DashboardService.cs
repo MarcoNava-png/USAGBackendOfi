@@ -24,6 +24,7 @@ namespace WebApplication2.Services
 
             response.Data = role.ToLower() switch
             {
+                Rol.SUPER_ADMIN => await GetAdminDashboardAsync(),
                 Rol.ADMIN => await GetAdminDashboardAsync(),
                 Rol.DIRECTOR => await GetDirectorDashboardAsync(),
                 Rol.FINANZAS => await GetFinanzasDashboardAsync(),
