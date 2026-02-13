@@ -178,6 +178,31 @@ namespace WebApplication2.Services
             return await _userManager.GetRolesAsync(user);
         }
 
+        public async Task UpdateUserEmailAsync(string userId, string newEmail)
+        {
+            var user = await _userManager.FindByIdAsync(userId)
+                ?? throw new Exception("Usuario no encontrado.");
+
+            // Verificar que el nuevo email no esté en uso
+            var existingUser = await _userManager.FindByEmailAsync(newEmail);
+            if (existingUser != null && existingUser.Id != userId)
+            {
+                throw new Exception("El correo electrónico ya está en uso por otro usuario.");
+            }
+
+            user.Email = newEmail;
+            user.NormalizedEmail = newEmail.ToUpperInvariant();
+            user.UserName = newEmail;
+            user.NormalizedUserName = newEmail.ToUpperInvariant();
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(" ", result.Errors.Select(e => e.Description));
+                throw new Exception($"Error al actualizar email: {errors}");
+            }
+        }
+
         public async Task UpdateUserRolesAsync(string userId, List<string> newRoles)
         {
             var user = await _userManager.FindByIdAsync(userId)

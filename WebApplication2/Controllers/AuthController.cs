@@ -307,6 +307,13 @@ namespace WebApplication2
                 existingUser.Telefono = request.Telefono;
                 existingUser.Biografia = request.Biografia;
 
+                // Actualizar email si cambió
+                if (!string.IsNullOrEmpty(request.Email) && request.Email != existingUser.Email)
+                {
+                    await _authService.UpdateUserEmailAsync(id, request.Email);
+                    existingUser.Email = request.Email;
+                }
+
                 var updatedUser = await _authService.UpdateUserProfile(existingUser);
 
                 if (request.Roles != null && request.Roles.Count > 0)
