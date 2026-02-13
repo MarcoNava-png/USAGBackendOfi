@@ -19,12 +19,17 @@ namespace WebApplication2.Data.Seed
                 {
                     Console.WriteLine("=== INICIANDO DbInitializer ===");
                     var context = service.GetRequiredService<ApplicationDbContext>();
+                    var masterContext = service.GetRequiredService<MasterDbContext>();
                     var userManager = service.GetRequiredService<UserManager<ApplicationUser>>();
                     var roleManager = service.GetRequiredService<RoleManager<IdentityRole>>();
                     var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 
                     var isDevelopment = environment == Environments.Development;
                     Console.WriteLine($"Ambiente: {environment}, IsDevelopment: {isDevelopment}");
+
+                    Console.WriteLine("Ejecutando migraciones Master...");
+                    masterContext.Database.Migrate();
+                    Console.WriteLine("Migraciones Master completadas.");
 
                     Console.WriteLine("Ejecutando migraciones...");
                     context.Database.Migrate();

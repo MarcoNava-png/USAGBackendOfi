@@ -17,6 +17,9 @@ ENV ASPNETCORE_URLS=http://+:8080
 # Copiar archivos publicados
 COPY --from=build --chown=appuser:appuser /app/publish .
 
+# Crear directorio de uploads con permisos para appuser
+RUN mkdir -p /app/uploads && chown appuser:appuser /app/uploads
+
 # Cambiar a usuario no-root
 USER appuser
 

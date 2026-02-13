@@ -29,7 +29,25 @@ namespace WebApplication2.Controllers
             _mapper = mapper;
         }
 
-        [HttpGet("{campusId}")]
+        [HttpGet]
+        public async Task<ActionResult<PagedResult<ProfesorDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
+        {
+            var pagination = await _profesorService.GetAllProfesores(page, pageSize);
+
+            var profesoresDto = _mapper.Map<IEnumerable<ProfesorDto>>(pagination.Items);
+
+            var response = new PagedResult<ProfesorDto>
+            {
+                TotalItems = pagination.TotalItems,
+                Items = [.. profesoresDto],
+                PageNumber = pagination.PageNumber,
+                PageSize = pagination.PageSize
+            };
+
+            return Ok(response);
+        }
+
+        [HttpGet("{campusId:int}")]
         public async Task<ActionResult<PagedResult<ProfesorDto>>> Get(int campusId, [FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
         {
             var pagination = await _profesorService.GetProfesores(campusId, page, pageSize);

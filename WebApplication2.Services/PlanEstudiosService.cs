@@ -83,6 +83,15 @@ namespace WebApplication2.Services
                 throw new Exception("El nivel educativo seleccionado no existe");
             }
 
+            var duplicado = await _dbContext.PlanEstudios.AnyAsync(p =>
+                p.ClavePlanEstudios == planEstudios.ClavePlanEstudios &&
+                p.IdCampus == planEstudios.IdCampus &&
+                p.Status == Core.Enums.StatusEnum.Active);
+            if (duplicado)
+            {
+                throw new Exception($"Ya existe un plan de estudios con la clave '{planEstudios.ClavePlanEstudios}' en este campus");
+            }
+
             planEstudios.Status = Core.Enums.StatusEnum.Active;
 
             await _dbContext.PlanEstudios.AddAsync(planEstudios);

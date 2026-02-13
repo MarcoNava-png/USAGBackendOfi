@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using WebApplication2.Configuration.Constants;
 using WebApplication2.Core.DTOs.Importacion;
 using WebApplication2.Core.Requests.Importacion;
 using WebApplication2.Core.Responses.Importacion;
@@ -15,11 +16,13 @@ namespace WebApplication2.Services
     {
         private readonly ApplicationDbContext _db;
         private readonly IMatriculaService _matriculaService;
+        private readonly IAuthService _authService;
 
-        public ImportacionService(ApplicationDbContext db, IMatriculaService matriculaService)
+        public ImportacionService(ApplicationDbContext db, IMatriculaService matriculaService, IAuthService authService)
         {
             _db = db;
             _matriculaService = matriculaService;
+            _authService = authService;
         }
 
         public async Task<List<string>> GetCampusDisponiblesAsync()
@@ -754,10 +757,10 @@ namespace WebApplication2.Services
                 { "4to", 4 }, { "4to.", 4 }, { "cuarto", 4 }, { "4", 4 },
                 { "5to", 5 }, { "5to.", 5 }, { "quinto", 5 }, { "5", 5 },
                 { "6to", 6 }, { "6to.", 6 }, { "sexto", 6 }, { "6", 6 },
-                { "7mo", 7 }, { "7mo.", 7 }, { "septimo", 7 }, { "septimo", 7 }, { "7", 7 },
+                { "7mo", 7 }, { "7mo.", 7 }, { "septimo", 7 }, { "séptimo", 7 }, { "7", 7 },
                 { "8vo", 8 }, { "8vo.", 8 }, { "octavo", 8 }, { "8", 8 },
                 { "9no", 9 }, { "9no.", 9 }, { "noveno", 9 }, { "9", 9 },
-                { "10mo", 10 }, { "10mo.", 10 }, { "decimo", 10 }, { "decimo", 10 }, { "10", 10 },
+                { "10mo", 10 }, { "10mo.", 10 }, { "decimo", 10 }, { "décimo", 10 }, { "10", 10 },
                 { "11vo", 11 }, { "11vo.", 11 }, { "11", 11 },
                 { "12vo", 12 }, { "12vo.", 12 }, { "12", 12 }
             };
@@ -1373,14 +1376,20 @@ namespace WebApplication2.Services
         {
             var response = new ImportarMateriasResponse();
 
+            Console.WriteLine($"=== ImportarMateriasAsync: Recibidas {request.Materias?.Count ?? 0} materias ===");
+
             var campusDict = await _db.Campus
                 .Where(c => c.Activo)
                 .ToDictionaryAsync(c => c.ClaveCampus.ToLower(), c => c);
+
+            Console.WriteLine($"Campus disponibles: {string.Join(", ", campusDict.Keys)}");
 
             var planes = await _db.PlanEstudios
                 .Include(p => p.IdCampusNavigation)
                 .Where(p => p.Status == Core.Enums.StatusEnum.Active)
                 .ToListAsync();
+
+            Console.WriteLine($"Planes disponibles: {string.Join(", ", planes.Select(p => $"{p.ClavePlanEstudios}({p.NombrePlanEstudios})-Campus:{p.IdCampus}"))}");
 
             var materiasDict = await _db.Materia
                 .Where(m => m.Status == Core.Enums.StatusEnum.Active)
@@ -1389,6 +1398,7 @@ namespace WebApplication2.Services
             int fila = 1;
             foreach (var dto in request.Materias)
             {
+                Console.WriteLine($"[Fila {fila}] Clave='{dto.Clave}', Nombre='{dto.Nombre}', Plan='{dto.PlanEstudios}', Campus='{dto.ClaveCampus}', Cuatrimestre='{dto.Cuatrimestre}'");
                 var cuatrimestre = ParseCuatrimestre(dto.Cuatrimestre);
 
                 var resultado = new ResultadoImportacionMateria
@@ -1518,12 +1528,14 @@ namespace WebApplication2.Services
                 }
                 catch (DbUpdateException dbEx)
                 {
+                    Console.WriteLine($"[Fila {resultado.Fila}] ERROR DB: {dbEx.InnerException?.Message ?? dbEx.Message}");
                     resultado.Exito = false;
                     resultado.Mensaje = dbEx.InnerException?.Message ?? dbEx.Message;
                     response.Fallidos++;
                 }
                 catch (Exception ex)
                 {
+                    Console.WriteLine($"[Fila {resultado.Fila}] ERROR: {ex.Message}");
                     resultado.Exito = false;
                     resultado.Mensaje = ex.Message;
                     response.Fallidos++;
@@ -1533,6 +1545,7 @@ namespace WebApplication2.Services
                 response.TotalProcesados++;
             }
 
+            Console.WriteLine($"=== RESULTADO IMPORTACION: Total={response.TotalProcesados}, Creadas={response.MateriasCreadas}, Actualizadas={response.MateriasActualizadas}, Relaciones={response.RelacionesCreadas}, Fallidos={response.Fallidos} ===");
             return response;
         }
 
@@ -1678,6 +1691,347 @@ namespace WebApplication2.Services
             var valueLower = value.Trim().ToLower();
             return valueLower == "si" || valueLower == "si" || valueLower == "yes" ||
                    valueLower == "1" || valueLower == "true" || valueLower == "verdadero";
+        }
+
+        public async Task<ImportarProfesoresResponse> ImportarProfesoresAsync(ImportarProfesoresRequest request)
+        {
+            var response = new ImportarProfesoresResponse();
+
+            var generosDict = await _db.Genero
+                .ToDictionaryAsync(g => g.DescGenero.ToLower(), g => g.IdGenero);
+
+            var noEmpleadosExistentes = await _db.Profesor
+                .Where(p => p.Status == Core.Enums.StatusEnum.Active)
+                .Select(p => p.NoEmpleado.ToLower())
+                .ToListAsync();
+
+            var emailsExistentes = await _db.Profesor
+                .Where(p => p.Status == Core.Enums.StatusEnum.Active && p.EmailInstitucional != null)
+                .Select(p => p.EmailInstitucional!.ToLower())
+                .ToListAsync();
+
+            int fila = 1;
+            foreach (var dto in request.Profesores)
+            {
+                var nombreLimpio = LimpiarTituloNombre(dto.Nombre);
+
+                var resultado = new ResultadoImportacionProfesor
+                {
+                    Fila = fila++,
+                    NoEmpleado = dto.NoEmpleado,
+                    NombreCompleto = $"{nombreLimpio} {dto.ApellidoPaterno} {dto.ApellidoMaterno}".Trim()
+                };
+
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(dto.NoEmpleado))
+                        throw new Exception("La clave/numero de empleado es requerida");
+
+                    if (string.IsNullOrWhiteSpace(dto.Nombre))
+                        throw new Exception("El nombre es requerido");
+
+                    if (string.IsNullOrWhiteSpace(dto.ApellidoPaterno))
+                        throw new Exception("El apellido paterno es requerido");
+
+                    var noEmpleadoNorm = dto.NoEmpleado.Trim();
+
+                    // Determinar email: usar el del Excel si existe
+                    var emailNorm = !string.IsNullOrWhiteSpace(dto.Email)
+                        ? dto.Email.Trim().ToLower()
+                        : null;
+
+                    // Verificar si el profesor ya existe por NoEmpleado
+                    var profesorExistente = await _db.Profesor
+                        .Include(p => p.IdPersonaNavigation)
+                        .FirstOrDefaultAsync(p => p.NoEmpleado.ToLower() == noEmpleadoNorm.ToLower()
+                            && p.Status == Core.Enums.StatusEnum.Active);
+
+                    if (profesorExistente != null)
+                    {
+                        if (request.ActualizarExistentes)
+                        {
+                            await ActualizarProfesorImportadoAsync(profesorExistente, dto, generosDict, nombreLimpio, resultado);
+                            resultado.IdProfesor = profesorExistente.IdProfesor;
+                            resultado.Exito = true;
+                            resultado.Mensaje = "Profesor actualizado";
+                            response.Actualizados++;
+                        }
+                        else
+                        {
+                            resultado.Exito = false;
+                            resultado.Mensaje = "Profesor ya existe (usar opcion de actualizar)";
+                            response.Fallidos++;
+                        }
+                    }
+                    else
+                    {
+                        // Verificar email duplicado si se proporciono
+                        if (emailNorm != null && emailsExistentes.Contains(emailNorm))
+                        {
+                            resultado.Advertencias.Add($"El email '{dto.Email}' ya esta registrado, se creara sin cuenta de usuario");
+                        }
+
+                        var nuevoProfesor = await CrearProfesorImportadoAsync(dto, generosDict, nombreLimpio, resultado);
+                        resultado.IdProfesor = nuevoProfesor.IdProfesor;
+                        resultado.Exito = true;
+                        resultado.Mensaje = "Profesor creado exitosamente";
+                        response.Exitosos++;
+
+                        // Agregar a listas de tracking para evitar duplicados en el mismo lote
+                        noEmpleadosExistentes.Add(noEmpleadoNorm.ToLower());
+                        if (emailNorm != null)
+                            emailsExistentes.Add(emailNorm);
+                    }
+
+                    // Advertencia sobre cedula profesional (campo informativo, no se guarda en modelo actual)
+                    if (!string.IsNullOrWhiteSpace(dto.CedulaProfesional))
+                        resultado.Advertencias.Add($"Cedula profesional: {dto.CedulaProfesional} (informativo, no se almacena en el modelo actual)");
+
+                    // Advertencia sobre domicilio ambiguo
+                    if (!string.IsNullOrWhiteSpace(dto.Domicilio))
+                        resultado.Advertencias.Add($"Domicilio guardado como texto libre: {dto.Domicilio}");
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    resultado.Exito = false;
+                    resultado.Mensaje = dbEx.InnerException?.Message ?? dbEx.Message;
+                    response.Fallidos++;
+                }
+                catch (Exception ex)
+                {
+                    resultado.Exito = false;
+                    resultado.Mensaje = ex.InnerException?.Message ?? ex.Message;
+                    response.Fallidos++;
+                }
+
+                response.Resultados.Add(resultado);
+                response.TotalProcesados++;
+            }
+
+            return response;
+        }
+
+        private async Task<Profesor> CrearProfesorImportadoAsync(
+            ImportarProfesorDto dto,
+            Dictionary<string, int> generosDict,
+            string nombreLimpio,
+            ResultadoImportacionProfesor resultado)
+        {
+            var curpNormalizado = string.IsNullOrWhiteSpace(dto.Curp) ? null : dto.Curp.Trim().ToUpper();
+            var rfcNormalizado = string.IsNullOrWhiteSpace(dto.Rfc) ? null : dto.Rfc.Trim().ToUpper();
+            var emailNorm = !string.IsNullOrWhiteSpace(dto.Email) ? dto.Email.Trim().ToLower() : null;
+
+            if (!string.IsNullOrEmpty(curpNormalizado))
+            {
+                var curpExiste = await _db.Persona.AnyAsync(p => p.Curp == curpNormalizado);
+                if (curpExiste)
+                {
+                    resultado.Advertencias.Add($"CURP '{curpNormalizado}' ya existe, se omitira para evitar duplicados");
+                    curpNormalizado = null;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(rfcNormalizado))
+            {
+                var rfcExiste = await _db.Persona.AnyAsync(p => p.Rfc == rfcNormalizado);
+                if (rfcExiste)
+                {
+                    resultado.Advertencias.Add($"RFC '{rfcNormalizado}' ya existe en otra persona, se omitira para evitar duplicados");
+                    rfcNormalizado = null;
+                }
+            }
+
+            int? idGenero = GetIdGenero(dto.Genero, generosDict);
+
+            var persona = new Persona
+            {
+                Nombre = nombreLimpio,
+                ApellidoPaterno = dto.ApellidoPaterno.Trim(),
+                ApellidoMaterno = string.IsNullOrWhiteSpace(dto.ApellidoMaterno) ? null : dto.ApellidoMaterno.Trim(),
+                Curp = curpNormalizado,
+                Rfc = rfcNormalizado,
+                Telefono = string.IsNullOrWhiteSpace(dto.Telefono) ? null : dto.Telefono.Trim(),
+                Correo = emailNorm,
+                IdGenero = idGenero,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "Sistema-Importacion",
+                Status = Core.Enums.StatusEnum.Active
+            };
+
+            if (TryParseDate(dto.FechaNacimiento, out var fechaNac))
+            {
+                persona.FechaNacimiento = fechaNac;
+            }
+
+            // Guardar domicilio como texto libre en la direccion
+            if (!string.IsNullOrWhiteSpace(dto.Domicilio))
+            {
+                var codigoPostalDefault = await _db.CodigosPostales.FirstOrDefaultAsync();
+                if (codigoPostalDefault != null)
+                {
+                    var direccion = new Direccion
+                    {
+                        Calle = dto.Domicilio.Trim(),
+                        CodigoPostalId = codigoPostalDefault.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = "Sistema-Importacion",
+                        Status = Core.Enums.StatusEnum.Active
+                    };
+                    _db.Direccion.Add(direccion);
+                    await _db.SaveChangesAsync();
+                    persona.IdDireccion = direccion.IdDireccion;
+                }
+            }
+
+            _db.Persona.Add(persona);
+            await _db.SaveChangesAsync();
+
+            // Crear cuenta de usuario con el NoEmpleado como password
+            // Usar el email como username para la cuenta
+            ApplicationUser? usuario = null;
+            if (emailNorm != null)
+            {
+                try
+                {
+                    var user = new ApplicationUser
+                    {
+                        UserName = emailNorm,
+                        Email = emailNorm,
+                    };
+                    var passwordSeguro = $"{dto.NoEmpleado.Trim()}@Usag2024";
+                    usuario = await _authService.Signup(user, passwordSeguro, new List<string> { Rol.DOCENTE });
+                }
+                catch (Exception ex)
+                {
+                    resultado.Advertencias.Add($"No se pudo crear cuenta de usuario: {ex.Message}");
+                }
+            }
+            else
+            {
+                resultado.Advertencias.Add("Sin email, no se creo cuenta de usuario");
+            }
+
+            var profesor = new Profesor
+            {
+                NoEmpleado = dto.NoEmpleado.Trim(),
+                IdPersona = persona.IdPersona,
+                EmailInstitucional = emailNorm,
+                Activo = true,
+                UsuarioId = usuario?.Id,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = "Sistema-Importacion",
+                Status = Core.Enums.StatusEnum.Active
+            };
+
+            _db.Profesor.Add(profesor);
+            await _db.SaveChangesAsync();
+
+            return profesor;
+        }
+
+        private async Task ActualizarProfesorImportadoAsync(
+            Profesor profesor,
+            ImportarProfesorDto dto,
+            Dictionary<string, int> generosDict,
+            string nombreLimpio,
+            ResultadoImportacionProfesor resultado)
+        {
+            var persona = profesor.IdPersonaNavigation;
+
+            var curpNormalizado = string.IsNullOrWhiteSpace(dto.Curp) ? null : dto.Curp.Trim().ToUpper();
+
+            if (!string.IsNullOrEmpty(curpNormalizado) && curpNormalizado != persona.Curp)
+            {
+                var curpExiste = await _db.Persona.AnyAsync(p => p.Curp == curpNormalizado && p.IdPersona != persona.IdPersona);
+                if (curpExiste)
+                {
+                    resultado.Advertencias.Add($"CURP '{curpNormalizado}' ya existe en otra persona, se omitira");
+                    curpNormalizado = null;
+                }
+            }
+
+            persona.Nombre = nombreLimpio;
+            persona.ApellidoPaterno = dto.ApellidoPaterno.Trim();
+            persona.ApellidoMaterno = string.IsNullOrWhiteSpace(dto.ApellidoMaterno) ? null : dto.ApellidoMaterno.Trim();
+
+            if (!string.IsNullOrEmpty(curpNormalizado))
+                persona.Curp = curpNormalizado;
+
+            if (!string.IsNullOrWhiteSpace(dto.Rfc))
+            {
+                var rfcNorm = dto.Rfc.Trim().ToUpper();
+                var rfcExiste = await _db.Persona.AnyAsync(p => p.Rfc == rfcNorm && p.IdPersona != persona.IdPersona);
+                if (!rfcExiste)
+                    persona.Rfc = rfcNorm;
+                else
+                    resultado.Advertencias.Add($"RFC '{rfcNorm}' ya existe en otra persona, se omitira");
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Telefono))
+                persona.Telefono = dto.Telefono.Trim();
+
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+                persona.Correo = dto.Email.Trim().ToLower();
+
+            if (TryParseDate(dto.FechaNacimiento, out var fechaNac))
+                persona.FechaNacimiento = fechaNac;
+
+            int? idGenero = GetIdGenero(dto.Genero, generosDict);
+            if (idGenero.HasValue)
+                persona.IdGenero = idGenero;
+
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+                profesor.EmailInstitucional = dto.Email.Trim().ToLower();
+
+            profesor.Activo = true;
+
+            await _db.SaveChangesAsync();
+
+            // Crear cuenta de usuario si no tiene una
+            if (string.IsNullOrEmpty(profesor.UsuarioId))
+            {
+                var emailNorm = !string.IsNullOrWhiteSpace(dto.Email) ? dto.Email.Trim().ToLower() : null;
+                if (emailNorm != null)
+                {
+                    try
+                    {
+                        var user = new ApplicationUser
+                        {
+                            UserName = emailNorm,
+                            Email = emailNorm,
+                        };
+                        var passwordSeguro = $"{dto.NoEmpleado.Trim()}@Usag2024";
+                        var usuario = await _authService.Signup(user, passwordSeguro, new List<string> { Rol.DOCENTE });
+                        profesor.UsuarioId = usuario.Id;
+                        await _db.SaveChangesAsync();
+                        resultado.Advertencias.Add("Cuenta de usuario creada en actualizacion");
+                    }
+                    catch (Exception ex)
+                    {
+                        resultado.Advertencias.Add($"No se pudo crear cuenta de usuario: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Elimina titulos academicos del nombre (Lic., Ing., Dr., Mtro., etc.)
+        /// "Lic. Enrique" -> "Enrique"
+        /// "Ing. Carlos Alberto" -> "Carlos Alberto"
+        /// </summary>
+        private static string LimpiarTituloNombre(string? nombre)
+        {
+            if (string.IsNullOrWhiteSpace(nombre))
+                return string.Empty;
+
+            var nombreTrim = nombre.Trim();
+
+            // Patrones comunes de titulos academicos en Mexico
+            var patronTitulos = new Regex(
+                @"^(Lic\.|Lic|Ing\.|Ing|Dr\.|Dr|Dra\.|Dra|Mtro\.|Mtro|Mtra\.|Mtra|C\.P\.|CP|L\.C\.P\.|LCP|M\.C\.|MC|Ph\.D\.|PhD|Arq\.|Arq|Psic\.|Psic|Q\.F\.B\.|QFB|L\.A\.E\.|LAE|M\.A\.|MA|Profr?\.|Prof)\s+",
+                RegexOptions.IgnoreCase);
+
+            return patronTitulos.Replace(nombreTrim, "").Trim();
         }
     }
 

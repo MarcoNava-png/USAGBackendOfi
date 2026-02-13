@@ -13,6 +13,7 @@
         public const string CONTROL_ESCOLAR = "controlescolar";
         public const string FINANZAS = "finanzas";
         public const string ADMISIONES = "admisiones";
+        public const string ACADEMICO = "academico";
 
 
         public const string ROLES_ADMINISTRACION = $"{SUPER_ADMIN},{ADMIN}";

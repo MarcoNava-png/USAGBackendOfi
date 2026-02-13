@@ -208,6 +208,19 @@ namespace WebApplication2.Data.Seed
                     }
                     break;
 
+                case Rol.ACADEMICO:
+                    var academicoFullModules = new[] { "Dashboard", "Academico", "Estudiantes", "Catalogos" };
+                    var academicoViewOnly = new[] { "Admisiones" };
+                    foreach (var p in allPermissions.Where(p => academicoFullModules.Contains(p.Module)))
+                    {
+                        result.Add((p, true, true, true, true));
+                    }
+                    foreach (var p in allPermissions.Where(p => academicoViewOnly.Contains(p.Module)))
+                    {
+                        result.Add((p, true, false, false, false));
+                    }
+                    break;
+
                 case Rol.ADMISIONES:
                     var admisionesModulesTotal = new[] { "Dashboard", "Admisiones" };
                     var admisionesViewFinanzas = new[] { "Finanzas" }; 

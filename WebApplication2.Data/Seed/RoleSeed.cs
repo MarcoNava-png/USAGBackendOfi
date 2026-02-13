@@ -15,6 +15,9 @@ namespace WebApplication2.Data.Seed
             {
                 var value = field.GetValue(null)!.ToString();
 
+                if (value.Contains(','))
+                    continue;
+
                 if (!roleManager.RoleExistsAsync(value).Result)
                 {
                     var role = new IdentityRole();

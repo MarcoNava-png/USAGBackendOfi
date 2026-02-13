@@ -17,6 +17,34 @@ namespace WebApplication2.Services
             _dbContext = dbContext;
         }
 
+        public async Task<PagedResult<Profesor>> GetAllProfesores(int page, int pageSize)
+        {
+            var query = _dbContext.Profesor
+                .Include(d => d.IdPersonaNavigation)
+                    .ThenInclude(p => p.IdGeneroNavigation)
+                .Include(d => d.IdPersonaNavigation)
+                    .ThenInclude(p => p.IdDireccionNavigation)
+                .Include(d => d.IdPersonaNavigation)
+                    .ThenInclude(p => p.IdEstadoCivilNavigation)
+                .Where(p => p.Status == Core.Enums.StatusEnum.Active);
+
+            var totalItems = await query.CountAsync();
+
+            var profesores = await query
+                .OrderBy(p => p.IdPersonaNavigation.ApellidoPaterno)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new PagedResult<Profesor>
+            {
+                TotalItems = totalItems,
+                Items = profesores,
+                PageNumber = page,
+                PageSize = pageSize
+            };
+        }
+
         public async Task<PagedResult<Profesor>> GetProfesores(int campusId, int page, int pageSize)
         {
             var totalItems = await _dbContext.Profesor

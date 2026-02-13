@@ -9,7 +9,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.FINANZAS}")]
+    [Authorize(Roles = $"{Rol.SUPER_ADMIN},{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.FINANZAS}")]
     public class BitacoraAccionController : ControllerBase
     {
         private readonly IBitacoraAccionService _svc;

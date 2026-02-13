@@ -24,5 +24,7 @@ namespace WebApplication2.Services.Interfaces
         Task<ImportarMateriasResponse> ImportarMateriasAsync(ImportarMateriasRequest request);
 
         Task<byte[]> GenerarPlantillaMateriasAsync(int? idPlanEstudios = null);
+
+        Task<ImportarProfesoresResponse> ImportarProfesoresAsync(ImportarProfesoresRequest request);
     }
 }

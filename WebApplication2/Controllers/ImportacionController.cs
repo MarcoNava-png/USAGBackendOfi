@@ -179,6 +179,112 @@ namespace WebApplication2.Controllers
             return Ok(resultado);
         }
 
+        [HttpPost("profesores/validar")]
+        public async Task<ActionResult<ValidarImportacionProfesoresResponse>> ValidarProfesores([FromBody] ImportarProfesoresRequest request)
+        {
+            if (request.Profesores == null || request.Profesores.Count == 0)
+            {
+                return BadRequest("No se proporcionaron profesores para validar");
+            }
+
+            var detalles = new List<ValidarImportacionProfesoresResponse.DetalleValidacionProfesor>();
+            int validos = 0;
+            int conErrores = 0;
+            int fila = 1;
+            var noEmpleadosEnArchivo = new HashSet<string>();
+            var emailsEnArchivo = new HashSet<string>();
+
+            foreach (var prof in request.Profesores)
+            {
+                var erroresRegistro = new List<string>();
+                var advertencias = new List<string>();
+
+                if (string.IsNullOrWhiteSpace(prof.NoEmpleado))
+                    erroresRegistro.Add("Clave/numero de empleado es requerido");
+                if (string.IsNullOrWhiteSpace(prof.Nombre))
+                    erroresRegistro.Add("Nombre es requerido");
+                if (string.IsNullOrWhiteSpace(prof.ApellidoPaterno))
+                    erroresRegistro.Add("Apellido paterno es requerido");
+
+                if (string.IsNullOrWhiteSpace(prof.Email))
+                    advertencias.Add("Sin email, no se creara cuenta de usuario");
+
+                if (!string.IsNullOrWhiteSpace(prof.NoEmpleado))
+                {
+                    if (noEmpleadosEnArchivo.Contains(prof.NoEmpleado.ToLower()))
+                        erroresRegistro.Add("Clave duplicada en el archivo");
+                    else
+                        noEmpleadosEnArchivo.Add(prof.NoEmpleado.ToLower());
+                }
+
+                if (!string.IsNullOrWhiteSpace(prof.Email))
+                {
+                    if (emailsEnArchivo.Contains(prof.Email.ToLower()))
+                        advertencias.Add("Email duplicado en el archivo");
+                    else
+                        emailsEnArchivo.Add(prof.Email.ToLower());
+                }
+
+                if (!string.IsNullOrWhiteSpace(prof.Domicilio))
+                    advertencias.Add("Domicilio se guardara como texto libre (sin estructura)");
+
+                if (!string.IsNullOrWhiteSpace(prof.CedulaProfesional))
+                    advertencias.Add($"Cedula profesional: {prof.CedulaProfesional} (informativo)");
+
+                var esValido = erroresRegistro.Count == 0;
+                if (esValido) validos++; else conErrores++;
+
+                detalles.Add(new ValidarImportacionProfesoresResponse.DetalleValidacionProfesor
+                {
+                    Fila = fila++,
+                    NoEmpleado = prof.NoEmpleado,
+                    NombreCompleto = $"{prof.Nombre} {prof.ApellidoPaterno} {prof.ApellidoMaterno}".Trim(),
+                    Exito = esValido,
+                    Mensaje = esValido ? "Valido" : string.Join("; ", erroresRegistro),
+                    Advertencias = advertencias
+                });
+            }
+
+            return Ok(new ValidarImportacionProfesoresResponse
+            {
+                TotalRegistros = request.Profesores.Count,
+                RegistrosValidos = validos,
+                RegistrosConErrores = conErrores,
+                EsValido = conErrores == 0,
+                DetalleValidacion = detalles
+            });
+        }
+
+        [HttpPost("profesores")]
+        public async Task<ActionResult<ImportarProfesoresResponse>> ImportarProfesores([FromBody] ImportarProfesoresRequest request)
+        {
+            if (request.Profesores == null || request.Profesores.Count == 0)
+            {
+                return BadRequest("No se proporcionaron profesores para importar");
+            }
+
+            if (request.Profesores.Count > 500)
+            {
+                return BadRequest("Maximo 500 profesores por peticion");
+            }
+
+            var resultado = await _importacionService.ImportarProfesoresAsync(request);
+            return Ok(resultado);
+        }
+
+        [HttpPost("profesores/uno")]
+        public async Task<ActionResult<ImportarProfesoresResponse>> ImportarUnProfesor([FromBody] ImportarProfesorDto profesor)
+        {
+            var request = new ImportarProfesoresRequest
+            {
+                Profesores = new List<ImportarProfesorDto> { profesor },
+                ActualizarExistentes = true
+            };
+
+            var resultado = await _importacionService.ImportarProfesoresAsync(request);
+            return Ok(resultado);
+        }
+
         [HttpGet("materias/plantilla")]
         public async Task<IActionResult> DescargarPlantillaMaterias([FromQuery] int? idPlanEstudios = null)
         {
