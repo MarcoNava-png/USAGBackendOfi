@@ -11,7 +11,7 @@ namespace WebApplication2.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
+    [Authorize]
     public class PermissionController : ControllerBase
     {
         private readonly IPermissionService _permissionService;
@@ -22,6 +22,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<List<PermissionDto>>> GetAllPermissions()
         {
             var permissions = await _permissionService.GetAllPermissionsAsync();
@@ -29,6 +30,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("by-module")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<List<ModulePermissionsDto>>> GetPermissionsByModule()
         {
             var permissions = await _permissionService.GetPermissionsByModuleAsync();
@@ -36,6 +38,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<PermissionDto>> GetPermission(int id)
         {
             var permission = await _permissionService.GetPermissionByIdAsync(id);
@@ -76,6 +79,7 @@ namespace WebApplication2.Controllers
 
 
         [HttpGet("roles")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<List<RoleWithPermissionsDto>>> GetAllRolesWithPermissions()
         {
             var roles = await _permissionService.GetAllRolesWithPermissionsAsync();
@@ -83,6 +87,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("roles/{roleId}")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<RoleWithPermissionsDto>> GetRolePermissions(string roleId)
         {
             var role = await _permissionService.GetRolePermissionsAsync(roleId);
@@ -94,6 +99,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("roles/by-name/{roleName}")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<List<RolePermissionDto>>> GetPermissionsByRoleName(string roleName)
         {
             var permissions = await _permissionService.GetPermissionsByRoleNameAsync(roleName);
@@ -102,6 +108,7 @@ namespace WebApplication2.Controllers
 
 
         [HttpPost("assign")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult<RolePermission>> AssignPermissionToRole([FromBody] AssignPermissionRequest request)
         {
             if (await EsRolAdminAsync(request.RoleId) && !User.IsInRole(Rol.SUPER_ADMIN))
@@ -115,6 +122,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("assign-bulk")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult> BulkAssignPermissions([FromBody] BulkAssignPermissionsRequest request)
         {
             if (await EsRolAdminAsync(request.RoleId) && !User.IsInRole(Rol.SUPER_ADMIN))
@@ -128,6 +136,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpDelete("roles/{roleId}/permissions/{permissionId}")]
+        [Authorize(Roles = Rol.ROLES_ADMINISTRACION)]
         public async Task<ActionResult> RemovePermissionFromRole(string roleId, int permissionId)
         {
             if (await EsRolAdminAsync(roleId) && !User.IsInRole(Rol.SUPER_ADMIN))
@@ -201,7 +210,6 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("my-permissions")]
-        [Authorize]
         public async Task<ActionResult<UserPermissionsDto>> GetMyPermissions()
         {
             var userId = User.FindFirst("userId")?.Value;
