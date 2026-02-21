@@ -13,7 +13,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.DOCENTE}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.DOCENTE},{Rol.ACADEMICO}")]
     public class ParcialesController : ControllerBase
     {
         private readonly IParcialesService _ParcialesService;

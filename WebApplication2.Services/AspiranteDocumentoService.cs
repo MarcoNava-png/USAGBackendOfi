@@ -48,15 +48,40 @@ namespace WebApplication2.Services
             var existe = await _db.AspiranteDocumento.AnyAsync(x => x.IdAspirante == req.IdAspirante);
             if (!existe)
             {
-                var reqs = await _db.DocumentoRequisito.Where(r => r.Activo).ToListAsync();
-                foreach (var r in reqs)
+                // Get the aspirant's plan to check for plan-specific documents
+                var aspirante = await _db.Aspirante.AsNoTracking().FirstOrDefaultAsync(a => a.IdAspirante == req.IdAspirante);
+                var planDocs = aspirante != null
+                    ? await _db.PlanDocumentoRequisito
+                        .Where(pd => pd.IdPlanEstudios == aspirante.IdPlan)
+                        .ToListAsync()
+                    : new List<PlanDocumentoRequisito>();
+
+                if (planDocs.Count > 0)
                 {
-                    _db.AspiranteDocumento.Add(new AspiranteDocumento
+                    // Use plan-specific documents
+                    foreach (var pd in planDocs)
                     {
-                        IdAspirante = req.IdAspirante,
-                        IdDocumentoRequisito = r.IdDocumentoRequisito,
-                        Estatus = EstatusDocumentoEnum.PENDIENTE
-                    });
+                        _db.AspiranteDocumento.Add(new AspiranteDocumento
+                        {
+                            IdAspirante = req.IdAspirante,
+                            IdDocumentoRequisito = pd.IdDocumentoRequisito,
+                            Estatus = EstatusDocumentoEnum.PENDIENTE
+                        });
+                    }
+                }
+                else
+                {
+                    // Fallback: use all active documents
+                    var reqs = await _db.DocumentoRequisito.Where(r => r.Activo).ToListAsync();
+                    foreach (var r in reqs)
+                    {
+                        _db.AspiranteDocumento.Add(new AspiranteDocumento
+                        {
+                            IdAspirante = req.IdAspirante,
+                            IdDocumentoRequisito = r.IdDocumentoRequisito,
+                            Estatus = EstatusDocumentoEnum.PENDIENTE
+                        });
+                    }
                 }
                 await _db.SaveChangesAsync();
             }
@@ -306,6 +331,49 @@ namespace WebApplication2.Services
             }
 
             return resultado;
+        }
+
+        public async Task<bool> ResetearDocumentoAsync(long idAspiranteDocumento)
+        {
+            var doc = await _db.AspiranteDocumento
+                .Include(d => d.Requisito)
+                .FirstOrDefaultAsync(x => x.IdAspiranteDocumento == idAspiranteDocumento);
+
+            if (doc == null) return false;
+
+            if (!string.IsNullOrEmpty(doc.UrlArchivo))
+            {
+                try
+                {
+                    var containerName = _configuration["Azure:DocumentosContainerName"] ?? "documentos";
+                    var baseUrl = _configuration["LocalStorage:BaseUrl"] ?? "/uploads";
+                    var blobName = doc.UrlArchivo
+                        .Replace($"{baseUrl}/{containerName}/", "")
+                        .Replace($"https://", "");
+
+                    if (blobName.Contains("/"))
+                    {
+                        var idx = blobName.IndexOf($"{doc.IdAspirante}/");
+                        if (idx >= 0) blobName = blobName.Substring(idx);
+                    }
+
+                    await _blobStorageService.DeleteFile(blobName, containerName);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Advertencia: No se pudo eliminar el archivo fisico: {ex.Message}");
+                }
+            }
+
+            doc.Estatus = EstatusDocumentoEnum.PENDIENTE;
+            doc.UrlArchivo = null;
+            doc.Notas = null;
+            doc.FechaSubidoUtc = null;
+            doc.FechaValidacion = null;
+            doc.UsuarioValidacion = null;
+
+            await _db.SaveChangesAsync();
+            return true;
         }
 
     }

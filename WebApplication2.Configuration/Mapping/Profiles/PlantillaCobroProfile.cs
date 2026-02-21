@@ -17,7 +17,7 @@ namespace WebApplication2.Configuration.Mapping.Profiles
                 .ForMember(d => d.NombrePlanEstudios, o => o.MapFrom(s => s.IdPlanEstudiosNavigation != null ? s.IdPlanEstudiosNavigation.NombrePlanEstudios : null))
                 .ForMember(d => d.NombrePeriodo, o => o.Ignore()) 
                 .ForMember(d => d.NombreTurno, o => o.Ignore())
-                .ForMember(d => d.NombreModalidad, o => o.Ignore())
+                .ForMember(d => d.NombreModalidad, o => o.MapFrom(s => s.IdModalidadNavigation != null ? s.IdModalidadNavigation.DescModalidad : null))
                 .ForMember(d => d.TotalConceptos, o => o.MapFrom(s => s.Detalles != null && s.Detalles.Any() ? s.Detalles.Sum(d => d.Cantidad * d.PrecioUnitario) : 0m))
                 .ForMember(d => d.Detalles, o => o.MapFrom(s => s.Detalles ?? new List<PlantillaCobroDetalle>()));
 

@@ -22,6 +22,24 @@ public partial class Aspirante : BaseEntity
 
     public int? CuatrimestreInteres { get; set; }
 
+    public string? InstitucionProcedencia { get; set; }
+
+    public int? IdModalidad { get; set; }
+
+    public int? IdPeriodoAcademico { get; set; }
+
+    public bool? RecorridoPlantel { get; set; }
+
+    public bool? Trabaja { get; set; }
+
+    public string? NombreEmpresa { get; set; }
+
+    public string? DomicilioEmpresa { get; set; }
+
+    public string? PuestoEmpresa { get; set; }
+
+    public string? QuienCubreGastos { get; set; }
+
     public virtual ICollection<AspiranteConvenio> AspiranteConvenio { get; set; } = new List<AspiranteConvenio>();
 
     public virtual AspiranteEstatus IdAspiranteEstatusNavigation { get; set; } = null!;
@@ -34,5 +52,10 @@ public partial class Aspirante : BaseEntity
     public virtual PlanEstudios IdPlanNavigation { get; set; } = null!;
 
     public virtual Turno Turno { get; set; }
+
+    public virtual Modalidad? IdModalidadNavigation { get; set; }
+
+    public virtual PeriodoAcademico? IdPeriodoAcademicoNavigation { get; set; }
+
     public ICollection<AspiranteDocumento> Documentos { get; set; } = [];
 }

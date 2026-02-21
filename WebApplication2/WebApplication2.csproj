@@ -35,4 +35,11 @@
     <ProjectReference Include="..\WebApplication2.Services\WebApplication2.Services.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Logousag.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

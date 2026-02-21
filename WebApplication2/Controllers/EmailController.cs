@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebApplication2.Core.DTOs.MicrosoftGraph;
+using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.MicrosoftGraph;
 using WebApplication2.Core.Responses.MicrosoftGraph;
 using WebApplication2.Services;
+using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2.Controllers;
 
@@ -13,13 +15,22 @@ namespace WebApplication2.Controllers;
 public class EmailController : ControllerBase
 {
     private readonly IMicrosoftGraphService _graphService;
+    private readonly IAuthService _authService;
+    private readonly IEmailService _emailService;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<EmailController> _logger;
 
     public EmailController(
         IMicrosoftGraphService graphService,
+        IAuthService authService,
+        IEmailService emailService,
+        IConfiguration configuration,
         ILogger<EmailController> logger)
     {
         _graphService = graphService;
+        _authService = authService;
+        _emailService = emailService;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -184,6 +195,102 @@ public class EmailController : ControllerBase
                 return BadRequest(new { error = "Password es requerido" });
 
             var result = await _graphService.CreateUserAsync(request, ct);
+
+            if (result.Success && request.CreateInApp && request.Roles.Count > 0)
+            {
+                try
+                {
+                    var appUser = new ApplicationUser
+                    {
+                        UserName = request.UserPrincipalName,
+                        Email = request.UserPrincipalName,
+                        Nombres = request.GivenName ?? "",
+                        Apellidos = request.Surname ?? "",
+                        Telefono = request.MobilePhone,
+                    };
+
+                    var createdUser = await _authService.Signup(appUser, request.Password, request.Roles);
+                    result.AppUserCreated = true;
+                    result.AppUserId = createdUser.Id;
+                    result.AssignedRoles = request.Roles;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Usuario creado en Azure AD pero fallo la creacion en SACI: {Email}", request.UserPrincipalName);
+                    result.AppUserCreated = false;
+                    result.Message = $"Correo creado en Azure, pero hubo un error al crear en el sistema: {ex.Message}";
+                }
+            }
+
+            if (result.Success && request.SendCredentialsEmail)
+            {
+                try
+                {
+                    var frontendUrl = _configuration["FrontendUrl"] ?? "https://saciusag.com.mx";
+                    var loginUrl = $"{frontendUrl}/auth/v2/login";
+                    var htmlBody = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+        .content {{ background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; }}
+        .credentials {{ background: #ffffff; border: 2px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0; }}
+        .credentials p {{ margin: 8px 0; }}
+        .label {{ color: #64748b; font-size: 13px; }}
+        .value {{ font-family: monospace; font-size: 16px; font-weight: bold; color: #1e293b; }}
+        .button {{ display: inline-block; background: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }}
+        .footer {{ text-align: center; padding: 20px; color: #64748b; font-size: 12px; }}
+        .warning {{ background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; margin: 15px 0; color: #92400e; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1>Bienvenido al Sistema SACI</h1>
+        </div>
+        <div class='content'>
+            <p>Hola <strong>{request.DisplayName}</strong>,</p>
+            <p>Se ha creado tu cuenta institucional. A continuacion encontraras tus credenciales de acceso:</p>
+            <div class='credentials'>
+                <p><span class='label'>Correo institucional:</span><br><span class='value'>{request.UserPrincipalName}</span></p>
+                <p><span class='label'>Contrasena temporal:</span><br><span class='value'>{request.Password}</span></p>
+            </div>
+            <div class='warning'>
+                <strong>Importante:</strong> Deberas cambiar tu contrasena la primera vez que inicies sesion.
+            </div>
+            <p>Ingresa al sistema haciendo clic en el siguiente boton:</p>
+            <p style='text-align: center;'>
+                <a href='{loginUrl}' class='button'>Iniciar Sesion</a>
+            </p>
+            <p>O copia y pega este enlace en tu navegador:</p>
+            <p style='word-break: break-all; color: #2563eb;'>{loginUrl}</p>
+        </div>
+        <div class='footer'>
+            <p>Sistema de Gestion Escolar SACI - USAG</p>
+            <p>Este es un correo automatico, por favor no responder.</p>
+        </div>
+    </div>
+</body>
+</html>";
+
+                    await _emailService.SendEmailAsync(
+                        request.UserPrincipalName,
+                        "Bienvenido al Sistema SACI - Tus credenciales de acceso",
+                        htmlBody);
+
+                    result.CredentialsEmailSent = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "No se pudo enviar correo de credenciales a {Email}", request.UserPrincipalName);
+                    result.CredentialsEmailSent = false;
+                }
+            }
+
             return Created($"/api/email/users/{result.UserId}", result);
         }
         catch (Exception ex)

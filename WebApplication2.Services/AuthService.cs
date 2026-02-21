@@ -146,6 +146,9 @@ namespace WebApplication2.Services
                 var errors = string.Join(" ", result.Errors.Select(e => e.Description));
                 throw new Exception($"Error al restablecer contraseña: {errors}");
             }
+
+            user.MustChangePassword = true;
+            await _userManager.UpdateAsync(user);
         }
 
         public async Task<ApplicationUser> UpdateUserProfile(ApplicationUser newUser)
@@ -200,6 +203,31 @@ namespace WebApplication2.Services
             {
                 var errors = string.Join(" ", result.Errors.Select(e => e.Description));
                 throw new Exception($"Error al actualizar email: {errors}");
+            }
+        }
+
+        public async Task ChangeOwnPasswordAsync(string userId, string currentPassword, string newPassword)
+        {
+            var user = await _userManager.FindByIdAsync(userId)
+                ?? throw new Exception("Usuario no encontrado.");
+
+            var checkResult = await _signInManager.CheckPasswordSignInAsync(user, currentPassword, false);
+            if (!checkResult.Succeeded)
+            {
+                throw new Exception("La contraseña actual es incorrecta.");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(" ", result.Errors.Select(e => e.Description));
+                throw new Exception(errors);
+            }
+
+            if (user.MustChangePassword)
+            {
+                user.MustChangePassword = false;
+                await _userManager.UpdateAsync(user);
             }
         }
 
@@ -295,6 +323,7 @@ namespace WebApplication2.Services
                 Token = token,
                 Expiration = expiration,
                 PhotoUrl = user.PhotoUrl,
+                MustChangePassword = user.MustChangePassword,
             };
         }
 

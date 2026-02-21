@@ -348,7 +348,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("generar-documento")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO}")]
         [ProducesResponseType(typeof(AccionPanelResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<AccionPanelResponse>> GenerarDocumento(
@@ -374,7 +374,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("{idEstudiante:int}/kardex/pdf")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO}")]
         [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DescargarKardexPdf(
@@ -398,7 +398,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("{idEstudiante:int}/constancia/pdf")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO}")]
         [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DescargarConstanciaPdf(
@@ -467,7 +467,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("exportar/excel")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO}")]
         [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
         public async Task<IActionResult> ExportarExcel(
             [FromBody] BuscarEstudiantesPanelRequest request,

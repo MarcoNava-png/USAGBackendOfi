@@ -11,6 +11,7 @@ namespace WebApplication2.Core.DTOs.Admision
         public DatosContactoDto DatosContacto { get; set; } = new();
         public InformacionAcademicaDto InformacionAcademica { get; set; } = new();
         public List<DocumentoDto> Documentos { get; set; } = new();
+        public DatosSocioeconomicosDto DatosSocioeconomicos { get; set; } = new();
         public InformacionPagosDto InformacionPagos { get; set; } = new();
         public SeguimientoDto Seguimiento { get; set; } = new();
         public MetadataGeneracionDto Metadata { get; set; } = new();

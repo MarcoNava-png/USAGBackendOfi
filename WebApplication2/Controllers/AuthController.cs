@@ -106,7 +106,8 @@ namespace WebApplication2
                 Apellidos = request.Apellidos,
                 Telefono = request.Telefono,
                 Biografia = request.Biografia,
-                PhotoUrl = request.PhotoUrl
+                PhotoUrl = request.PhotoUrl,
+                MustChangePassword = true
             };
 
             var createdUser = await _authService.Signup(user, request.Password, request.Roles);
@@ -288,6 +289,25 @@ namespace WebApplication2
             catch (Exception ex)
             {
                 throw new Exception("Error al guardar el usuario. " + ex.Message);
+            }
+        }
+
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangeOwnPasswordRequest request)
+        {
+            var userId = User.FindFirst("userId")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized();
+
+            try
+            {
+                await _authService.ChangeOwnPasswordAsync(userId, request.CurrentPassword, request.NewPassword);
+                return Ok(new { message = "Contraseña actualizada exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
         }
 

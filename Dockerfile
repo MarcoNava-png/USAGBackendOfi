@@ -8,6 +8,16 @@ RUN dotnet publish ./WebApplication2/WebApplication2.csproj -c Release -o /app/p
 # ===== run =====
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 
+# Instalar dependencias nativas para SkiaSharp/QuestPDF (libfontconfig, libfreetype, fuentes)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libfontconfig1 \
+    libfreetype6 \
+    fonts-liberation \
+    fonts-dejavu-core \
+    fontconfig \
+    && fc-cache -f -v \
+    && rm -rf /var/lib/apt/lists/*
+
 # Crear usuario no-root para seguridad
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
 
@@ -25,4 +35,3 @@ USER appuser
 
 EXPOSE 8080
 ENTRYPOINT ["dotnet","WebApplication2.dll"]
-

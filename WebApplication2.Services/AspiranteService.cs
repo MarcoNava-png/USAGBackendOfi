@@ -79,6 +79,8 @@ namespace WebApplication2.Services
                     (a.IdPersonaNavigation.Curp != null && a.IdPersonaNavigation.Curp.ToLower().Contains(filterLower)));
             }
 
+            baseQuery = baseQuery.Where(a => a.Status != Core.Enums.StatusEnum.Deleted);
+
             baseQuery = baseQuery.Where(a =>
                 a.IdAspiranteEstatusNavigation == null ||
                 a.IdAspiranteEstatusNavigation.DescEstatus != "Cancelado");
@@ -195,6 +197,10 @@ namespace WebApplication2.Services
                 persona.Curp = newAspirante.IdPersonaNavigation.Curp;
                 persona.Correo = newAspirante.IdPersonaNavigation.Correo;
                 persona.Telefono = newAspirante.IdPersonaNavigation.Telefono;
+                persona.Nacionalidad = newAspirante.IdPersonaNavigation.Nacionalidad;
+                persona.NombreContactoEmergencia = newAspirante.IdPersonaNavigation.NombreContactoEmergencia;
+                persona.TelefonoContactoEmergencia = newAspirante.IdPersonaNavigation.TelefonoContactoEmergencia;
+                persona.ParentescoContactoEmergencia = newAspirante.IdPersonaNavigation.ParentescoContactoEmergencia;
 
                 _dbContext.Persona.Update(persona);
             }
@@ -219,6 +225,15 @@ namespace WebApplication2.Services
             aspirante.IdAspiranteEstatus = newAspirante.IdAspiranteEstatus;
             aspirante.IdAtendidoPorUsuario = newAspirante.IdAtendidoPorUsuario;
             aspirante.CuatrimestreInteres = newAspirante.CuatrimestreInteres;
+            aspirante.InstitucionProcedencia = newAspirante.InstitucionProcedencia;
+            aspirante.IdModalidad = newAspirante.IdModalidad;
+            aspirante.IdPeriodoAcademico = newAspirante.IdPeriodoAcademico;
+            aspirante.RecorridoPlantel = newAspirante.RecorridoPlantel;
+            aspirante.Trabaja = newAspirante.Trabaja;
+            aspirante.NombreEmpresa = newAspirante.NombreEmpresa;
+            aspirante.DomicilioEmpresa = newAspirante.DomicilioEmpresa;
+            aspirante.PuestoEmpresa = newAspirante.PuestoEmpresa;
+            aspirante.QuienCubreGastos = newAspirante.QuienCubreGastos;
 
             if (!string.IsNullOrEmpty(aspirante.IdAtendidoPorUsuario) && !int.TryParse(aspirante.IdAtendidoPorUsuario, out _))
             {
@@ -251,10 +266,31 @@ namespace WebApplication2.Services
 
         private async Task InicializarDocumentosAspiranteAsync(int idAspirante)
         {
-            var reqs = await _dbContext.DocumentoRequisito
-        .Where(r => r.Activo)
-        .Select(r => r.IdDocumentoRequisito)
-        .ToListAsync();
+            // Get the aspirant's plan
+            var aspirante = await _dbContext.Aspirante.AsNoTracking().FirstOrDefaultAsync(a => a.IdAspirante == idAspirante);
+
+            // Check for plan-specific documents
+            var planDocs = aspirante != null
+                ? await _dbContext.PlanDocumentoRequisito
+                    .Where(pd => pd.IdPlanEstudios == aspirante.IdPlan)
+                    .Select(pd => pd.IdDocumentoRequisito)
+                    .ToListAsync()
+                : new List<int>();
+
+            List<int> reqs;
+            if (planDocs.Count > 0)
+            {
+                // Use plan-specific documents
+                reqs = planDocs;
+            }
+            else
+            {
+                // Fallback: use all active documents
+                reqs = await _dbContext.DocumentoRequisito
+                    .Where(r => r.Activo)
+                    .Select(r => r.IdDocumentoRequisito)
+                    .ToListAsync();
+            }
 
             if (reqs.Count == 0) return;
 
@@ -483,6 +519,8 @@ namespace WebApplication2.Services
                 .Include(a => a.IdAspiranteEstatusNavigation)
                 .Include(a => a.IdMedioContactoNavigation)
                 .Include(a => a.Turno)
+                .Include(a => a.IdModalidadNavigation)
+                .Include(a => a.IdPeriodoAcademicoNavigation)
                 .Include(a => a.IdPlanNavigation)
                     .ThenInclude(p => p.IdNivelEducativoNavigation)
                 .Include(a => a.IdPlanNavigation)
@@ -511,6 +549,18 @@ namespace WebApplication2.Services
             var municipio = codigoPostal?.Municipio;
             var estado = municipio?.Estado;
             var plan = aspirante.IdPlanNavigation;
+
+            string? diasTexto = null;
+            if (aspirante.IdModalidad.HasValue)
+            {
+                var dias = await _dbContext.PlanModalidadDia
+                    .Where(d => d.IdPlanEstudios == aspirante.IdPlan && d.IdModalidad == aspirante.IdModalidad.Value)
+                    .Include(d => d.IdDiaSemanaNavigation)
+                    .OrderBy(d => d.IdDiaSemana)
+                    .Select(d => d.IdDiaSemanaNavigation.Nombre)
+                    .ToListAsync();
+                if (dias.Count > 0) diasTexto = string.Join(", ", dias);
+            }
 
             var recibos = await _dbContext.Recibo
                 .Include(r => r.Detalles)
@@ -547,6 +597,48 @@ namespace WebApplication2.Services
                     edad--;
             }
 
+            // Obtener precios vigentes de conceptos para el plan del aspirante
+            var hoyFecha = DateOnly.FromDateTime(DateTime.UtcNow);
+            var preciosVigentes = await _dbContext.ConceptoPrecio
+                .Include(cp => cp.ConceptoPago)
+                .Where(cp => cp.Activo
+                    && cp.ConceptoPago.Activo
+                    && cp.VigenciaDesde <= hoyFecha
+                    && (cp.VigenciaHasta == null || cp.VigenciaHasta >= hoyFecha)
+                    && (cp.IdPlanEstudios == null || cp.IdPlanEstudios == aspirante.IdPlan))
+                .OrderByDescending(cp => cp.IdPlanEstudios.HasValue)
+                .ThenByDescending(cp => cp.VigenciaDesde)
+                .ToListAsync();
+
+            decimal? ObtenerPrecio(ConceptoTipoEnum tipo)
+            {
+                var precio = preciosVigentes
+                    .FirstOrDefault(p => p.ConceptoPago.Tipo == tipo);
+                return precio?.Importe;
+            }
+
+            decimal? ObtenerPrecioPorClave(string clave)
+            {
+                var precio = preciosVigentes
+                    .FirstOrDefault(p => p.ConceptoPago.Clave.ToUpper() == clave.ToUpper());
+                return precio?.Importe;
+            }
+
+            var costosDesglose = new List<CostoDesglosePdfDto>
+            {
+                new() { Concepto = "FICHA DE ADMISIÓN", Monto = ObtenerPrecioPorClave("FICHA") ?? ObtenerPrecioPorClave("FICHA_ADMISION") },
+                new() { Concepto = "INSCRIPCIÓN", Monto = ObtenerPrecio(ConceptoTipoEnum.INSCRIPCION) ?? ObtenerPrecioPorClave("INSCRIPCION") },
+                new() { Concepto = "REINSCRIPCIÓN", Monto = ObtenerPrecioPorClave("REINSCRIPCION") },
+                new() { Concepto = "EXAMEN DE ADMISIÓN", Monto = ObtenerPrecio(ConceptoTipoEnum.EXAMEN) ?? ObtenerPrecioPorClave("EXAMEN") ?? ObtenerPrecioPorClave("EXAMEN_ADMISION") },
+                new() { Concepto = "PROPEDÉUTICO", Monto = ObtenerPrecioPorClave("PROPEDEUTICO") },
+                new() { Concepto = "MENSUALIDADES", Monto = ObtenerPrecio(ConceptoTipoEnum.COLEGIATURA) ?? ObtenerPrecioPorClave("COLEGIATURA") ?? ObtenerPrecioPorClave("MENSUALIDAD") },
+                new() { Concepto = "SEGURO ESTUDIANTIL", Monto = ObtenerPrecio(ConceptoTipoEnum.SEGURO) ?? ObtenerPrecioPorClave("SEGURO") },
+                new() { Concepto = "CREDENCIAL ESTUDIANTIL", Monto = ObtenerPrecio(ConceptoTipoEnum.CREDENCIAL) ?? ObtenerPrecioPorClave("CREDENCIAL") },
+            };
+
+            var tieneConvenio = await _dbContext.AspiranteConvenio
+                .AnyAsync(ac => ac.IdAspirante == aspiranteId && ac.Estatus == "ACTIVO");
+
             var ficha = new FichaAdmisionDto
             {
                 IdAspirante = aspirante.IdAspirante,
@@ -567,6 +659,7 @@ namespace WebApplication2.Services
                     Edad = edad,
                     Genero = persona?.IdGeneroNavigation?.DescGenero,
                     EstadoCivil = persona?.IdEstadoCivilNavigation?.DescEstadoCivil,
+                    Nacionalidad = persona?.Nacionalidad,
                     FotoUrl = null
                 },
 
@@ -575,6 +668,9 @@ namespace WebApplication2.Services
                     Email = persona?.Correo,
                     Telefono = persona?.Telefono,
                     Celular = persona?.Celular,
+                    NombreContactoEmergencia = persona?.NombreContactoEmergencia,
+                    TelefonoContactoEmergencia = persona?.TelefonoContactoEmergencia,
+                    ParentescoContactoEmergencia = persona?.ParentescoContactoEmergencia,
                     Direccion = direccion != null ? new DireccionDto
                     {
                         Calle = direccion.Calle,
@@ -597,7 +693,21 @@ namespace WebApplication2.Services
                     DuracionMeses = plan?.DuracionMeses,
                     Turno = aspirante.Turno?.Nombre,
                     Campus = plan?.IdCampusNavigation?.Nombre,
-                    Periodicidad = plan?.IdPeriodicidadNavigation?.DescPeriodicidad
+                    Periodicidad = plan?.IdPeriodicidadNavigation?.DescPeriodicidad,
+                    InstitucionProcedencia = aspirante.InstitucionProcedencia,
+                    Modalidad = aspirante.IdModalidadNavigation?.DescModalidad,
+                    PeriodoAcademico = aspirante.IdPeriodoAcademicoNavigation?.Nombre,
+                    Dias = diasTexto,
+                    RecorridoPlantel = aspirante.RecorridoPlantel
+                },
+
+                DatosSocioeconomicos = new DatosSocioeconomicosDto
+                {
+                    Trabaja = aspirante.Trabaja,
+                    NombreEmpresa = aspirante.NombreEmpresa,
+                    DomicilioEmpresa = aspirante.DomicilioEmpresa,
+                    PuestoEmpresa = aspirante.PuestoEmpresa,
+                    QuienCubreGastos = aspirante.QuienCubreGastos
                 },
 
                 Documentos = aspirante.Documentos.Select(d => new DocumentoDto
@@ -605,7 +715,7 @@ namespace WebApplication2.Services
                     Clave = d.Requisito?.Clave ?? "N/A",
                     Descripcion = d.Requisito?.Descripcion ?? "N/A",
                     EsObligatorio = d.Requisito?.EsObligatorio ?? false,
-                    Estatus = d.Estatus.ToString(),
+                    Estatus = d.Estatus,
                     FechaSubida = d.FechaSubidoUtc,
                     UrlArchivo = d.UrlArchivo,
                     Notas = d.Notas
@@ -635,7 +745,9 @@ namespace WebApplication2.Services
                             PrecioUnitario = d.PrecioUnitario,
                             Subtotal = d.Importe
                         }).ToList()
-                    }).ToList()
+                    }).ToList(),
+                    CostosDesglose = costosDesglose,
+                    TieneConvenio = tieneConvenio
                 },
 
                 Seguimiento = new SeguimientoDto
@@ -993,6 +1105,127 @@ namespace WebApplication2.Services
             }
 
             return recibosGenerados;
+        }
+
+        public async Task<bool> OcultarAspiranteAsync(int idAspirante, string usuarioId)
+        {
+            var aspirante = await _dbContext.Aspirante
+                .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante);
+
+            if (aspirante == null)
+                return false;
+
+            aspirante.Status = Core.Enums.StatusEnum.Deleted;
+            _dbContext.Aspirante.Update(aspirante);
+
+            var seguimiento = new AspiranteBitacoraSeguimiento
+            {
+                AspiranteId = idAspirante,
+                UsuarioAtiendeId = usuarioId,
+                Fecha = DateTime.UtcNow,
+                MedioContacto = "Sistema",
+                Resumen = "Aspirante ocultado del listado",
+                ProximaAccion = "N/A"
+            };
+
+            await _dbContext.AspiranteBitacoraSeguimiento.AddAsync(seguimiento);
+            await _dbContext.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<ComisionReporteDto> CalcularComisionesAsync(
+            DateTime fechaDesde, DateTime fechaHasta, decimal comisionPorRegistro, decimal porcentajePorPago, string? filtrarPorUsuarioId = null)
+        {
+            var query = _dbContext.Aspirante
+                .Include(a => a.IdPersonaNavigation)
+                .Include(a => a.IdAspiranteEstatusNavigation)
+                .Where(a => a.CreatedAt >= fechaDesde && a.CreatedAt <= fechaHasta)
+                .Where(a => a.Status != Core.Enums.StatusEnum.Deleted);
+
+            if (!string.IsNullOrEmpty(filtrarPorUsuarioId))
+            {
+                query = query.Where(a => a.CreatedBy == filtrarPorUsuarioId);
+            }
+
+            var aspirantes = await query.ToListAsync();
+
+            var aspiranteIds = aspirantes.Select(a => a.IdAspirante).ToList();
+
+            var pagosData = await _dbContext.PagoAplicacion
+                .Include(pa => pa.Pago)
+                .Include(pa => pa.ReciboDetalle)
+                    .ThenInclude(rd => rd.Recibo)
+                .Where(pa => pa.Pago.Estatus == Core.Enums.EstatusPago.CONFIRMADO)
+                .Where(pa => pa.ReciboDetalle.Recibo.IdAspirante != null
+                          && aspiranteIds.Contains(pa.ReciboDetalle.Recibo.IdAspirante.Value))
+                .Select(pa => new
+                {
+                    IdAspirante = pa.ReciboDetalle.Recibo.IdAspirante!.Value,
+                    pa.MontoAplicado
+                })
+                .ToListAsync();
+
+            var pagosPorAspirante = pagosData
+                .GroupBy(p => p.IdAspirante)
+                .ToDictionary(g => g.Key, g => g.Sum(p => p.MontoAplicado));
+
+            var userIds = aspirantes.Select(a => a.CreatedBy).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+            var usuarios = await _dbContext.Users
+                .Where(u => userIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => $"{u.Nombres} {u.Apellidos}".Trim());
+
+            var agrupado = aspirantes
+                .GroupBy(a => a.CreatedBy ?? "SYSTEM")
+                .Select(g =>
+                {
+                    var detalles = g.Select(a =>
+                    {
+                        var totalPagado = pagosPorAspirante.GetValueOrDefault(a.IdAspirante, 0m);
+                        var comisionPago = totalPagado * (porcentajePorPago / 100m);
+
+                        return new AspiranteComisionDetalleDto
+                        {
+                            IdAspirante = a.IdAspirante,
+                            NombreCompleto = a.IdPersonaNavigation != null
+                                ? $"{a.IdPersonaNavigation.Nombre} {a.IdPersonaNavigation.ApellidoPaterno} {a.IdPersonaNavigation.ApellidoMaterno}".Trim()
+                                : "N/A",
+                            FechaRegistro = a.FechaRegistro,
+                            Estatus = a.IdAspiranteEstatusNavigation?.DescEstatus ?? "N/A",
+                            TotalPagado = totalPagado,
+                            ComisionGenerada = comisionPorRegistro + comisionPago
+                        };
+                    }).ToList();
+
+                    var totalRegistros = detalles.Count;
+                    var comRegistros = totalRegistros * comisionPorRegistro;
+                    var totalPagosRecibidos = detalles.Sum(d => d.TotalPagado);
+                    var comPagos = totalPagosRecibidos * (porcentajePorPago / 100m);
+
+                    return new UsuarioComisionDto
+                    {
+                        UsuarioId = g.Key,
+                        NombreUsuario = usuarios.GetValueOrDefault(g.Key, g.Key),
+                        TotalRegistros = totalRegistros,
+                        ComisionRegistros = comRegistros,
+                        TotalPagosRecibidos = totalPagosRecibidos,
+                        ComisionPagos = comPagos,
+                        TotalComision = comRegistros + comPagos,
+                        Detalle = detalles
+                    };
+                })
+                .OrderByDescending(u => u.TotalComision)
+                .ToList();
+
+            return new ComisionReporteDto
+            {
+                FechaDesde = fechaDesde,
+                FechaHasta = fechaHasta,
+                ComisionPorRegistro = comisionPorRegistro,
+                PorcentajePorPago = porcentajePorPago,
+                TotalComisionesGlobal = agrupado.Sum(u => u.TotalComision),
+                Comisiones = agrupado
+            };
         }
 
     }

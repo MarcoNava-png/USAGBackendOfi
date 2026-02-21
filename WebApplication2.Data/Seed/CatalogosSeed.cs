@@ -93,6 +93,89 @@ namespace WebApplication2.Data.Seed
                 dbContext.SaveChanges();
             }
 
+            if (!dbContext.Modalidad.Any())
+            {
+                var items = new List<Modalidad>()
+                {
+                    new Modalidad { DescModalidad = "Presencial", Activo = true },
+                    new Modalidad { DescModalidad = "En línea", Activo = true },
+                    new Modalidad { DescModalidad = "Mixta", Activo = true },
+                };
+
+                dbContext.Modalidad.AddRange(items);
+                dbContext.SaveChanges();
+            }
+
+            if (!dbContext.ModalidadPlan.Any())
+            {
+                var items = new List<ModalidadPlan>()
+                {
+                    new ModalidadPlan { DescModalidadPlan = "Con Título", Activo = true },
+                    new ModalidadPlan { DescModalidadPlan = "Sin Título", Activo = true },
+                };
+
+                dbContext.ModalidadPlan.AddRange(items);
+                dbContext.SaveChanges();
+            }
+
+            if (!dbContext.DocumentoRequisito.Any())
+            {
+                var items = new List<DocumentoRequisito>()
+                {
+                    new DocumentoRequisito
+                    {
+                        Clave = "ACTA-NAC",
+                        Descripcion = "Acta de Nacimiento",
+                        EsObligatorio = true,
+                        Orden = 1,
+                        Activo = true
+                    },
+                    new DocumentoRequisito
+                    {
+                        Clave = "CURP",
+                        Descripcion = "CURP",
+                        EsObligatorio = true,
+                        Orden = 2,
+                        Activo = true
+                    },
+                    new DocumentoRequisito
+                    {
+                        Clave = "CERT-BACH",
+                        Descripcion = "Certificado de Bachillerato",
+                        EsObligatorio = true,
+                        Orden = 3,
+                        Activo = true
+                    },
+                    new DocumentoRequisito
+                    {
+                        Clave = "INE",
+                        Descripcion = "Identificación Oficial (INE/Pasaporte)",
+                        EsObligatorio = true,
+                        Orden = 4,
+                        Activo = true
+                    },
+                    new DocumentoRequisito
+                    {
+                        Clave = "FOTO",
+                        Descripcion = "Fotografía tamaño infantil",
+                        EsObligatorio = true,
+                        Orden = 5,
+                        Activo = true
+                    },
+                    new DocumentoRequisito
+                    {
+                        Clave = "COMP-DOM",
+                        Descripcion = "Comprobante de Domicilio",
+                        EsObligatorio = false,
+                        Orden = 6,
+                        Activo = true
+                    }
+                };
+
+                dbContext.DocumentoRequisito.AddRange(items);
+                dbContext.SaveChanges();
+            }
+
             if (isDevelopment)
             {
                 if (!dbContext.CodigosPostales.Any())
@@ -627,64 +710,6 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.AspiranteConvenio.AddRange(items);
-                    dbContext.SaveChanges();
-                }
-
-                if (!dbContext.DocumentoRequisito.Any())
-                {
-                    var items = new List<DocumentoRequisito>()
-                    {
-                        new DocumentoRequisito
-                        {
-                            Clave = "ACTA-NAC",
-                            Descripcion = "Acta de Nacimiento",
-                            EsObligatorio = true,
-                            Orden = 1,
-                            Activo = true
-                        },
-                        new DocumentoRequisito
-                        {
-                            Clave = "CURP",
-                            Descripcion = "CURP",
-                            EsObligatorio = true,
-                            Orden = 2,
-                            Activo = true
-                        },
-                        new DocumentoRequisito
-                        {
-                            Clave = "CERT-BACH",
-                            Descripcion = "Certificado de Bachillerato",
-                            EsObligatorio = true,
-                            Orden = 3,
-                            Activo = true
-                        },
-                        new DocumentoRequisito
-                        {
-                            Clave = "INE",
-                            Descripcion = "Identificación Oficial (INE/Pasaporte)",
-                            EsObligatorio = true,
-                            Orden = 4,
-                            Activo = true
-                        },
-                        new DocumentoRequisito
-                        {
-                            Clave = "FOTO",
-                            Descripcion = "Fotografía tamaño infantil",
-                            EsObligatorio = true,
-                            Orden = 5,
-                            Activo = true
-                        },
-                        new DocumentoRequisito
-                        {
-                            Clave = "COMP-DOM",
-                            Descripcion = "Comprobante de Domicilio",
-                            EsObligatorio = false,
-                            Orden = 6,
-                            Activo = true
-                        }
-                    };
-
-                    dbContext.DocumentoRequisito.AddRange(items);
                     dbContext.SaveChanges();
                 }
 

@@ -31,5 +31,7 @@ namespace WebApplication2.Services.Interfaces
         Task AsignarProrrogaGlobalAsync(int idAspirante, DateTime fechaProrroga, string motivo, string usuarioId);
 
         Task<List<DocumentacionAspiranteResumenDto>> GetResumenDocumentacionAsync(string? filtroEstatus, string? busqueda, CancellationToken ct);
+
+        Task<bool> ResetearDocumentoAsync(long idAspiranteDocumento);
     }
 }

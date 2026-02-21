@@ -339,19 +339,29 @@ namespace WebApplication2.Services
 
         public async Task ActualizarEstatusPagoAsync(long idRecibo)
         {
+            // Verificar el estatus del recibo directamente en BD (evitar caché de EF Core
+            // que puede tener datos obsoletos si el recibo se actualizó con raw SQL)
+            var estatusRecibo = await _db.Recibo
+                .AsNoTracking()
+                .Where(r => r.IdRecibo == idRecibo)
+                .Select(r => r.Estatus)
+                .FirstOrDefaultAsync();
+
+            if (estatusRecibo != EstatusRecibo.PAGADO)
+                return;
+
             var solicitudes = await _db.SolicitudesDocumento
                 .Where(s => s.IdRecibo == idRecibo && s.Estatus == EstatusSolicitudDocumento.PENDIENTE_PAGO)
                 .ToListAsync();
 
-            var recibo = await _db.Recibo.FindAsync(idRecibo);
-
-            if (recibo?.Estatus == EstatusRecibo.PAGADO)
+            foreach (var sol in solicitudes)
             {
-                foreach (var sol in solicitudes)
-                {
-                    sol.Estatus = EstatusSolicitudDocumento.PAGADO;
-                    sol.FechaModificacion = DateTime.UtcNow;
-                }
+                sol.Estatus = EstatusSolicitudDocumento.PAGADO;
+                sol.FechaModificacion = DateTime.UtcNow;
+            }
+
+            if (solicitudes.Any())
+            {
                 await _db.SaveChangesAsync();
             }
         }

@@ -24,5 +24,7 @@ namespace WebApplication2.Services.Interfaces
         Task<AspiranteEstatus?> ObtenerEstatusEnProcesoAsync();
         Task<PlantillaCobroDto?> BuscarPlantillaParaAspiranteAsync(int idAspirante, CancellationToken ct);
         Task<IReadOnlyList<ReciboDto>> GenerarRecibosDesdeePlantillaParaAspiranteAsync(int idAspirante, int idPlantillaCobro, bool eliminarPendientes, CancellationToken ct);
+        Task<bool> OcultarAspiranteAsync(int idAspirante, string usuarioId);
+        Task<ComisionReporteDto> CalcularComisionesAsync(DateTime fechaDesde, DateTime fechaHasta, decimal comisionPorRegistro, decimal porcentajePorPago, string? filtrarPorUsuarioId = null);
     }
 }

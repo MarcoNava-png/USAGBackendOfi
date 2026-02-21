@@ -7,7 +7,7 @@ namespace WebApplication2.Controllers;
 
 [ApiController]
 [Route("api/reportes-academicos")]
-[Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.DOCENTE}")]
+[Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.DOCENTE},{Rol.ACADEMICO}")]
 public class ReporteAcademicoController : ControllerBase
 {
     private readonly IReporteAcademicoService _svc;

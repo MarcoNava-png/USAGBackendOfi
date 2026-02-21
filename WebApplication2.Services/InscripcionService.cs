@@ -164,7 +164,7 @@ namespace WebApplication2.Services
                 Nombre = $"Plan {periodoAcad.Nombre}",
                 IdPeriodicidad = periodicidad.IdPeriodicidad,
                 IdPeriodoAcademico = idPeriodoAcademico,
-                Modalidad = ModalidadPlanEnum.CON_TITULO,
+                IdModalidadPlan = _dbContext.ModalidadPlan.First(m => m.DescModalidadPlan == "Con Título").IdModalidadPlan,
                 Moneda = "MXN",
                 Activo = true,
                 VigenciaDesde = periodoAcad.FechaInicio,

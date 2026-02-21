@@ -18,7 +18,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/grupos")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.COORDINADOR},{Rol.DIRECTOR},{Rol.DOCENTE},{Rol.CONTROL_ESCOLAR}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.COORDINADOR},{Rol.DIRECTOR},{Rol.DOCENTE},{Rol.CONTROL_ESCOLAR},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
     public class GrupoController : ControllerBase
     {
         private readonly IGrupoService _grupoService;

@@ -15,7 +15,7 @@ namespace WebApplication2.Configuration.Mapping.Profiles
         {
             CreateMap<CrearPlanPagoDto, PlanPago>()
                 .ForMember(d => d.IdPlanPago, o => o.Ignore())
-                .ForMember(d => d.Modalidad, o => o.MapFrom(s => s.modalidad))
+                .ForMember(d => d.IdModalidadPlan, o => o.MapFrom(s => s.idModalidadPlan))
                 .ForMember(d => d.Activo, o => o.MapFrom(s => s.Activo));
 
             CreateMap<CrearPlanDetalleDto, PlanPagoDetalle>()

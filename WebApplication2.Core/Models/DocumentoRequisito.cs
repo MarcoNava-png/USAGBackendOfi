@@ -19,6 +19,8 @@ namespace WebApplication2.Core.Models
         public bool Activo { get; set; } = true;
 
         public ICollection<AspiranteDocumento> AspiranteDocumentos { get; set; } = new List<AspiranteDocumento>();
+
+        public ICollection<PlanDocumentoRequisito> PlanDocumentosRequisito { get; set; } = new List<PlanDocumentoRequisito>();
     }
 }
 

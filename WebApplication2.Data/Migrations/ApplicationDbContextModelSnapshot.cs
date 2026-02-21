@@ -186,6 +186,9 @@ namespace WebApplication2.Data.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Nombres")
                         .HasColumnType("nvarchar(max)");
 
@@ -312,6 +315,10 @@ namespace WebApplication2.Data.Migrations
                     b.Property<int?>("CuatrimestreInteres")
                         .HasColumnType("int");
 
+                    b.Property<string>("DomicilioEmpresa")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<DateTime>("FechaRegistro")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
@@ -326,18 +333,46 @@ namespace WebApplication2.Data.Migrations
                     b.Property<int>("IdMedioContacto")
                         .HasColumnType("int");
 
+                    b.Property<int?>("IdModalidad")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("IdPeriodoAcademico")
+                        .HasColumnType("int");
+
                     b.Property<int?>("IdPersona")
                         .HasColumnType("int");
 
                     b.Property<int>("IdPlan")
                         .HasColumnType("int");
 
+                    b.Property<string>("InstitucionProcedencia")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NombreEmpresa")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Observaciones")
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
+                    b.Property<string>("PuestoEmpresa")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("QuienCubreGastos")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool?>("RecorridoPlantel")
+                        .HasColumnType("bit");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<bool?>("Trabaja")
+                        .HasColumnType("bit");
 
                     b.Property<int?>("TurnoId")
                         .HasColumnType("int");
@@ -354,6 +389,10 @@ namespace WebApplication2.Data.Migrations
                     b.HasIndex("IdAspiranteEstatus");
 
                     b.HasIndex("IdMedioContacto");
+
+                    b.HasIndex("IdModalidad");
+
+                    b.HasIndex("IdPeriodoAcademico");
 
                     b.HasIndex("IdPersona");
 
@@ -2120,6 +2159,60 @@ namespace WebApplication2.Data.Migrations
                     b.ToTable("MedioPago");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.Modalidad", b =>
+                {
+                    b.Property<int>("IdModalidad")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdModalidad"));
+
+                    b.Property<bool>("Activo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("DescModalidad")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("IdModalidad")
+                        .HasName("PK_Modalidad");
+
+                    b.HasIndex(new[] { "DescModalidad" }, "UQ_Modalidad")
+                        .IsUnique()
+                        .HasFilter("[DescModalidad] IS NOT NULL");
+
+                    b.ToTable("Modalidad");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.ModalidadPlan", b =>
+                {
+                    b.Property<int>("IdModalidadPlan")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdModalidadPlan"));
+
+                    b.Property<bool>("Activo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("DescModalidadPlan")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("IdModalidadPlan")
+                        .HasName("PK_ModalidadPlan");
+
+                    b.HasIndex(new[] { "DescModalidadPlan" }, "UQ_ModalidadPlan")
+                        .IsUnique()
+                        .HasFilter("[DescModalidadPlan] IS NOT NULL");
+
+                    b.ToTable("ModalidadPlan");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.Municipio", b =>
                 {
                     b.Property<string>("Id")
@@ -2548,6 +2641,10 @@ namespace WebApplication2.Data.Migrations
                     b.Property<int?>("IdGenero")
                         .HasColumnType("int");
 
+                    b.Property<string>("Nacionalidad")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Nombre")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -2611,6 +2708,48 @@ namespace WebApplication2.Data.Migrations
                         .HasFilter("[Rfc] IS NOT NULL");
 
                     b.ToTable("Persona");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.PlanDocumentoRequisito", b =>
+                {
+                    b.Property<int>("IdPlanDocumentoRequisito")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdPlanDocumentoRequisito"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("EsObligatorio")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("IdDocumentoRequisito")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdPlanEstudios")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("IdPlanDocumentoRequisito");
+
+                    b.HasIndex("IdDocumentoRequisito");
+
+                    b.HasIndex("IdPlanEstudios", "IdDocumentoRequisito")
+                        .IsUnique();
+
+                    b.ToTable("PlanDocumentoRequisito");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.PlanEstudios", b =>
@@ -2700,6 +2839,35 @@ namespace WebApplication2.Data.Migrations
                     b.ToTable("PlanEstudios");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.PlanModalidadDia", b =>
+                {
+                    b.Property<int>("IdPlanModalidadDia")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdPlanModalidadDia"));
+
+                    b.Property<byte>("IdDiaSemana")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("IdModalidad")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdPlanEstudios")
+                        .HasColumnType("int");
+
+                    b.HasKey("IdPlanModalidadDia");
+
+                    b.HasIndex("IdDiaSemana");
+
+                    b.HasIndex("IdModalidad");
+
+                    b.HasIndex(new[] { "IdPlanEstudios", "IdModalidad", "IdDiaSemana" }, "UQ_PlanModalidadDia")
+                        .IsUnique();
+
+                    b.ToTable("PlanModalidadDia");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.PlanPago", b =>
                 {
                     b.Property<int>("IdPlanPago")
@@ -2717,6 +2885,9 @@ namespace WebApplication2.Data.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("IdModalidadPlan")
+                        .HasColumnType("int");
+
                     b.Property<int>("IdPeriodicidad")
                         .HasColumnType("int");
 
@@ -2724,9 +2895,6 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<int?>("IdPlanEstudios")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Modalidad")
                         .HasColumnType("int");
 
                     b.Property<string>("Moneda")
@@ -2751,6 +2919,8 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("date");
 
                     b.HasKey("IdPlanPago");
+
+                    b.HasIndex("IdModalidadPlan");
 
                     b.ToTable("PlanPago");
                 });
@@ -2967,6 +3137,8 @@ namespace WebApplication2.Data.Migrations
                     b.HasKey("IdPlantillaCobro");
 
                     b.HasIndex("EsActiva");
+
+                    b.HasIndex("IdModalidad");
 
                     b.HasIndex("IdPlanEstudios");
 
@@ -3597,6 +3769,16 @@ namespace WebApplication2.Data.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_Aspirante_Medio");
 
+                    b.HasOne("WebApplication2.Core.Models.Modalidad", "IdModalidadNavigation")
+                        .WithMany("Aspirante")
+                        .HasForeignKey("IdModalidad")
+                        .HasConstraintName("FK_Aspirante_Modalidad");
+
+                    b.HasOne("WebApplication2.Core.Models.PeriodoAcademico", "IdPeriodoAcademicoNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPeriodoAcademico")
+                        .HasConstraintName("FK_Aspirante_PeriodoAcademico");
+
                     b.HasOne("WebApplication2.Core.Models.Persona", "IdPersonaNavigation")
                         .WithMany("Aspirante")
                         .HasForeignKey("IdPersona")
@@ -3615,6 +3797,10 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("IdAspiranteEstatusNavigation");
 
                     b.Navigation("IdMedioContactoNavigation");
+
+                    b.Navigation("IdModalidadNavigation");
+
+                    b.Navigation("IdPeriodoAcademicoNavigation");
 
                     b.Navigation("IdPersonaNavigation");
 
@@ -4113,6 +4299,25 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("IdGeneroNavigation");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.PlanDocumentoRequisito", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.DocumentoRequisito", "DocumentoRequisito")
+                        .WithMany("PlanDocumentosRequisito")
+                        .HasForeignKey("IdDocumentoRequisito")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.PlanEstudios", "PlanEstudios")
+                        .WithMany("DocumentosRequisito")
+                        .HasForeignKey("IdPlanEstudios")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DocumentoRequisito");
+
+                    b.Navigation("PlanEstudios");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.PlanEstudios", b =>
                 {
                     b.HasOne("WebApplication2.Core.Models.Campus", "IdCampusNavigation")
@@ -4138,6 +4343,45 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("IdNivelEducativoNavigation");
 
                     b.Navigation("IdPeriodicidadNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.PlanModalidadDia", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.DiaSemana", "IdDiaSemanaNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdDiaSemana")
+                        .IsRequired()
+                        .HasConstraintName("FK_PlanModalidadDia_DiaSemana");
+
+                    b.HasOne("WebApplication2.Core.Models.Modalidad", "IdModalidadNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdModalidad")
+                        .IsRequired()
+                        .HasConstraintName("FK_PlanModalidadDia_Modalidad");
+
+                    b.HasOne("WebApplication2.Core.Models.PlanEstudios", "IdPlanEstudiosNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPlanEstudios")
+                        .IsRequired()
+                        .HasConstraintName("FK_PlanModalidadDia_Plan");
+
+                    b.Navigation("IdDiaSemanaNavigation");
+
+                    b.Navigation("IdModalidadNavigation");
+
+                    b.Navigation("IdPlanEstudiosNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.PlanPago", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.ModalidadPlan", "IdModalidadPlanNavigation")
+                        .WithMany("PlanPago")
+                        .HasForeignKey("IdModalidadPlan")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_PlanPago_ModalidadPlan");
+
+                    b.Navigation("IdModalidadPlanNavigation");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.PlanPagoAsignacion", b =>
@@ -4166,11 +4410,19 @@ namespace WebApplication2.Data.Migrations
 
             modelBuilder.Entity("WebApplication2.Core.Models.PlantillaCobro", b =>
                 {
+                    b.HasOne("WebApplication2.Core.Models.Modalidad", "IdModalidadNavigation")
+                        .WithMany("PlantillaCobro")
+                        .HasForeignKey("IdModalidad")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_PlantillaCobro_Modalidad");
+
                     b.HasOne("WebApplication2.Core.Models.PlanEstudios", "IdPlanEstudiosNavigation")
                         .WithMany()
                         .HasForeignKey("IdPlanEstudios")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("IdModalidadNavigation");
 
                     b.Navigation("IdPlanEstudiosNavigation");
                 });
@@ -4342,6 +4594,8 @@ namespace WebApplication2.Data.Migrations
             modelBuilder.Entity("WebApplication2.Core.Models.DocumentoRequisito", b =>
                 {
                     b.Navigation("AspiranteDocumentos");
+
+                    b.Navigation("PlanDocumentosRequisito");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Estado", b =>
@@ -4397,6 +4651,18 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("Aspirante");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.Modalidad", b =>
+                {
+                    b.Navigation("Aspirante");
+
+                    b.Navigation("PlantillaCobro");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.ModalidadPlan", b =>
+                {
+                    b.Navigation("PlanPago");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.Municipio", b =>
                 {
                     b.Navigation("CodigosPostales");
@@ -4443,6 +4709,8 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("Aspirante");
 
                     b.Navigation("ConvenioAlcance");
+
+                    b.Navigation("DocumentosRequisito");
 
                     b.Navigation("Estudiante");
 

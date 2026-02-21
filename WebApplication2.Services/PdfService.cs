@@ -14,7 +14,7 @@ namespace WebApplication2.Services;
 public class PdfService : IPdfService
 {
     private readonly string _logoPath;
-
+    private static readonly string FontePrincipal = DetectarFuenteDisponible();
     private static readonly string ColorAzulOscuro = "#003366";
     private static readonly string ColorAzulClaro = "#0088CC";
     private static readonly string ColorGris = "#666666";
@@ -30,7 +30,48 @@ public class PdfService : IPdfService
         {
             _logoPath = Path.Combine(env.ContentRootPath, "Logousag.png");
         }
+
+        // Configurar fuente de respaldo para evitar errores cuando una fuente no está disponible
+        QuestPDF.Settings.CheckIfAllTextGlyphsAreAvailable = false;
     }
+
+    private static string DetectarFuenteDisponible()
+    {
+        // Configurar licencia antes de probar fuentes
+        QuestPDF.Settings.License = LicenseType.Community;
+        QuestPDF.Settings.CheckIfAllTextGlyphsAreAvailable = false;
+
+        string[] fuentesPreferidas = ["Arial", "Liberation Sans", "DejaVu Sans", "Helvetica"];
+
+        foreach (var fuente in fuentesPreferidas)
+        {
+            try
+            {
+                var testDoc = Document.Create(c =>
+                {
+                    c.Page(p =>
+                    {
+                        p.Content().Text("test").FontFamily(fuente);
+                    });
+                });
+                testDoc.GeneratePdf();
+                Console.WriteLine($"[PdfService] Fuente seleccionada: {fuente}");
+                return fuente;
+            }
+            catch
+            {
+                Console.WriteLine($"[PdfService] Fuente '{fuente}' no disponible, probando siguiente...");
+                continue;
+            }
+        }
+
+        Console.WriteLine("[PdfService] Usando fuente por defecto: DejaVu Sans");
+        return "DejaVu Sans";
+    }
+
+    private static readonly string ColorTitulo = "#2F5496";
+    private static readonly string ColorSeccionHeader = "#B4C6E7";
+    private static readonly string ColorBorde = "#000000";
 
     public byte[] GenerarHojaInscripcion(FichaAdmisionDto ficha)
     {
@@ -39,460 +80,342 @@ public class PdfService : IPdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.Letter);
-                page.MarginVertical(30);
-                page.MarginHorizontal(40);
-                page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Arial"));
+                page.MarginTop(48);
+                page.MarginBottom(42);
+                page.MarginHorizontal(57);
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily(FontePrincipal).Bold());
 
-                page.Header().Element(c => ComposeHeader(c, ficha));
-
-                page.Content().Element(c => ComposeContent(c, ficha));
-
-                page.Footer().Element(ComposeFooter);
+                page.Content().Column(col =>
+                {
+                    col.Item().Element(c => FichaHeader(c, ficha));
+                    col.Item().Element(c => FichaTableBody(c, ficha));
+                    col.Item().Element(c => FichaFirmas(c, ficha));
+                    col.Item().Element(c => FichaAvisoPrivacidad(c));
+                });
             });
         });
 
         return document.GeneratePdf();
     }
 
-    private void ComposeHeader(IContainer container, FichaAdmisionDto ficha)
+    private void FichaHeader(IContainer container, FichaAdmisionDto ficha)
     {
-        container.Column(column =>
-        {
-            column.Item().Row(row =>
-            {
-                if (File.Exists(_logoPath))
-                {
-                    row.ConstantItem(120).Height(60).Image(_logoPath).FitArea();
-                }
-                else
-                {
-                    row.ConstantItem(120).Height(60).Background(ColorGrisClaro)
-                        .AlignCenter().AlignMiddle()
-                        .Text("LOGO").FontSize(12).Bold();
-                }
+        var folio = ficha.Folio ?? $"ASP-{ficha.IdAspirante:D6}";
+        var periodo = ficha.InformacionAcademica?.PeriodoAcademico
+            ?? ficha.InformacionAcademica?.Periodicidad
+            ?? "";
+        var fecha = DateTime.Now.ToString("dd/MM/yyyy");
 
-                row.RelativeItem().Column(col =>
+        container.Row(row =>
+        {
+            row.ConstantItem(77).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignCenter().AlignMiddle().Padding(4).Column(logoCol =>
                 {
-                    col.Item().AlignCenter().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO")
-                        .FontSize(16).Bold().FontColor(ColorAzulOscuro);
-                    col.Item().AlignCenter().Text("HOJA DE INSCRIPCIÓN")
-                        .FontSize(14).SemiBold().FontColor(ColorAzulClaro);
-                    col.Item().AlignCenter().Text("\"Veni Vidi Vici\"")
-                        .FontSize(9).Italic().FontColor(ColorGris);
+                    if (File.Exists(_logoPath))
+                        logoCol.Item().MaxHeight(45).Image(_logoPath).FitArea();
                 });
 
-                row.ConstantItem(120);
-            });
+            row.ConstantItem(274).Border(0.5f).BorderColor(ColorBorde)
+                .Background(ColorTitulo).AlignCenter().AlignMiddle()
+                .Text("FORMATO DEL ASPIRANTE").Bold().FontSize(14).FontColor(Colors.White);
 
-            column.Item().PaddingTop(10).LineHorizontal(2).LineColor(ColorAzulOscuro);
-
-            column.Item().PaddingTop(8).Row(row =>
+            row.RelativeItem().Column(infoCol =>
             {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("FOLIO: ").Bold().FontColor(ColorAzulOscuro);
-                    text.Span(ficha.Folio ?? $"ASP-{ficha.IdAspirante:D6}");
-                });
-                row.RelativeItem().AlignRight().Text(text =>
-                {
-                    text.Span("FECHA: ").Bold().FontColor(ColorAzulOscuro);
-                    text.Span(DateTime.Now.ToString("dd/MM/yyyy"));
-                });
-            });
-
-            column.Item().PaddingTop(5).LineHorizontal(1).LineColor(ColorGris);
-        });
-    }
-
-    private void ComposeContent(IContainer container, FichaAdmisionDto ficha)
-    {
-        container.PaddingVertical(10).Column(column =>
-        {
-            column.Item().Element(c => ComposeSectionHeader(c, "DATOS PERSONALES"));
-            column.Item().Element(c => ComposeDatosPersonales(c, ficha.DatosPersonales));
-
-            column.Item().PaddingVertical(8);
-
-            column.Item().Element(c => ComposeSectionHeader(c, "DATOS DE CONTACTO"));
-            column.Item().Element(c => ComposeDatosContacto(c, ficha.DatosContacto));
-
-            column.Item().PaddingVertical(8);
-
-            column.Item().Element(c => ComposeSectionHeader(c, "INFORMACIÓN ACADÉMICA"));
-            column.Item().Element(c => ComposeInformacionAcademica(c, ficha.InformacionAcademica));
-
-            column.Item().PaddingVertical(8);
-
-            column.Item().Element(c => ComposeSectionHeader(c, "DOCUMENTOS ENTREGADOS"));
-            column.Item().Element(c => ComposeDocumentos(c, ficha.Documentos));
-
-            column.Item().PaddingVertical(8);
-
-            column.Item().Element(c => ComposeSectionHeader(c, "INFORMACIÓN DE PAGO"));
-            column.Item().Element(c => ComposeInformacionPago(c, ficha.InformacionPagos));
-
-            column.Item().PaddingVertical(15);
-
-            column.Item().Element(ComposeFirmas);
-        });
-    }
-
-    private void ComposeSectionHeader(IContainer container, string titulo)
-    {
-        container.Background(ColorAzulOscuro).Padding(6)
-            .Text(titulo).FontSize(11).Bold().FontColor(Colors.White);
-    }
-
-    private void ComposeDatosPersonales(IContainer container, DatosPersonalesDto datos)
-    {
-        container.Border(1).BorderColor(ColorGris).Padding(10).Column(column =>
-        {
-            column.Item().Row(row =>
-            {
-                row.RelativeItem().Column(col =>
-                {
-                    col.Item().Text(text =>
+                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(20)
+                    .PaddingHorizontal(5).AlignMiddle().Row(r =>
                     {
-                        text.Span("Nombre Completo: ").SemiBold();
-                        text.Span(datos.NombreCompleto ?? "N/A");
+                        r.AutoItem().Text("FOLIO: ").Bold();
+                        r.RelativeItem().Text(folio).Bold();
                     });
-                });
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("CURP: ").SemiBold();
-                    text.Span(datos.CURP ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("RFC: ").SemiBold();
-                    text.Span(datos.RFC ?? "N/A");
-                });
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Fecha de Nacimiento: ").SemiBold();
-                    text.Span(datos.FechaNacimiento?.ToString("dd/MM/yyyy") ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Edad: ").SemiBold();
-                    text.Span(datos.Edad.HasValue ? $"{datos.Edad} años" : "N/A");
-                });
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Género: ").SemiBold();
-                    text.Span(datos.Genero ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Estado Civil: ").SemiBold();
-                    text.Span(datos.EstadoCivil ?? "N/A");
-                });
-            });
-        });
-    }
-
-    private void ComposeDatosContacto(IContainer container, DatosContactoDto datos)
-    {
-        container.Border(1).BorderColor(ColorGris).Padding(10).Column(column =>
-        {
-            column.Item().Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Email: ").SemiBold();
-                    text.Span(datos.Email ?? "N/A");
-                });
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Teléfono: ").SemiBold();
-                    text.Span(datos.Telefono ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Celular: ").SemiBold();
-                    text.Span(datos.Celular ?? "N/A");
-                });
-            });
-
-            column.Item().PaddingTop(5).Text(text =>
-            {
-                text.Span("Dirección: ").SemiBold();
-                text.Span(datos.Direccion?.DireccionCompleta ?? "N/A");
-            });
-        });
-    }
-
-    private void ComposeInformacionAcademica(IContainer container, InformacionAcademicaDto datos)
-    {
-        container.Border(1).BorderColor(ColorGris).Padding(10).Column(column =>
-        {
-            column.Item().Text(text =>
-            {
-                text.Span("Plan de Estudios: ").SemiBold();
-                text.Span(datos.NombrePlan ?? "N/A");
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Clave: ").SemiBold();
-                    text.Span(datos.ClavePlan ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("RVOE: ").SemiBold();
-                    text.Span(datos.RVOE ?? "N/A");
-                });
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Campus: ").SemiBold();
-                    text.Span(datos.Campus ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Turno: ").SemiBold();
-                    text.Span(datos.Turno ?? "N/A");
-                });
-            });
-
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Nivel Educativo: ").SemiBold();
-                    text.Span(datos.NivelEducativo ?? "N/A");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Duración: ").SemiBold();
-                    text.Span(datos.DuracionMeses.HasValue ? $"{datos.DuracionMeses} meses" : "N/A");
-                });
-            });
-        });
-    }
-
-    private void ComposeDocumentos(IContainer container, List<DocumentoDto> documentos)
-    {
-        container.Border(1).BorderColor(ColorGris).Padding(10).Column(column =>
-        {
-            if (documentos == null || documentos.Count == 0)
-            {
-                column.Item().Text("Sin documentos registrados").Italic().FontColor(ColorGris);
-                return;
-            }
-
-            var docsEnFilas = documentos.Select((doc, index) => new { doc, index })
-                .GroupBy(x => x.index / 2)
-                .ToList();
-
-            foreach (var fila in docsEnFilas)
-            {
-                column.Item().PaddingVertical(2).Row(row =>
-                {
-                    foreach (var item in fila)
+                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(20)
+                    .PaddingHorizontal(5).AlignMiddle().Row(r =>
                     {
-                        row.RelativeItem().Row(docRow =>
-                        {
-                            var icono = GetDocumentoIcono(item.doc.Estatus);
-                            var color = GetDocumentoColor(item.doc.Estatus);
-
-                            docRow.ConstantItem(18).Text(icono).FontColor(color);
-                            docRow.RelativeItem().Text(text =>
-                            {
-                                text.Span(item.doc.Descripcion);
-                                if (item.doc.EsObligatorio)
-                                {
-                                    text.Span(" *").FontColor(Colors.Red.Medium);
-                                }
-                            });
-                        });
-                    }
-
-                    if (fila.Count() == 1)
+                        r.AutoItem().Text("PERIODO: ").Bold().FontSize(8);
+                        r.RelativeItem().Text(periodo).Bold().FontSize(8);
+                    });
+                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(20)
+                    .PaddingHorizontal(5).AlignMiddle().Row(r =>
                     {
-                        row.RelativeItem();
-                    }
-                });
-            }
-
-            column.Item().PaddingTop(8).Text(text =>
-            {
-                text.Span("Leyenda: ").SemiBold().FontSize(8);
-                text.Span("✓ Validado  ").FontColor(Colors.Green.Medium).FontSize(8);
-                text.Span("○ Pendiente  ").FontColor(Colors.Orange.Medium).FontSize(8);
-                text.Span("✗ Rechazado  ").FontColor(Colors.Red.Medium).FontSize(8);
-                text.Span("* Obligatorio").FontColor(Colors.Red.Medium).FontSize(8);
+                        r.AutoItem().Text("FECHA: ").Bold();
+                        r.RelativeItem().Text(fecha).Bold();
+                    });
             });
         });
     }
 
-    private string GetDocumentoIcono(string estatus)
+    private void FichaTableBody(IContainer container, FichaAdmisionDto ficha)
     {
-        return estatus?.ToUpper() switch
-        {
-            "VALIDADO" => "✓",
-            "RECHAZADO" => "✗",
-            "SUBIDO" => "◐",
-            _ => "○"
-        };
-    }
-
-    private string GetDocumentoColor(string estatus)
-    {
-        return estatus?.ToUpper() switch
-        {
-            "VALIDADO" => Colors.Green.Medium,
-            "RECHAZADO" => Colors.Red.Medium,
-            "SUBIDO" => Colors.Blue.Medium,
-            _ => Colors.Orange.Medium
-        };
-    }
-
-    private void ComposeInformacionPago(IContainer container, InformacionPagosDto pagos)
-    {
-        container.Border(1).BorderColor(ColorGris).Padding(10).Column(column =>
-        {
-            column.Item().Row(row =>
+        container.Border(0.5f).BorderColor(ColorBorde)
+            .Column(col =>
             {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Total a Pagar: ").SemiBold();
-                    text.Span($"${pagos.TotalAPagar:N2}");
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Total Pagado: ").SemiBold();
-                    text.Span($"${pagos.TotalPagado:N2}").FontColor(Colors.Green.Medium);
-                });
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Saldo Pendiente: ").SemiBold();
-                    var colorSaldo = pagos.SaldoPendiente > 0 ? Colors.Red.Medium : Colors.Green.Medium;
-                    text.Span($"${pagos.SaldoPendiente:N2}").FontColor(colorSaldo);
-                });
+                FichaFilasDatosGenerales(col, ficha);
+                FichaFilasProgramaEducativo(col, ficha);
+                FichaFilasSocioeconomicos(col, ficha);
+                FichaFilasFinancieros(col, ficha);
             });
+    }
 
-            if (pagos.Recibos != null && pagos.Recibos.Count > 0)
+    private void FichaFilasDatosGenerales(ColumnDescriptor col, FichaAdmisionDto ficha)
+    {
+        var dp = ficha.DatosPersonales;
+        var dc = ficha.DatosContacto;
+        var dir = dc?.Direccion;
+        col.Item().Background(ColorSeccionHeader).MinHeight(20)
+            .AlignCenter().AlignMiddle()
+            .Text("DATOS GENERALES DEL ALUMNO");
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(323).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"NOMBRE: {dp?.NombreCompleto ?? ""}");
+            row.ConstantItem(98).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"GENERO: {dp?.Genero ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"EDAD: {dp?.Edad?.ToString() ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(141).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"ESTADO CIVIL: {dp?.EstadoCivil ?? ""}");
+            row.ConstantItem(183).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"CALLE: {dir?.Calle ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"COLONIA: {dir?.Colonia ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(77).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"C.P. {dir?.CodigoPostal ?? ""}");
+            row.ConstantItem(175).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"TELEFONO: {dc?.Telefono ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"CORREO: {dc?.Email ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(190).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"NACIONALIDAD: {dp?.Nacionalidad ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"CIUDAD Y ESTADO: {(dir != null ? $"{dir.Municipio}, {dir.Estado}" : "")}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"CURP: {dp?.CURP ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(253).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"TELEFONO ALTERNO: {dc?.Celular ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"PARENTESCO: {dc?.ParentescoContactoEmergencia ?? ""}");
+        });
+    }
+
+    private void FichaFilasProgramaEducativo(ColumnDescriptor col, FichaAdmisionDto ficha)
+    {
+        var ia = ficha.InformacionAcademica;
+        var seg = ficha.Seguimiento;
+        var recorrido = ia?.RecorridoPlantel;
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+            .Background(ColorSeccionHeader).MinHeight(20)
+            .AlignCenter().AlignMiddle()
+            .Text("DATOS DEL PROGRAMA EDUCATIVO");
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"PROGRAMA DE INTERES: {ia?.NombrePlan ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"INSTITUCION DE PROCEDENCIA: {ia?.InstitucionProcedencia ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(63).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle().Text("CAMPUS:");
+            row.ConstantItem(112).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle().Text(ia?.Campus ?? "");
+            row.ConstantItem(126).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"TURNO: {ia?.Turno ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"MODALIDAD: {ia?.Modalidad ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(140).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"HORARIO: {ia?.Turno ?? ""}");
+            row.ConstantItem(140).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle().Text($"DIAS: {ia?.Dias ?? ""}");
+            row.ConstantItem(121).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text("RECORRIDO POR EL CAMPUS").FontSize(8);
+            row.ConstantItem(28).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignMiddle().AlignCenter()
+                .Text(recorrido == true ? "SI X" : "SI").FontSize(9);
+            row.RelativeItem().AlignMiddle().AlignCenter()
+                .Text(recorrido == false ? "NO X" : "NO").FontSize(9);
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"COMO NOS CONOCISTE: {seg?.MedioContacto ?? ""}");
+        });
+    }
+
+    private void FichaFilasSocioeconomicos(ColumnDescriptor col, FichaAdmisionDto ficha)
+    {
+        var se = ficha.DatosSocioeconomicos;
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+            .Background(ColorSeccionHeader).MinHeight(20)
+            .AlignCenter().AlignMiddle()
+            .Text("DATOS SOCIOECONOMICOS");
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(70).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle().Text("TRABAJAS:");
+            row.ConstantItem(27).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignMiddle().AlignCenter()
+                .Text(se?.Trabaja == true ? "SI X" : "SI").FontSize(9);
+            row.ConstantItem(36).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignMiddle().AlignCenter()
+                .Text(se?.Trabaja == false ? "NO X" : "NO").FontSize(9);
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"NOMBRE DE LA EMPRESA: {se?.NombreEmpresa ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.ConstantItem(323).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(5).AlignMiddle()
+                .Text($"DOMICILIO: {se?.DomicilioEmpresa ?? ""}");
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"PUESTO: {se?.PuestoEmpresa ?? ""}");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        {
+            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
+                .Text($"QUIEN CUBRIRA TUS GASTOS: {se?.QuienCubreGastos ?? ""}");
+        });
+    }
+
+    private void FichaFilasFinancieros(ColumnDescriptor col, FichaAdmisionDto ficha)
+    {
+        var pagos = ficha.InformacionPagos;
+        var costos = pagos?.CostosDesglose ?? new List<CostoDesglosePdfDto>();
+        var tieneConvenio = pagos?.TieneConvenio ?? false;
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+            .Background(ColorSeccionHeader).MinHeight(20)
+            .AlignCenter().AlignMiddle()
+            .Text("DATOS FINANCIEROS");
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(18).Row(row =>
+        {
+            row.ConstantItem(203).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignMiddle().AlignCenter().Text("COSTOS");
+            row.RelativeItem().AlignMiddle().AlignCenter()
+                .Text("DETALLES");
+        });
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).Row(mainRow =>
+        {
+            mainRow.ConstantItem(203).BorderRight(0.5f).BorderColor(ColorBorde).Column(costCol =>
             {
-                column.Item().PaddingTop(10).Text("Detalle de Recibos:").SemiBold();
-
-                foreach (var recibo in pagos.Recibos)
+                for (int i = 0; i < costos.Count; i++)
                 {
-                    column.Item().PaddingTop(5).Background(ColorGrisClaro).Padding(6).Row(row =>
+                    var costo = costos[i];
+                    var item = i > 0
+                        ? costCol.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+                        : costCol.Item();
+
+                    item.MinHeight(17).Row(r =>
                     {
-                        row.RelativeItem().Column(col =>
-                        {
-                            col.Item().Text(text =>
-                            {
-                                text.Span($"Folio: {recibo.Folio ?? "N/A"}").SemiBold();
-                                text.Span($"  |  Estado: ").SemiBold();
-                                var colorEstatus = GetEstatusReciboColor(recibo.Estatus);
-                                text.Span(recibo.Estatus).FontColor(colorEstatus).Bold();
-                            });
-
-                            if (recibo.Conceptos != null && recibo.Conceptos.Count > 0)
-                            {
-                                foreach (var concepto in recibo.Conceptos)
-                                {
-                                    col.Item().PaddingLeft(10).Text($"• {concepto.Concepto}: ${concepto.Subtotal:N2}")
-                                        .FontSize(9);
-                                }
-                            }
-                        });
-
-                        row.ConstantItem(100).AlignRight().Column(col =>
-                        {
-                            col.Item().Text($"Total: ${recibo.Total:N2}").SemiBold();
-                            col.Item().Text($"Saldo: ${recibo.Saldo:N2}").FontSize(9);
-                        });
+                        r.ConstantItem(133).BorderRight(0.5f).BorderColor(ColorBorde)
+                            .PaddingHorizontal(5).AlignMiddle()
+                            .Text(costo.Concepto).FontSize(9);
+                        r.RelativeItem().PaddingHorizontal(3).AlignMiddle().AlignRight()
+                            .Text(costo.Monto.HasValue ? $"${costo.Monto.Value:N2}" : "N/A").FontSize(9);
                     });
                 }
-            }
-            else
-            {
-                column.Item().PaddingTop(5).Text("Sin recibos generados").Italic().FontColor(ColorGris);
-            }
+
+                // Fila de CONVENIO
+                costCol.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(17).Row(r =>
+                {
+                    r.ConstantItem(133).BorderRight(0.5f).BorderColor(ColorBorde)
+                        .PaddingHorizontal(5).AlignMiddle()
+                        .Text("CONVENIO").FontSize(9);
+                    r.RelativeItem().PaddingHorizontal(3).AlignMiddle().AlignCenter()
+                        .Text(tieneConvenio ? "SI" : "NO").FontSize(9);
+                });
+            });
+
+            mainRow.RelativeItem().Padding(5)
+                .Text(ficha.Observaciones ?? "").FontSize(9);
         });
     }
 
-    private string GetEstatusReciboColor(string estatus)
+    private void FichaFirmas(IContainer container, FichaAdmisionDto ficha)
     {
-        return estatus?.ToUpper() switch
-        {
-            "PAGADO" => Colors.Green.Medium,
-            "PENDIENTE" => Colors.Orange.Medium,
-            "VENCIDO" => Colors.Red.Medium,
-            "CANCELADO" => Colors.Grey.Medium,
-            _ => Colors.Grey.Medium
-        };
-    }
+        var nombreAspirante = ficha.DatosPersonales?.NombreCompleto ?? "";
+        var nombreEntrevistador = ficha.Seguimiento?.AsesorAsignado?.NombreCompleto ?? "";
 
-    private void ComposeFirmas(IContainer container)
-    {
-        container.PaddingTop(20).Row(row =>
+        container.PaddingTop(25).Row(row =>
         {
             row.RelativeItem().Column(col =>
             {
-                col.Item().AlignCenter().PaddingBottom(40).Text("");
-                col.Item().AlignCenter().LineHorizontal(1).LineColor(Colors.Black);
-                col.Item().AlignCenter().PaddingTop(5).Text("Firma del Aspirante").FontSize(9);
+                col.Item().PaddingBottom(35).Text("");
+                col.Item().PaddingHorizontal(20).LineHorizontal(0.5f).LineColor(Colors.Black);
+                col.Item().AlignCenter().PaddingTop(3).Text(nombreAspirante).Bold().FontSize(9);
+                col.Item().AlignCenter().PaddingTop(1).Text("Firma del aspirante").FontSize(8);
             });
 
             row.ConstantItem(60);
 
             row.RelativeItem().Column(col =>
             {
-                col.Item().AlignCenter().PaddingBottom(40).Text("");
-                col.Item().AlignCenter().LineHorizontal(1).LineColor(Colors.Black);
-                col.Item().AlignCenter().PaddingTop(5).Text("Firma del Responsable").FontSize(9);
+                col.Item().PaddingBottom(35).Text("");
+                col.Item().PaddingHorizontal(20).LineHorizontal(0.5f).LineColor(Colors.Black);
+                col.Item().AlignCenter().PaddingTop(3).Text(nombreEntrevistador).Bold().FontSize(9);
+                col.Item().AlignCenter().PaddingTop(1).Text("Entrevistador").FontSize(8);
             });
         });
     }
 
-    private void ComposeFooter(IContainer container)
+    private void FichaAvisoPrivacidad(IContainer container)
     {
-        container.Column(column =>
+        container.PaddingTop(6).Column(col =>
         {
-            column.Item().LineHorizontal(1).LineColor(ColorGris);
-            column.Item().PaddingTop(5).Row(row =>
-            {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span("Universidad San Andrés de Guanajuato").FontSize(8).FontColor(ColorGris);
-                });
-                row.RelativeItem().AlignCenter().Text(text =>
-                {
-                    text.Span("Documento generado el ").FontSize(8).FontColor(ColorGris);
-                    text.Span(DateTime.Now.ToString("dd/MM/yyyy HH:mm")).FontSize(8).FontColor(ColorGris);
-                });
-                row.RelativeItem().AlignRight().Text(text =>
-                {
-                    text.CurrentPageNumber().FontSize(8).FontColor(ColorGris);
-                    text.Span(" de ").FontSize(8).FontColor(ColorGris);
-                    text.TotalPages().FontSize(8).FontColor(ColorGris);
-                });
-            });
+            col.Item().Text("Declaro bajo protesta de decir verdad que la información y documentación proporcionada es verídica, por lo que, en caso de existir falsedad en ella, tengo pleno conocimiento que se aplicarán las sanciones administrativas y penas establecidas en los ordenamientos respectivos para quienes se conducen con falsedad ante la autoridad competente.")
+                .FontSize(6);
+            col.Item().PaddingTop(2)
+                .Text("Usted puede consultar en cualquier momento nuestro Aviso de Privacidad en la página de internet https://usaguanajuato.edu.mx; o https://usaguanajuato.edu.mx/docs/AVISO%DE%20PRIVACIDAD.PDF")
+                .FontSize(6);
         });
     }
 
@@ -507,7 +430,7 @@ public class PdfService : IPdfService
                 page.Size(PageSizes.Letter);
                 page.MarginVertical(30);
                 page.MarginHorizontal(40);
-                page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
+                page.DefaultTextStyle(x => x.FontSize(9).FontFamily(FontePrincipal));
 
                 page.Header().Element(c => ComposeKardexHeader(c, kardex, folioDocumento));
                 page.Content().Element(c => ComposeKardexContent(c, kardex));
@@ -669,7 +592,7 @@ public class PdfService : IPdfService
                 page.Size(PageSizes.Letter);
                 page.MarginVertical(50);
                 page.MarginHorizontal(60);
-                page.DefaultTextStyle(x => x.FontSize(11).FontFamily("Arial"));
+                page.DefaultTextStyle(x => x.FontSize(11).FontFamily(FontePrincipal));
 
                 page.Header().Element(c => ComposeConstanciaHeader(c));
                 page.Content().Element(c => ComposeConstanciaContent(c, constancia));
@@ -871,7 +794,7 @@ public class PdfService : IPdfService
                 page.Size(226, 800, Unit.Point);
                 page.MarginVertical(15);
                 page.MarginHorizontal(10);
-                page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
+                page.DefaultTextStyle(x => x.FontSize(9).FontFamily(FontePrincipal));
 
                 page.Content().Element(c => ComposeComprobanteContent(c, comprobante));
             });
@@ -1077,7 +1000,7 @@ public class PdfService : IPdfService
                 page.Size(PageSizes.Letter);
                 page.MarginVertical(30);
                 page.MarginHorizontal(40);
-                page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Arial"));
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily(FontePrincipal));
 
                 page.Header().Element(c => ComposeReciboHeader(c, recibo));
                 page.Content().Element(c => ComposeReciboContent(c, recibo));

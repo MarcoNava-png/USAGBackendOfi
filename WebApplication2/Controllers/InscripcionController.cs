@@ -14,7 +14,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/inscripciones")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.COORDINADOR},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.COORDINADOR},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.ACADEMICO}")]
     public class InscripcionController : ControllerBase
     {
         private readonly IInscripcionService _inscripcionService;

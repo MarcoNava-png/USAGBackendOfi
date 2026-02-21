@@ -66,6 +66,11 @@ namespace WebApplication2.Services
             if (asignacion == null)
                 throw new InvalidOperationException("El estudiante no tiene plan asignado para el periodo.");
 
+            var periodo = await _db.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == dto.IdPeriodoAcademico, ct);
+
+            var fechaBase = periodo?.FechaInicio ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
             var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
             var nuevos = new List<Recibo>();
 
@@ -73,13 +78,15 @@ namespace WebApplication2.Services
             {
                 foreach (var d in asignacion.PlanPago.Detalles.OrderBy(x => x.MesOffset).ThenBy(x => x.Orden))
                 {
+                    var fechaVencimiento = CalcularFechaVencimiento(fechaBase, d.MesOffset, dto.DiaVencimiento);
+
                     var r = new Recibo
                     {
                         Folio = await GenerarFolioAsync(ct),
                         IdEstudiante = dto.IdEstudiante,
                         IdPeriodoAcademico = dto.IdPeriodoAcademico,
                         FechaEmision = hoy,
-                        FechaVencimiento = new DateOnly(hoy.Year, hoy.Month, Math.Min(dto.DiaVencimiento, (byte)28)),
+                        FechaVencimiento = fechaVencimiento,
                         Estatus = EstatusRecibo.PENDIENTE
                     };
                     _db.Recibo.Add(r);
@@ -89,7 +96,7 @@ namespace WebApplication2.Services
                     {
                         IdRecibo = r.IdRecibo,
                         IdConceptoPago = d.IdConceptoPago,
-                        Descripcion = d.Descripcion,
+                        Descripcion = ProcesarDescripcionConPlaceholders(d.Descripcion, fechaVencimiento),
                         Cantidad = d.Cantidad,
                         PrecioUnitario = d.Importe,
                         RefTabla = "PlanPagoDetalle",
@@ -105,13 +112,15 @@ namespace WebApplication2.Services
             }
             else
             {
+                var fechaVencimiento = CalcularFechaVencimiento(fechaBase, 0, dto.DiaVencimiento);
+
                 var r = new Recibo
                 {
                     Folio = await GenerarFolioAsync(ct),
                     IdEstudiante = dto.IdEstudiante,
                     IdPeriodoAcademico = dto.IdPeriodoAcademico,
                     FechaEmision = hoy,
-                    FechaVencimiento = new DateOnly(hoy.Year, hoy.Month, Math.Min(dto.DiaVencimiento, (byte)28)),
+                    FechaVencimiento = fechaVencimiento,
                     Estatus = EstatusRecibo.PENDIENTE
                 };
                 _db.Recibo.Add(r);
@@ -123,7 +132,7 @@ namespace WebApplication2.Services
                     {
                         IdRecibo = r.IdRecibo,
                         IdConceptoPago = d.IdConceptoPago,
-                        Descripcion = d.Descripcion,
+                        Descripcion = ProcesarDescripcionConPlaceholders(d.Descripcion, fechaVencimiento),
                         Cantidad = d.Cantidad,
                         PrecioUnitario = d.Importe,
                         RefTabla = "PlanPagoDetalle",
@@ -1887,6 +1896,40 @@ namespace WebApplication2.Services
             using var stream = new MemoryStream();
             workbook.SaveAs(stream);
             return stream.ToArray();
+        }
+        private static DateOnly CalcularFechaVencimiento(DateOnly fechaBase, int mesOffset, byte diaPago)
+        {
+            var fecha = fechaBase.AddMonths(mesOffset);
+            int diaMaximo = DateTime.DaysInMonth(fecha.Year, fecha.Month);
+            int diaFinal = Math.Min(diaPago, diaMaximo);
+
+            return new DateOnly(fecha.Year, fecha.Month, diaFinal);
+        }
+
+        private static string ProcesarDescripcionConPlaceholders(string? descripcion, DateOnly fechaVencimiento)
+        {
+            if (string.IsNullOrEmpty(descripcion))
+                return descripcion ?? string.Empty;
+
+            var nombresMeses = new[]
+            {
+                "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            };
+
+            var mes = fechaVencimiento.Month;
+            var año = fechaVencimiento.Year;
+            var nombreMes = nombresMeses[mes];
+
+            var resultado = descripcion
+                .Replace("{Mes}", nombreMes, StringComparison.OrdinalIgnoreCase)
+                .Replace("{MesAño}", $"{nombreMes} {año}", StringComparison.OrdinalIgnoreCase)
+                .Replace("{MesAnio}", $"{nombreMes} {año}", StringComparison.OrdinalIgnoreCase)
+                .Replace("{Año}", año.ToString(), StringComparison.OrdinalIgnoreCase)
+                .Replace("{Anio}", año.ToString(), StringComparison.OrdinalIgnoreCase)
+                .Replace("{NumeroMes}", mes.ToString("D2"), StringComparison.OrdinalIgnoreCase);
+
+            return resultado;
         }
     }
 }

@@ -42,6 +42,7 @@ namespace WebApplication2.Core.Models
         public DateTime? FechaModificacion { get; set; }
 
         public virtual PlanEstudios? IdPlanEstudiosNavigation { get; set; }
+        public virtual Modalidad? IdModalidadNavigation { get; set; }
         public virtual ICollection<PlantillaCobroDetalle> Detalles { get; set; } = new List<PlantillaCobroDetalle>();
     }
 }

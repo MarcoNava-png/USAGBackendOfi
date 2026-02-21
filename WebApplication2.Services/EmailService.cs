@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Net.Mail;
+using WebApplication2.Core.Requests.MicrosoftGraph;
 using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2.Services
@@ -10,13 +11,31 @@ namespace WebApplication2.Services
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<EmailService> _logger;
+        private readonly IMicrosoftGraphService? _graphService;
         private readonly bool _useSmtp;
+        private readonly bool _useGraph;
+        private readonly string? _fromEmail;
 
-        public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+        public EmailService(
+            IConfiguration configuration,
+            ILogger<EmailService> logger,
+            IMicrosoftGraphService? graphService = null)
         {
             _configuration = configuration;
             _logger = logger;
+            _graphService = graphService;
             _useSmtp = !string.IsNullOrEmpty(_configuration["Email:SmtpHost"]);
+            _fromEmail = _configuration["Email:FromEmail"];
+
+            // Usar Graph si hay servicio disponible y un email remitente configurado
+            _useGraph = _graphService != null && !string.IsNullOrEmpty(_fromEmail);
+
+            if (_useGraph)
+                _logger.LogInformation("EmailService: Usando Microsoft Graph API con remitente {FromEmail}", _fromEmail);
+            else if (_useSmtp)
+                _logger.LogInformation("EmailService: Usando SMTP con host {SmtpHost}", _configuration["Email:SmtpHost"]);
+            else
+                _logger.LogWarning("EmailService: Sin configuración de correo, operando en modo desarrollo (consola)");
         }
 
         public async Task SendPasswordResetEmailAsync(string toEmail, string resetToken, string resetUrl)
@@ -69,7 +88,11 @@ namespace WebApplication2.Services
 
         public async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
         {
-            if (_useSmtp)
+            if (_useGraph)
+            {
+                await SendGraphEmailAsync(toEmail, subject, htmlBody);
+            }
+            else if (_useSmtp)
             {
                 await SendSmtpEmailAsync(toEmail, subject, htmlBody);
             }
@@ -99,6 +122,21 @@ namespace WebApplication2.Services
             }
         }
 
+        private async Task SendGraphEmailAsync(string toEmail, string subject, string htmlBody)
+        {
+            var request = new SendEmailRequest
+            {
+                To = toEmail,
+                Subject = subject,
+                Body = htmlBody,
+                IsHtml = true
+            };
+
+            await _graphService!.SendEmailAsync(_fromEmail!, request);
+
+            _logger.LogInformation("Email enviado vía Microsoft Graph desde {From} a {To}", _fromEmail, toEmail);
+        }
+
         private async Task SendSmtpEmailAsync(string toEmail, string subject, string htmlBody)
         {
             var smtpHost = _configuration["Email:SmtpHost"];
@@ -125,7 +163,7 @@ namespace WebApplication2.Services
 
             await client.SendMailAsync(mailMessage);
 
-            _logger.LogInformation("Email enviado exitosamente a {ToEmail}", toEmail);
+            _logger.LogInformation("Email enviado vía SMTP a {ToEmail}", toEmail);
         }
     }
 }

@@ -18,7 +18,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.ADMISIONES}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.ADMISIONES},{Rol.ACADEMICO}")]
     public class AspiranteController : ControllerBase
     {
         private readonly IAspiranteService _aspiranteService;
@@ -314,15 +314,28 @@ namespace WebApplication2.Controllers
                     Telefono = request.Telefono,
 
                     IdDireccionNavigation = direccion,
-                    IdEstadoCivil = request.IdEstadoCivil
+                    IdEstadoCivil = request.IdEstadoCivil,
+                    Nacionalidad = request.Nacionalidad,
+                    NombreContactoEmergencia = request.NombreContactoEmergencia,
+                    TelefonoContactoEmergencia = request.TelefonoContactoEmergencia,
+                    ParentescoContactoEmergencia = request.ParentescoContactoEmergencia
                 },
                 IdPlan = request.PlanEstudiosId,
                 IdMedioContacto = request.MedioContactoId,
                 FechaRegistro = DateTime.UtcNow,
                 Observaciones = request.Notas,
                 TurnoId = request.HorarioId,
-                IdAspiranteEstatus = idEstatusEnProceso, 
-                IdAtendidoPorUsuario = request.AtendidoPorUsuarioId
+                IdAspiranteEstatus = idEstatusEnProceso,
+                IdAtendidoPorUsuario = request.AtendidoPorUsuarioId,
+                InstitucionProcedencia = request.InstitucionProcedencia,
+                IdModalidad = request.IdModalidad,
+                IdPeriodoAcademico = request.IdPeriodoAcademico,
+                RecorridoPlantel = request.RecorridoPlantel,
+                Trabaja = request.Trabaja,
+                NombreEmpresa = request.NombreEmpresa,
+                DomicilioEmpresa = request.DomicilioEmpresa,
+                PuestoEmpresa = request.PuestoEmpresa,
+                QuienCubreGastos = request.QuienCubreGastos
             };
 
             try
@@ -371,6 +384,10 @@ namespace WebApplication2.Controllers
                     Telefono = request.Telefono,
 
                     IdDireccionNavigation = direccion,
+                    Nacionalidad = request.Nacionalidad,
+                    NombreContactoEmergencia = request.NombreContactoEmergencia,
+                    TelefonoContactoEmergencia = request.TelefonoContactoEmergencia,
+                    ParentescoContactoEmergencia = request.ParentescoContactoEmergencia
                 },
                 IdPlan = request.PlanEstudiosId,
                 IdMedioContacto = request.MedioContactoId,
@@ -378,7 +395,16 @@ namespace WebApplication2.Controllers
                 Observaciones = request.Notas,
                 TurnoId = request.HorarioId,
                 IdAspiranteEstatus = request.AspiranteStatusId,
-                IdAtendidoPorUsuario = request.AtendidoPorUsuarioId
+                IdAtendidoPorUsuario = request.AtendidoPorUsuarioId,
+                InstitucionProcedencia = request.InstitucionProcedencia,
+                IdModalidad = request.IdModalidad,
+                IdPeriodoAcademico = request.IdPeriodoAcademico,
+                RecorridoPlantel = request.RecorridoPlantel,
+                Trabaja = request.Trabaja,
+                NombreEmpresa = request.NombreEmpresa,
+                DomicilioEmpresa = request.DomicilioEmpresa,
+                PuestoEmpresa = request.PuestoEmpresa,
+                QuienCubreGastos = request.QuienCubreGastos
             };
 
             try
@@ -557,6 +583,17 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpDelete("documentos/{idDocumento:long}")]
+        public async Task<ActionResult> ResetearDocumento(long idDocumento)
+        {
+            var resultado = await _docsSvc.ResetearDocumentoAsync(idDocumento);
+
+            if (!resultado)
+                return NotFound("Documento no encontrado");
+
+            return Ok(new { Mensaje = "Documento reseteado a estado pendiente" });
+        }
+
         [HttpGet("documentos/{idDocumento:long}")]
         public async Task<ActionResult<AspiranteDocumentoDto>> ObtenerDocumento(long idDocumento)
         {
@@ -566,6 +603,26 @@ namespace WebApplication2.Controllers
                 return NotFound("Documento no encontrado");
 
             return Ok(doc);
+        }
+
+        [HttpPatch("{id:int}/ocultar")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR}")]
+        public async Task<ActionResult> OcultarAspirante(int id)
+        {
+            try
+            {
+                var usuarioId = User?.Claims?.FirstOrDefault(c => c.Type == "userId")?.Value ?? "SYSTEM";
+                var resultado = await _aspiranteService.OcultarAspiranteAsync(id, usuarioId);
+
+                if (!resultado)
+                    return NotFound("Aspirante no encontrado");
+
+                return Ok(new { Mensaje = "Aspirante ocultado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
         }
 
         [HttpPatch("{id:int}/cancelar")]
@@ -583,6 +640,36 @@ namespace WebApplication2.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, ex.Message);
+            }
+        }
+
+        [HttpGet("comisiones")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
+        public async Task<ActionResult<ComisionReporteDto>> CalcularComisiones(
+            [FromQuery] DateTime? fechaDesde,
+            [FromQuery] DateTime? fechaHasta,
+            [FromQuery] decimal comisionPorRegistro = 100,
+            [FromQuery] decimal porcentajePorPago = 5)
+        {
+            try
+            {
+                var desde = fechaDesde ?? new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+                var hasta = fechaHasta ?? DateTime.UtcNow;
+
+                string? filtrarPorUsuarioId = null;
+                if (User.IsInRole(Rol.ADMISIONES) && !User.IsInRole(Rol.ADMIN) && !User.IsInRole(Rol.DIRECTOR) && !User.IsInRole(Rol.FINANZAS))
+                {
+                    filtrarPorUsuarioId = User.FindFirst("userId")?.Value ?? User.Identity?.Name;
+                }
+
+                var resultado = await _aspiranteService.CalcularComisionesAsync(
+                    desde, hasta, comisionPorRegistro, porcentajePorPago, filtrarPorUsuarioId);
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
             }
         }
 
@@ -633,7 +720,8 @@ namespace WebApplication2.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { Error = $"Error al generar PDF: {ex.Message}" });
+                var inner = ex.InnerException != null ? $" | Inner: {ex.InnerException.Message}" : "";
+                return StatusCode(500, new { Error = $"Error al generar PDF: {ex.Message}{inner}" });
             }
         }
 

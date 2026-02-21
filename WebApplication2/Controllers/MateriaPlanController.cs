@@ -13,7 +13,7 @@ namespace WebApplication2.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO}")]
     public class MateriaPlanController : ControllerBase
     {
         private readonly IMateriaPlanService _materiaPlanService;

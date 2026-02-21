@@ -45,4 +45,6 @@ public partial class PlanEstudios : BaseEntity
     public virtual Periodicidad IdPeriodicidadNavigation { get; set; } = null!;
 
     public virtual ICollection<MateriaPlan> MateriaPlan { get; set; } = new List<MateriaPlan>();
+
+    public virtual ICollection<PlanDocumentoRequisito> DocumentosRequisito { get; set; } = new List<PlanDocumentoRequisito>();
 }

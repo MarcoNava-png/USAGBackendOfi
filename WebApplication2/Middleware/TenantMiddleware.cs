@@ -13,8 +13,9 @@ public class TenantMiddleware
     {
         "/health",
         "/swagger",
-        "/api/admin",         
-        "/api/superadmin",    
+        "/api/admin",
+        "/api/superadmin",
+        "/api/email",
         "/.well-known",
         "/favicon.ico"
     };

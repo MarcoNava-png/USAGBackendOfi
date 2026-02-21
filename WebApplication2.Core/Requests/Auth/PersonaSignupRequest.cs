@@ -36,5 +36,13 @@ namespace WebApplication2.Core.Requests.Auth
         public int? CodigoPostalId { get; set; }
 
         public int? IdEstadoCivil { get; set; }
+
+        public string? Nacionalidad { get; set; }
+
+        public string? NombreContactoEmergencia { get; set; }
+
+        public string? TelefonoContactoEmergencia { get; set; }
+
+        public string? ParentescoContactoEmergencia { get; set; }
     }
 }

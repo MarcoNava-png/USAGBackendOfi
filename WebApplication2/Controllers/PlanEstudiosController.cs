@@ -7,6 +7,7 @@ using WebApplication2.Core.DTOs;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.PlanEstudios;
 using WebApplication2.Services.Interfaces;
+using System.Collections.Generic;
 
 namespace WebApplication2.Controllers
 {
@@ -25,7 +26,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.ACADEMICO}")]
         public async Task<ActionResult<PagedResult<PlanEstudioDto>>> Get(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 1000,
@@ -48,7 +49,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.ACADEMICO}")]
         public async Task<ActionResult<PlanEstudioDto>> GetById(int id)
         {
             var planEstudios = await _planEstudioService.GetPlanEstudiosById(id);
@@ -131,6 +132,37 @@ namespace WebApplication2.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpGet("{id}/documentos")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.ADMISIONES}")]
+        public async Task<ActionResult<List<PlanDocumentoRequisitoDto>>> GetDocumentosPlan(int id)
+        {
+            var docs = await _planEstudioService.GetDocumentosPlanAsync(id);
+            return Ok(docs);
+        }
+
+        [HttpPut("{id}/documentos")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        public async Task<ActionResult> ActualizarDocumentosPlan(int id, [FromBody] ActualizarDocumentosPlanRequest request)
+        {
+            try
+            {
+                await _planEstudioService.ActualizarDocumentosPlanAsync(id, request.Documentos);
+                return Ok(new { message = "Documentos del plan actualizados correctamente" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("documentos-requisito")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.ADMISIONES}")]
+        public async Task<ActionResult<List<DocumentoRequisitoDisponibleDto>>> GetTodosDocumentosRequisito()
+        {
+            var docs = await _planEstudioService.GetTodosDocumentosRequisitoAsync();
+            return Ok(docs);
         }
     }
 }

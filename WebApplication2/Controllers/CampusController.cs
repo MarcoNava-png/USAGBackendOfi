@@ -27,7 +27,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.ACADEMICO}")]
         public async Task<ActionResult<PagedResult<CampusDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
         {
             var pagination = await _campusService.GetCampuses(page, pageSize);
@@ -46,7 +46,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.ACADEMICO}")]
         public async Task<ActionResult<CampusDto>> GetById(int id)
         {
             var campus = await _campusService.GetCampusById(id);

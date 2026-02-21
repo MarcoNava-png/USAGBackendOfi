@@ -142,7 +142,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("coordinador")]
-        [Authorize(Roles = "admin,coordinador,director")]
+        [Authorize(Roles = "admin,coordinador,director,academico")]
         public async Task<IActionResult> GetCoordinadorDashboard()
         {
             try
@@ -164,7 +164,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("docente")]
-        [Authorize(Roles = "admin,docente,coordinador,director")]
+        [Authorize(Roles = "admin,docente,coordinador,director,academico")]
         public async Task<IActionResult> GetDocenteDashboard()
         {
             try

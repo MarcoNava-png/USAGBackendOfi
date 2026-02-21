@@ -157,6 +157,28 @@ namespace WebApplication2.Controllers
             return Ok(periodicidad);
         }
 
+        [HttpGet("modalidades")]
+        public async Task<ActionResult<IEnumerable<Modalidad>>> GetModalidades()
+        {
+            var modalidades = await _dbContext.Modalidad
+                .Where(m => m.Activo)
+                .AsNoTracking()
+                .ToListAsync();
+
+            return Ok(modalidades);
+        }
+
+        [HttpGet("modalidades-plan")]
+        public async Task<ActionResult<IEnumerable<ModalidadPlan>>> GetModalidadesPlan()
+        {
+            var modalidadesPlan = await _dbContext.ModalidadPlan
+                .Where(m => m.Activo)
+                .AsNoTracking()
+                .ToListAsync();
+
+            return Ok(modalidadesPlan);
+        }
+
         [HttpGet("documentos-requisito")]
         public async Task<ActionResult<IEnumerable<DocumentoRequisito>>> GetDocumentosRequisito()
         {
@@ -193,6 +215,7 @@ namespace WebApplication2.Controllers
                     pa.IdPeriodoAcademico,
                     pa.Clave,
                     pa.Nombre,
+                    pa.IdPeriodicidad,
                     Periodicidad = pa.IdPeriodicidadNavigation != null
                         ? pa.IdPeriodicidadNavigation.DescPeriodicidad
                         : null,

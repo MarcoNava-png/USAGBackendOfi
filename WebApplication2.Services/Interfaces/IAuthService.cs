@@ -17,6 +17,7 @@ namespace WebApplication2.Services.Interfaces
         Task AdminResetPassword(string userId, string newPassword);
         Task<ApplicationUser> UpdateUserProfile(ApplicationUser newUser);
         Task UpdateUserEmailAsync(string userId, string newEmail);
+        Task ChangeOwnPasswordAsync(string userId, string currentPassword, string newPassword);
         Task UpdateUserRolesAsync(string userId, List<string> newRoles);
         Task DeleteUser(string email);
         Task DeleteUserById(string id);

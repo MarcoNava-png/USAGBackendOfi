@@ -13,7 +13,7 @@ namespace WebApplication2.Controllers
     [ApiController]
     [Route("api/estudiantes")]
     [Produces("application/json")]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.FINANZAS}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.FINANZAS},{Rol.ACADEMICO}")]
     public class EstudianteController : ControllerBase
     {
         private readonly IEstudianteService _estudianteService;

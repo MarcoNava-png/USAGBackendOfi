@@ -50,13 +50,13 @@ namespace WebApplication2.Services
             var totalItems = await _dbContext.Profesor
                 .Include(d => d.IdPersonaNavigation)
                 .ThenInclude(p => p.IdGeneroNavigation)
-                .Where(p => p.Status == Core.Enums.StatusEnum.Active && p.CampusId == campusId)
+                .Where(p => p.Status == Core.Enums.StatusEnum.Active && (p.CampusId == campusId || p.CampusId == null))
                 .CountAsync();
 
             var profesores = await _dbContext.Profesor
                 .Include(d => d.IdPersonaNavigation)
                 .ThenInclude(p => p.IdGeneroNavigation)
-                .Where(p => p.Status == Core.Enums.StatusEnum.Active && p.CampusId == campusId)
+                .Where(p => p.Status == Core.Enums.StatusEnum.Active && (p.CampusId == campusId || p.CampusId == null))
                 .OrderBy(p => p.IdPersonaNavigation.ApellidoPaterno)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)

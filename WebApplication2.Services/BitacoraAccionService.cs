@@ -43,7 +43,7 @@ namespace WebApplication2.Services
         {
             if (filtro.Page <= 0) filtro.Page = 1;
             if (filtro.PageSize <= 0) filtro.PageSize = 20;
-            if (filtro.PageSize > 100) filtro.PageSize = 100;
+            if (filtro.PageSize > 10000) filtro.PageSize = 10000;
 
             var query = _db.BitacoraAcciones.AsNoTracking().AsQueryable();
 

@@ -207,6 +207,7 @@ builder.Services.AddScoped<IGrupoService, GrupoService>(sp =>
 });
 
 builder.Services.AddScoped<ICampusService, CampusService>();
+builder.Services.AddScoped<IDocumentoRequisitoService, DocumentoRequisitoService>();
 builder.Services.AddScoped<IBlobStorageService, LocalStorageService>();
 builder.Services.AddScoped<IMateriaPlanService, MateriaPlanService>();
 builder.Services.AddScoped<IParcialesService, ParcialesService>();

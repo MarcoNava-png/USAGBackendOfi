@@ -41,6 +41,7 @@ namespace WebApplication2.Services
         {
             var query = _db.PlantillasCobro
                 .Include(p => p.IdPlanEstudiosNavigation)
+                .Include(p => p.IdModalidadNavigation)
                 .Include(p => p.Detalles)
                     .ThenInclude(d => d.IdConceptoPagoNavigation)
                 .AsNoTracking();
@@ -70,6 +71,7 @@ namespace WebApplication2.Services
         {
             var plantilla = await _db.PlantillasCobro
                 .Include(p => p.IdPlanEstudiosNavigation)
+                .Include(p => p.IdModalidadNavigation)
                 .Include(p => p.Detalles)
                     .ThenInclude(d => d.IdConceptoPagoNavigation)
                 .AsNoTracking()
@@ -91,6 +93,7 @@ namespace WebApplication2.Services
         {
             var query = _db.PlantillasCobro
                 .Include(p => p.IdPlanEstudiosNavigation)
+                .Include(p => p.IdModalidadNavigation)
                 .Include(p => p.Detalles)
                     .ThenInclude(d => d.IdConceptoPagoNavigation)
                 .AsNoTracking()
@@ -357,6 +360,7 @@ namespace WebApplication2.Services
                 .Include(p => p.Detalles)
                     .ThenInclude(d => d.IdConceptoPagoNavigation)
                 .Include(p => p.IdPlanEstudiosNavigation)
+                .Include(p => p.IdModalidadNavigation)
                 .FirstOrDefaultAsync(p => p.IdPlantillaCobro == request.IdPlantillaCobro, ct);
 
             if (plantilla == null)

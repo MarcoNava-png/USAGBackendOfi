@@ -60,6 +60,7 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<PeriodoAcademico> PeriodoAcademico { get; set; }
         public virtual DbSet<Persona> Persona { get; set; }
         public virtual DbSet<PlanEstudios> PlanEstudios { get; set; }
+        public virtual DbSet<PlanModalidadDia> PlanModalidadDia { get; set; }
         public virtual DbSet<Profesor> Profesor { get; set; }
         public virtual DbSet<Turno> Turno { get; set; }
         public virtual DbSet<AspiranteBitacoraSeguimiento> AspiranteBitacoraSeguimiento { get; set; }
@@ -101,6 +102,11 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<BitacoraAccion> BitacoraAcciones { get; set; }
         public virtual DbSet<NotificacionUsuario> NotificacionesUsuario { get; set; }
 
+        public virtual DbSet<PlanDocumentoRequisito> PlanDocumentoRequisito { get; set; }
+
+        public virtual DbSet<Modalidad> Modalidad { get; set; }
+        public virtual DbSet<ModalidadPlan> ModalidadPlan { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -113,6 +119,12 @@ namespace WebApplication2.Data.DbContexts
             modelBuilder.Entity<Pago>().HasKey(x => x.IdPago);
             modelBuilder.Entity<PagoAplicacion>().HasKey(x => x.IdPagoAplicacion);
             modelBuilder.Entity<PlanPago>().HasKey(x => x.IdPlanPago);
+            modelBuilder.Entity<PlanPago>()
+                .HasOne(x => x.IdModalidadPlanNavigation)
+                .WithMany(m => m.PlanPago)
+                .HasForeignKey(x => x.IdModalidadPlan)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_PlanPago_ModalidadPlan");
             modelBuilder.Entity<PlanPagoDetalle>().HasKey(x => x.IdPlanPagoDetalle);
             modelBuilder.Entity<PlanPagoAsignacion>().HasKey(x => x.IdPlanPagoAsignacion);
             modelBuilder.Entity<ConceptoPago>().HasKey(x => x.IdConceptoPago);
@@ -154,6 +166,12 @@ namespace WebApplication2.Data.DbContexts
                 entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(sysutcdatetime())");
                 entity.Property(e => e.Observaciones).HasMaxLength(250);
 
+                entity.Property(e => e.InstitucionProcedencia).HasMaxLength(200);
+                entity.Property(e => e.NombreEmpresa).HasMaxLength(200);
+                entity.Property(e => e.DomicilioEmpresa).HasMaxLength(300);
+                entity.Property(e => e.PuestoEmpresa).HasMaxLength(100);
+                entity.Property(e => e.QuienCubreGastos).HasMaxLength(200);
+
                 entity.HasOne(d => d.IdAspiranteEstatusNavigation).WithMany(p => p.Aspirante)
                     .HasForeignKey(d => d.IdAspiranteEstatus)
                     .OnDelete(DeleteBehavior.ClientSetNull)
@@ -172,6 +190,14 @@ namespace WebApplication2.Data.DbContexts
                     .HasForeignKey(d => d.IdPlan)
                     .OnDelete(DeleteBehavior.ClientSetNull)
                     .HasConstraintName("FK_Aspirante_Plan");
+
+                entity.HasOne(d => d.IdModalidadNavigation).WithMany(p => p.Aspirante)
+                    .HasForeignKey(d => d.IdModalidad)
+                    .HasConstraintName("FK_Aspirante_Modalidad");
+
+                entity.HasOne(d => d.IdPeriodoAcademicoNavigation).WithMany()
+                    .HasForeignKey(d => d.IdPeriodoAcademico)
+                    .HasConstraintName("FK_Aspirante_PeriodoAcademico");
             });
 
             modelBuilder.Entity<AspiranteConvenio>(entity =>
@@ -516,6 +542,8 @@ namespace WebApplication2.Data.DbContexts
                 entity.Property(e => e.TelefonoContactoEmergencia).HasMaxLength(20);
                 entity.Property(e => e.ParentescoContactoEmergencia).HasMaxLength(50);
 
+                entity.Property(e => e.Nacionalidad).HasMaxLength(100);
+
                 entity.HasOne(d => d.IdDireccionNavigation).WithMany(p => p.Persona)
                     .HasForeignKey(d => d.IdDireccion)
                     .HasConstraintName("FK_Persona_Direccion");
@@ -589,6 +617,48 @@ namespace WebApplication2.Data.DbContexts
 
                 entity.Property(e => e.Clave).HasMaxLength(20);
                 entity.Property(e => e.Nombre).HasMaxLength(50);
+            });
+
+            modelBuilder.Entity<Modalidad>(entity =>
+            {
+                entity.HasKey(e => e.IdModalidad).HasName("PK_Modalidad");
+
+                entity.HasIndex(e => e.DescModalidad, "UQ_Modalidad").IsUnique();
+
+                entity.Property(e => e.DescModalidad).HasMaxLength(50);
+                entity.Property(e => e.Activo).HasDefaultValue(true);
+            });
+
+            modelBuilder.Entity<ModalidadPlan>(entity =>
+            {
+                entity.HasKey(e => e.IdModalidadPlan).HasName("PK_ModalidadPlan");
+
+                entity.HasIndex(e => e.DescModalidadPlan, "UQ_ModalidadPlan").IsUnique();
+
+                entity.Property(e => e.DescModalidadPlan).HasMaxLength(50);
+                entity.Property(e => e.Activo).HasDefaultValue(true);
+            });
+
+            modelBuilder.Entity<PlanModalidadDia>(entity =>
+            {
+                entity.HasKey(e => e.IdPlanModalidadDia);
+
+                entity.HasIndex(e => new { e.IdPlanEstudios, e.IdModalidad, e.IdDiaSemana }, "UQ_PlanModalidadDia").IsUnique();
+
+                entity.HasOne(d => d.IdPlanEstudiosNavigation).WithMany()
+                    .HasForeignKey(d => d.IdPlanEstudios)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_PlanModalidadDia_Plan");
+
+                entity.HasOne(d => d.IdModalidadNavigation).WithMany()
+                    .HasForeignKey(d => d.IdModalidad)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_PlanModalidadDia_Modalidad");
+
+                entity.HasOne(d => d.IdDiaSemanaNavigation).WithMany()
+                    .HasForeignKey(d => d.IdDiaSemana)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_PlanModalidadDia_DiaSemana");
             });
 
             modelBuilder.Entity<CalificacionDetalle>(entity =>
@@ -802,6 +872,12 @@ namespace WebApplication2.Data.DbContexts
                     .HasForeignKey(x => x.IdPlanEstudios)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                e.HasOne(x => x.IdModalidadNavigation)
+                    .WithMany(m => m.PlantillaCobro)
+                    .HasForeignKey(x => x.IdModalidad)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_PlantillaCobro_Modalidad");
+
                 e.HasMany(x => x.Detalles)
                     .WithOne(d => d.IdPlantillaCobroNavigation)
                     .HasForeignKey(d => d.IdPlantillaCobro)
@@ -936,6 +1012,23 @@ namespace WebApplication2.Data.DbContexts
                 e.HasIndex(x => x.UsuarioDestinoId);
                 e.HasIndex(x => new { x.UsuarioDestinoId, x.Leida });
                 e.HasIndex(x => x.FechaCreacion);
+            });
+
+            modelBuilder.Entity<PlanDocumentoRequisito>(e =>
+            {
+                e.HasKey(x => x.IdPlanDocumentoRequisito);
+
+                e.HasOne(x => x.PlanEstudios)
+                    .WithMany(p => p.DocumentosRequisito)
+                    .HasForeignKey(x => x.IdPlanEstudios)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasOne(x => x.DocumentoRequisito)
+                    .WithMany(d => d.PlanDocumentosRequisito)
+                    .HasForeignKey(x => x.IdDocumentoRequisito)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasIndex(x => new { x.IdPlanEstudios, x.IdDocumentoRequisito }).IsUnique();
             });
 
             modelBuilder.Entity<SolicitudDocumento>(e =>

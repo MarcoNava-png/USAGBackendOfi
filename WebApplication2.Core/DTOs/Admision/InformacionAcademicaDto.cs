@@ -10,5 +10,10 @@ namespace WebApplication2.Core.DTOs.Admision
         public string? Turno { get; set; }
         public string? Campus { get; set; }
         public string? Periodicidad { get; set; }
+        public string? InstitucionProcedencia { get; set; }
+        public string? Modalidad { get; set; }
+        public string? PeriodoAcademico { get; set; }
+        public string? Dias { get; set; }
+        public bool? RecorridoPlantel { get; set; }
     }
 }

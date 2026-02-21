@@ -12,6 +12,7 @@ namespace WebApplication2.Core.DTOs.Admision
         public int? Edad { get; set; }
         public string? Genero { get; set; }
         public string? EstadoCivil { get; set; }
+        public string? Nacionalidad { get; set; }
         public string? FotoUrl { get; set; }
     }
 }

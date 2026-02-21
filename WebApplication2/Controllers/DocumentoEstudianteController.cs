@@ -73,7 +73,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("solicitar")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
         public async Task<ActionResult<SolicitudDocumentoDto>> CrearSolicitud([FromBody] CrearSolicitudDocumentoRequest request)
         {
             try
@@ -99,7 +99,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("solicitudes")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.FINANZAS}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
         public async Task<ActionResult<SolicitudesListResponse>> GetSolicitudes([FromQuery] SolicitudesFiltro filtro)
         {
             var result = await _documentoService.GetSolicitudesAsync(filtro);
@@ -115,7 +115,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("solicitudes/{id}/generar")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
         public async Task<ActionResult<SolicitudDocumentoDto>> MarcarComoGenerada(long id)
         {
             try
@@ -131,7 +131,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("solicitudes/{id}/entregar")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
         public async Task<ActionResult<SolicitudDocumentoDto>> MarcarComoEntregado(long id)
         {
             try
@@ -163,7 +163,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("solicitudes/{id}/kardex/pdf")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
         public async Task<ActionResult> DescargarKardexPdf(long id)
         {
             try
@@ -185,7 +185,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("solicitudes/{id}/constancia/pdf")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO},{Rol.ADMISIONES}")]
         public async Task<ActionResult> DescargarConstanciaPdf(long id)
         {
             try
@@ -278,7 +278,7 @@ namespace WebApplication2.Controllers
         /// Obtiene todas las solicitudes para el panel de Control Escolar con estadísticas
         /// </summary>
         [HttpGet("panel-control-escolar")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.DIRECTOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.DIRECTOR},{Rol.ACADEMICO}")]
         public async Task<ActionResult<SolicitudesPendientesDto>> GetSolicitudesControlEscolar(
             [FromQuery] string? estatus = null,
             [FromQuery] DateTime? fechaDesde = null,
@@ -302,7 +302,7 @@ namespace WebApplication2.Controllers
         /// Obtiene el contador de solicitudes listas para generar (pagadas)
         /// </summary>
         [HttpGet("contador-pendientes")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.DIRECTOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.DIRECTOR},{Rol.ACADEMICO}")]
         public async Task<ActionResult<int>> GetContadorPendientes(CancellationToken ct = default)
         {
             try

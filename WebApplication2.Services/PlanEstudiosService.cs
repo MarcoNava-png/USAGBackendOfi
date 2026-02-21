@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using WebApplication2.Core.Common;
+using WebApplication2.Core.DTOs;
 using WebApplication2.Core.Models;
 using WebApplication2.Data.DbContexts;
 using WebApplication2.Services.Interfaces;
@@ -224,6 +225,62 @@ namespace WebApplication2.Services
             await _dbContext.SaveChangesAsync();
 
             return planEstudios;
+        }
+
+        public async Task<List<PlanDocumentoRequisitoDto>> GetDocumentosPlanAsync(int idPlan)
+        {
+            var docs = await _dbContext.PlanDocumentoRequisito
+                .Include(pd => pd.DocumentoRequisito)
+                .Where(pd => pd.IdPlanEstudios == idPlan)
+                .OrderBy(pd => pd.DocumentoRequisito.Orden)
+                .AsNoTracking()
+                .ToListAsync();
+
+            return docs.Select(pd => new PlanDocumentoRequisitoDto
+            {
+                IdDocumentoRequisito = pd.IdDocumentoRequisito,
+                Clave = pd.DocumentoRequisito.Clave,
+                Descripcion = pd.DocumentoRequisito.Descripcion,
+                EsObligatorio = pd.EsObligatorio,
+                Orden = pd.DocumentoRequisito.Orden
+            }).ToList();
+        }
+
+        public async Task ActualizarDocumentosPlanAsync(int idPlan, List<PlanDocumentoRequisitoItemDto> documentos)
+        {
+            var existentes = await _dbContext.PlanDocumentoRequisito
+                .Where(pd => pd.IdPlanEstudios == idPlan)
+                .ToListAsync();
+
+            _dbContext.PlanDocumentoRequisito.RemoveRange(existentes);
+
+            var nuevos = documentos.Select(d => new PlanDocumentoRequisito
+            {
+                IdPlanEstudios = idPlan,
+                IdDocumentoRequisito = d.IdDocumentoRequisito,
+                EsObligatorio = d.EsObligatorio
+            });
+
+            await _dbContext.PlanDocumentoRequisito.AddRangeAsync(nuevos);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        public async Task<List<DocumentoRequisitoDisponibleDto>> GetTodosDocumentosRequisitoAsync()
+        {
+            var docs = await _dbContext.DocumentoRequisito
+                .OrderBy(d => d.Orden)
+                .AsNoTracking()
+                .ToListAsync();
+
+            return docs.Select(d => new DocumentoRequisitoDisponibleDto
+            {
+                IdDocumentoRequisito = d.IdDocumentoRequisito,
+                Clave = d.Clave,
+                Descripcion = d.Descripcion,
+                EsObligatorio = d.EsObligatorio,
+                Orden = d.Orden,
+                Activo = d.Activo
+            }).ToList();
         }
     }
 }

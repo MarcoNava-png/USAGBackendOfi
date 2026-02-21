@@ -170,7 +170,7 @@ namespace WebApplication2.Data.Seed
                     break;
 
                 case Rol.CONTROL_ESCOLAR:
-                    var ceModules = new[] { "Dashboard", "Admisiones", "Estudiantes", "Finanzas", "Catalogos" };
+                    var ceModules = new[] { "Dashboard", "Admisiones", "Estudiantes", "Finanzas", "Catalogos", "Academico" };
                     foreach (var p in allPermissions.Where(p => ceModules.Contains(p.Module)))
                     {
                         result.Add((p, true, true, true, p.Module != "Catalogos"));

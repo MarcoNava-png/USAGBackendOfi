@@ -16,7 +16,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.COORDINADOR},{Rol.DIRECTOR},{Rol.DOCENTE},{Rol.CONTROL_ESCOLAR}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.COORDINADOR},{Rol.DIRECTOR},{Rol.DOCENTE},{Rol.CONTROL_ESCOLAR},{Rol.ACADEMICO}")]
     public class CalificacionesController : ControllerBase
     {
         private readonly ICalificacionesService _calificacionesService;

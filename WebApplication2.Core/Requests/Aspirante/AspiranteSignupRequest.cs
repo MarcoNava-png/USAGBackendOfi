@@ -22,5 +22,23 @@ namespace WebApplication2.Core.Requests.Aspirante
         public int? HorarioId { get; set; }
 
         public int? CuatrimestreInteres { get; set; }
+
+        public string? InstitucionProcedencia { get; set; }
+
+        public int? IdModalidad { get; set; }
+
+        public int? IdPeriodoAcademico { get; set; }
+
+        public bool? RecorridoPlantel { get; set; }
+
+        public bool? Trabaja { get; set; }
+
+        public string? NombreEmpresa { get; set; }
+
+        public string? DomicilioEmpresa { get; set; }
+
+        public string? PuestoEmpresa { get; set; }
+
+        public string? QuienCubreGastos { get; set; }
     }
 }

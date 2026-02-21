@@ -32,6 +32,7 @@ namespace WebApplication2.Services
                 Rol.ADMISIONES => await GetAdmisionesDashboardAsync(),
                 Rol.COORDINADOR => await GetCoordinadorDashboardAsync(userId),
                 Rol.DOCENTE => await GetDocenteDashboardAsync(userId),
+                Rol.ACADEMICO => await GetCoordinadorDashboardAsync(userId),
                 Rol.ALUMNO => await GetAlumnoDashboardAsync(userId),
                 _ => throw new ArgumentException($"Rol no soportado: {role}")
             };

@@ -34,6 +34,8 @@ public partial class Persona : BaseEntity
 
     public string? ParentescoContactoEmergencia { get; set; }
 
+    public string? Nacionalidad { get; set; }
+
     public virtual ICollection<Aspirante> Aspirante { get; set; } = new List<Aspirante>();
 
     public virtual ICollection<Estudiante> Estudiante { get; set; } = new List<Estudiante>();
