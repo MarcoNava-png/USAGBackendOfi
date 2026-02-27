@@ -9,6 +9,7 @@ using WebApplication2.Core.DTOs.Profesor;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.Profesor;
 using WebApplication2.Core.Responses.Profesor;
+using WebApplication2.Services;
 using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2.Controllers
@@ -21,12 +22,14 @@ namespace WebApplication2.Controllers
         private readonly IProfesorService _profesorService;
         private readonly IAuthService _authService;
         private readonly IMapper _mapper;
+        private readonly IMicrosoftGraphService _graphService;
 
-        public ProfesorController(IProfesorService profesorService, IAuthService authService, IMapper mapper)
+        public ProfesorController(IProfesorService profesorService, IAuthService authService, IMapper mapper, IMicrosoftGraphService graphService)
         {
             _profesorService = profesorService;
             _authService = authService;
             _mapper = mapper;
+            _graphService = graphService;
         }
 
         [HttpGet]
@@ -68,17 +71,48 @@ namespace WebApplication2.Controllers
         [HttpPost]
         public async Task<ActionResult<ProfesorDto>> Profesor([FromBody] ProfesorRequest request)
         {
-            var user = new ApplicationUser
+            // 1. Crear correo en Azure AD si se solicita
+            string? azureUserId = null;
+            if (request.CrearCorreoAzure)
             {
-                UserName = request.EmailInstitucional,
-                Email = request.EmailInstitucional,
-            };
+                var mailNickname = request.EmailInstitucional.Contains("@")
+                    ? request.EmailInstitucional.Substring(0, request.EmailInstitucional.IndexOf("@"))
+                    : request.EmailInstitucional;
+
+                var graphRequest = new Core.Requests.MicrosoftGraph.CreateUserRequest
+                {
+                    DisplayName = $"{request.Nombre} {request.ApellidoPaterno}".Trim(),
+                    UserPrincipalName = request.EmailInstitucional,
+                    MailNickname = mailNickname,
+                    GivenName = request.Nombre,
+                    Surname = $"{request.ApellidoPaterno} {request.ApellidoMaterno}".Trim(),
+                    Password = request.NoEmpleado,
+                    ForceChangePasswordNextSignIn = true,
+                    JobTitle = "Docente"
+                };
+
+                var graphResult = await _graphService.CreateUserAsync(graphRequest);
+                if (!graphResult.Success)
+                {
+                    return BadRequest(new { message = $"Error al crear correo en Microsoft 365: {graphResult.Message}" });
+                }
+                azureUserId = graphResult.UserId;
+            }
 
             try
             {
+                // 2. Crear usuario local
+                var user = new ApplicationUser
+                {
+                    UserName = request.EmailInstitucional,
+                    Email = request.EmailInstitucional,
+                };
+
                 var signupResponse = await _authService.Signup(user, request.NoEmpleado, [Rol.DOCENTE]);
 
+                // 3. Crear profesor
                 var newProfesor = _mapper.Map<Profesor>(request);
+                newProfesor.UsuarioId = signupResponse.Id;
 
                 var profesor = await _profesorService.CrearProfesor(newProfesor);
 
@@ -88,6 +122,11 @@ namespace WebApplication2.Controllers
             }
             catch (Exception ex)
             {
+                // Rollback: eliminar usuario de Azure AD si se creó
+                if (!string.IsNullOrEmpty(azureUserId))
+                {
+                    await _graphService.DeleteUserAsync(azureUserId);
+                }
                 return StatusCode(500, ex.Message);
             }
         }

@@ -17,5 +17,7 @@ namespace WebApplication2.Services.Interfaces
             List<HorarioValidacionDto> horariosNuevos,
             int? idGrupoMateriaActual = null,
             CancellationToken ct = default);
+
+        Task<Profesor?> GetProfesorByUsuarioId(string usuarioId, CancellationToken ct = default);
     }
 }

@@ -107,6 +107,15 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<Modalidad> Modalidad { get; set; }
         public virtual DbSet<ModalidadPlan> ModalidadPlan { get; set; }
 
+        public virtual DbSet<PlaneacionDocente> PlaneacionDocente { get; set; }
+        public virtual DbSet<TareaDocente> TareaDocente { get; set; }
+        public virtual DbSet<EntregaTarea> EntregaTarea { get; set; }
+
+        public virtual DbSet<TarifaAdmision> TarifasAdmision { get; set; }
+        public virtual DbSet<TarifaAdmisionDetalle> TarifasAdmisionDetalles { get; set; }
+
+        public virtual DbSet<TicketSoporte> TicketsSoporte { get; set; }
+        public virtual DbSet<TicketComentario> TicketComentarios { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -1062,6 +1071,142 @@ namespace WebApplication2.Data.DbContexts
                     .WithMany()
                     .HasForeignKey(x => x.IdRecibo)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<PlaneacionDocente>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.Property(x => x.NombreArchivo).HasMaxLength(255).IsRequired();
+                e.Property(x => x.UrlArchivo).HasMaxLength(500).IsRequired();
+                e.Property(x => x.Descripcion).HasMaxLength(500);
+                e.Property(x => x.TipoArchivo).HasMaxLength(50);
+
+                e.HasOne(x => x.Profesor)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdProfesor)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasOne(x => x.GrupoMateria)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdGrupoMateria)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasIndex(x => new { x.IdProfesor, x.IdGrupoMateria });
+            });
+
+            modelBuilder.Entity<TareaDocente>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+                e.Property(x => x.Descripcion).HasMaxLength(2000);
+                e.Property(x => x.PuntosMaximos).HasPrecision(10, 2);
+
+                e.HasOne(x => x.GrupoMateria)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdGrupoMateria)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasOne(x => x.Profesor)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdProfesor)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasIndex(x => new { x.IdGrupoMateria, x.Activa });
+            });
+
+            modelBuilder.Entity<EntregaTarea>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.Property(x => x.NombreArchivo).HasMaxLength(255).IsRequired();
+                e.Property(x => x.UrlArchivo).HasMaxLength(500).IsRequired();
+                e.Property(x => x.TipoArchivo).HasMaxLength(50);
+                e.Property(x => x.Calificacion).HasPrecision(10, 2);
+                e.Property(x => x.Retroalimentacion).HasMaxLength(1000);
+
+                e.HasOne(x => x.Tarea)
+                    .WithMany(t => t.Entregas)
+                    .HasForeignKey(x => x.IdTarea)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasOne(x => x.Estudiante)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdEstudiante)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasIndex(x => new { x.IdTarea, x.IdEstudiante });
+            });
+
+            modelBuilder.Entity<TarifaAdmision>(e =>
+            {
+                e.HasKey(x => x.IdTarifaAdmision);
+                e.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+
+                e.HasOne(x => x.IdPlanEstudiosNavigation)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdPlanEstudios)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasMany(x => x.Detalles)
+                    .WithOne(d => d.IdTarifaAdmisionNavigation)
+                    .HasForeignKey(d => d.IdTarifaAdmision)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                e.HasIndex(x => x.IdPlanEstudios);
+                e.HasIndex(x => new { x.IdPlanEstudios, x.Activo });
+            });
+
+            modelBuilder.Entity<TarifaAdmisionDetalle>(e =>
+            {
+                e.HasKey(x => x.IdTarifaAdmisionDetalle);
+                e.Property(x => x.Monto).HasPrecision(12, 2);
+                e.Property(x => x.Notas).HasMaxLength(500);
+
+                e.HasOne(x => x.IdConceptoPagoNavigation)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdConceptoPago)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasIndex(x => x.IdTarifaAdmision);
+            });
+
+            modelBuilder.Entity<TicketSoporte>(e =>
+            {
+                e.HasKey(x => x.IdTicket);
+                e.Property(x => x.Folio).HasMaxLength(30).IsRequired();
+                e.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+                e.Property(x => x.Descripcion).HasMaxLength(2000).IsRequired();
+                e.Property(x => x.UsuarioCreadorId).HasMaxLength(450).IsRequired();
+                e.Property(x => x.NombreCreador).HasMaxLength(200).IsRequired();
+                e.Property(x => x.UsuarioAsignadoId).HasMaxLength(450);
+                e.Property(x => x.NombreAsignado).HasMaxLength(200);
+                e.Property(x => x.ArchivoAdjuntoUrl).HasMaxLength(500);
+                e.Property(x => x.ArchivoAdjuntoNombre).HasMaxLength(200);
+                e.Property(x => x.Prioridad).HasDefaultValue(TicketPrioridadEnum.Baja);
+                e.Property(x => x.Estatus).HasDefaultValue(TicketEstatusEnum.Abierto);
+                e.Property(x => x.Categoria).HasDefaultValue(TicketCategoriaEnum.General);
+
+                e.HasIndex(x => x.Folio).IsUnique();
+                e.HasIndex(x => x.UsuarioCreadorId);
+                e.HasIndex(x => x.UsuarioAsignadoId);
+                e.HasIndex(x => x.Estatus);
+                e.HasIndex(x => x.Prioridad);
+
+                e.HasMany(x => x.Comentarios)
+                    .WithOne(c => c.Ticket)
+                    .HasForeignKey(c => c.IdTicket)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<TicketComentario>(e =>
+            {
+                e.HasKey(x => x.IdComentario);
+                e.Property(x => x.UsuarioId).HasMaxLength(450).IsRequired();
+                e.Property(x => x.NombreUsuario).HasMaxLength(200).IsRequired();
+                e.Property(x => x.Contenido).HasMaxLength(2000).IsRequired();
+                e.Property(x => x.ArchivoAdjuntoUrl).HasMaxLength(500);
+                e.Property(x => x.ArchivoAdjuntoNombre).HasMaxLength(200);
+
+                e.HasIndex(x => x.IdTicket);
             });
 
         }

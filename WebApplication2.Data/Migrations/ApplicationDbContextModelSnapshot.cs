@@ -1487,6 +1487,78 @@ namespace WebApplication2.Data.Migrations
                     b.ToTable("DocumentoRequisito");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.EntregaTarea", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Calificacion")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("FechaEntrega")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaRevision")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IdEstudiante")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdTarea")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NombreArchivo")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("Retroalimentacion")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("Revisada")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<long>("TamanoBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TipoArchivo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UrlArchivo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdEstudiante");
+
+                    b.HasIndex("IdTarea", "IdEstudiante");
+
+                    b.ToTable("EntregaTarea");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.Estado", b =>
                 {
                     b.Property<string>("Id")
@@ -3043,6 +3115,68 @@ namespace WebApplication2.Data.Migrations
                     b.ToTable("PlanPagoDetalle");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.PlaneacionDocente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("FechaSubida")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IdGrupoMateria")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdProfesor")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NombreArchivo")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<long>("TamanoBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TipoArchivo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UrlArchivo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdGrupoMateria");
+
+                    b.HasIndex("IdProfesor", "IdGrupoMateria");
+
+                    b.ToTable("PlaneacionDocente");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.PlantillaCobro", b =>
                 {
                     b.Property<int>("IdPlantillaCobro")
@@ -3588,6 +3722,321 @@ namespace WebApplication2.Data.Migrations
                     b.ToTable("SolicitudesDocumento");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.TareaDocente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("FechaLimite")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IdGrupoMateria")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdProfesor")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PuntosMaximos")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IdProfesor");
+
+                    b.HasIndex("IdGrupoMateria", "Activa");
+
+                    b.ToTable("TareaDocente");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TarifaAdmision", b =>
+                {
+                    b.Property<int>("IdTarifaAdmision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdTarifaAdmision"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AplicaConvenioMensualidad")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("IdPlanEstudios")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("IdTarifaAdmision");
+
+                    b.HasIndex("IdPlanEstudios");
+
+                    b.HasIndex("IdPlanEstudios", "Activo");
+
+                    b.ToTable("TarifasAdmision");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TarifaAdmisionDetalle", b =>
+                {
+                    b.Property<int>("IdTarifaAdmisionDetalle")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdTarifaAdmisionDetalle"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("EsAplicable")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("IdConceptoPago")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IdTarifaAdmision")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<string>("Notas")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("IdTarifaAdmisionDetalle");
+
+                    b.HasIndex("IdConceptoPago");
+
+                    b.HasIndex("IdTarifaAdmision");
+
+                    b.ToTable("TarifasAdmisionDetalles");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TicketComentario", b =>
+                {
+                    b.Property<int>("IdComentario")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdComentario"));
+
+                    b.Property<string>("ArchivoAdjuntoNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ArchivoAdjuntoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Contenido")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("EsAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("IdTicket")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NombreUsuario")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UsuarioId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("IdComentario");
+
+                    b.HasIndex("IdTicket");
+
+                    b.ToTable("TicketComentarios");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TicketSoporte", b =>
+                {
+                    b.Property<int>("IdTicket")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdTicket"));
+
+                    b.Property<string>("ArchivoAdjuntoNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ArchivoAdjuntoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Categoria")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Estatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("FechaCierre")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Folio")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("NombreAsignado")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NombreCreador")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Prioridad")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UsuarioAsignadoId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UsuarioCreadorId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("IdTicket");
+
+                    b.HasIndex("Estatus");
+
+                    b.HasIndex("Folio")
+                        .IsUnique();
+
+                    b.HasIndex("Prioridad");
+
+                    b.HasIndex("UsuarioAsignadoId");
+
+                    b.HasIndex("UsuarioCreadorId");
+
+                    b.ToTable("TicketsSoporte");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.TipoDocumentoEstudiante", b =>
                 {
                     b.Property<int>("IdTipoDocumento")
@@ -4044,6 +4493,25 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("CodigoPostal");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.EntregaTarea", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.Estudiante", "Estudiante")
+                        .WithMany()
+                        .HasForeignKey("IdEstudiante")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.TareaDocente", "Tarea")
+                        .WithMany("Entregas")
+                        .HasForeignKey("IdTarea")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Estudiante");
+
+                    b.Navigation("Tarea");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.Estudiante", b =>
                 {
                     b.HasOne("WebApplication2.Core.Models.Persona", "IdPersonaNavigation")
@@ -4408,6 +4876,25 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("PlanPago");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.PlaneacionDocente", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.GrupoMateria", "GrupoMateria")
+                        .WithMany()
+                        .HasForeignKey("IdGrupoMateria")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.Profesor", "Profesor")
+                        .WithMany()
+                        .HasForeignKey("IdProfesor")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("GrupoMateria");
+
+                    b.Navigation("Profesor");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.PlantillaCobro", b =>
                 {
                     b.HasOne("WebApplication2.Core.Models.Modalidad", "IdModalidadNavigation")
@@ -4541,6 +5028,66 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("UsuarioGenerador");
 
                     b.Navigation("UsuarioSolicitante");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TareaDocente", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.GrupoMateria", "GrupoMateria")
+                        .WithMany()
+                        .HasForeignKey("IdGrupoMateria")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.Profesor", "Profesor")
+                        .WithMany()
+                        .HasForeignKey("IdProfesor")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("GrupoMateria");
+
+                    b.Navigation("Profesor");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TarifaAdmision", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.PlanEstudios", "IdPlanEstudiosNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPlanEstudios")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("IdPlanEstudiosNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TarifaAdmisionDetalle", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.ConceptoPago", "IdConceptoPagoNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdConceptoPago")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.TarifaAdmision", "IdTarifaAdmisionNavigation")
+                        .WithMany("Detalles")
+                        .HasForeignKey("IdTarifaAdmision")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("IdConceptoPagoNavigation");
+
+                    b.Navigation("IdTarifaAdmisionNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TicketComentario", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.TicketSoporte", "Ticket")
+                        .WithMany("Comentarios")
+                        .HasForeignKey("IdTicket")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Aspirante", b =>
@@ -4750,6 +5297,21 @@ namespace WebApplication2.Data.Migrations
             modelBuilder.Entity("WebApplication2.Core.Models.ReciboDetalle", b =>
                 {
                     b.Navigation("Aplicaciones");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TareaDocente", b =>
+                {
+                    b.Navigation("Entregas");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TarifaAdmision", b =>
+                {
+                    b.Navigation("Detalles");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.TicketSoporte", b =>
+                {
+                    b.Navigation("Comentarios");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.TipoDocumentoEstudiante", b =>

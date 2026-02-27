@@ -9,7 +9,7 @@ namespace WebApplication2.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
     public sealed class ConceptosController : ControllerBase
     {
         private readonly IConceptoService _svc;
@@ -20,6 +20,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
         public async Task<ActionResult<ConceptoDto>> CrearConcepto(
             [FromBody] CrearConceptoDto dto,
             CancellationToken ct)
@@ -61,6 +62,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPut("{id:int}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
         public async Task<ActionResult<ConceptoDto>> Actualizar(
             int id,
             [FromBody] ActualizarConceptoDto dto,
@@ -82,6 +84,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPatch("{id:int}/estado")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
         public async Task<IActionResult> CambiarEstado(
             int id,
             [FromBody] CambiarEstadoDto dto,
@@ -99,6 +102,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpDelete("{id:int}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
         public async Task<IActionResult> Eliminar(int id, CancellationToken ct)
         {
             try
@@ -115,6 +119,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("{idConcepto:int}/precios")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
         public async Task<ActionResult<PrecioDto>> CrearPrecioPorRuta(
             int idConcepto,
             [FromBody] CrearPrecioDto dto,
@@ -137,6 +142,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("~/api/precios")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS}")]
         public async Task<ActionResult<PrecioDto>> CrearPrecio(
             [FromBody] CrearPrecioDto dto,
             CancellationToken ct)

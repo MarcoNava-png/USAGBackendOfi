@@ -21,6 +21,10 @@ public class ReporteAcademicoService : IReporteAcademicoService
     private static readonly string ColorGris = "#666666";
     private static readonly string ColorGrisClaro = "#F5F5F5";
 
+    // Colores institucionales para listado por grupos
+    private static readonly string ColorInstitucionalAzulClaro = "#D9E2F3";
+    private static readonly string ColorInstitucionalAzulOscuro = "#2E74B5";
+
     public ReporteAcademicoService(ApplicationDbContext context, IWebHostEnvironment env)
     {
         _context = context;
@@ -62,6 +66,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
         return new ReporteEstudiantesGrupoDto
         {
             NombreGrupo = grupo.NombreGrupo,
+            CodigoGrupo = grupo.CodigoGrupo ?? grupo.NombreGrupo,
             PlanEstudios = grupo.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? grupo.IdPlanEstudiosNavigation?.ClavePlanEstudios ?? "N/A",
             PeriodoAcademico = grupo.IdPeriodoAcademicoNavigation?.Nombre ?? "N/A",
             Turno = grupo.IdTurnoNavigation?.Nombre ?? "N/A",
@@ -342,64 +347,101 @@ public class ReporteAcademicoService : IReporteAcademicoService
 
     public byte[] GenerarEstudiantesPorGrupoPdf(ReporteEstudiantesGrupoDto data)
     {
+        var headerLogoPath = ResolveFilePath("header_logo.png");
+        var watermarkPath = ResolveFilePath("watermark_listado.png");
+
         var document = Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.Letter);
-                page.MarginVertical(30);
-                page.MarginHorizontal(40);
+                page.MarginTop(20);
+                page.MarginBottom(30);
+                page.MarginHorizontal(35);
 
-                page.Header().Element(c => ComposeHeader(c, $"Lista de Estudiantes - {data.NombreGrupo}"));
-
-                page.Content().PaddingVertical(10).Column(col =>
+                // Watermark as background (pre-generated with transparency)
+                if (watermarkPath != null)
                 {
-                    // Info block
-                    col.Item().PaddingBottom(10).Table(table =>
+                    page.Background().AlignCenter().AlignMiddle()
+                        .Image(watermarkPath).FitArea();
+                }
+
+                page.Header().Column(col =>
+                {
+                    // Logo header centrado
+                    if (headerLogoPath != null)
+                    {
+                        col.Item().AlignCenter().PaddingBottom(5).Height(60).Image(headerLogoPath).FitHeight();
+                    }
+
+                    // Título centrado
+                    col.Item().PaddingBottom(8).AlignCenter()
+                        .Text("Listado Por Grupo").FontSize(18).Bold().FontColor(ColorInstitucionalAzulOscuro);
+
+                    // Bloque info - replica exacta del Word
+                    col.Item().PaddingBottom(5).Table(table =>
                     {
                         table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(); });
-                        table.Cell().Text($"Plan de Estudios: {data.PlanEstudios}").FontSize(9).FontColor(ColorGris);
-                        table.Cell().Text($"Periodo: {data.PeriodoAcademico}").FontSize(9).FontColor(ColorGris);
-                        table.Cell().Text($"Turno: {data.Turno}").FontSize(9).FontColor(ColorGris);
-                        table.Cell().Text($"Total: {data.TotalEstudiantes} estudiantes").FontSize(9).Bold().FontColor(ColorAzulOscuro);
+
+                        // Fila 1: CARRERA y PERIODO con fondo azul claro
+                        table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(5)
+                            .Text(text =>
+                            {
+                                text.Span("CARRERA: ").Bold().FontSize(10);
+                                text.Span(data.PlanEstudios).FontSize(10);
+                            });
+                        table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(5)
+                            .Text(text =>
+                            {
+                                text.Span("PERIODO: ").Bold().FontSize(10);
+                                text.Span(data.PeriodoAcademico).FontSize(10);
+                            });
+
+                        // Fila 2: vacía y GRUPO con fondo azul claro
+                        table.Cell().Border(0.5f).BorderColor("#999999").Padding(5).Text("").FontSize(10);
+                        table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(5)
+                            .Text(text =>
+                            {
+                                text.Span("GRUPO: ").Bold().FontSize(10);
+                                text.Span(data.CodigoGrupo).FontSize(10);
+                            });
+                    });
+                });
+
+                page.Content().PaddingVertical(5).Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.ConstantColumn(90);  // Matrícula
+                        c.ConstantColumn(70);  // Estatus
+                        c.RelativeColumn();    // Nombre
                     });
 
-                    // Table
-                    col.Item().Table(table =>
+                    // Headers de tabla con azul oscuro institucional
+                    table.Header(header =>
                     {
-                        table.ColumnsDefinition(c =>
+                        foreach (var h in new[] { "MATRÍCULA", "ESTATUS", "NOMBRE" })
                         {
-                            c.ConstantColumn(30);  // #
-                            c.ConstantColumn(80);  // Matrícula
-                            c.RelativeColumn(3);   // Nombre
-                            c.RelativeColumn(2);   // Email
-                            c.ConstantColumn(90);  // Teléfono
-                            c.ConstantColumn(60);  // Estado
-                        });
-
-                        // Header
-                        table.Header(header =>
-                        {
-                            foreach (var h in new[] { "#", "Matrícula", "Nombre Completo", "Email", "Teléfono", "Estado" })
-                            {
-                                header.Cell().Background(ColorAzulOscuro).Padding(4)
-                                    .Text(h).FontSize(8).FontColor(Colors.White).Bold();
-                            }
-                        });
-
-                        for (int i = 0; i < data.Estudiantes.Count; i++)
-                        {
-                            var est = data.Estudiantes[i];
-                            var bgColor = i % 2 == 0 ? "#FFFFFF" : ColorGrisClaro;
-
-                            table.Cell().Background(bgColor).Padding(3).Text($"{i + 1}").FontSize(8);
-                            table.Cell().Background(bgColor).Padding(3).Text(est.Matricula).FontSize(8);
-                            table.Cell().Background(bgColor).Padding(3).Text(est.NombreCompleto).FontSize(8);
-                            table.Cell().Background(bgColor).Padding(3).Text(est.Email ?? "").FontSize(7);
-                            table.Cell().Background(bgColor).Padding(3).Text(est.Telefono ?? "").FontSize(8);
-                            table.Cell().Background(bgColor).Padding(3).Text(est.Estado).FontSize(8);
+                            header.Cell().Border(0.5f).BorderColor("#000000")
+                                .Background(ColorInstitucionalAzulOscuro).Padding(5)
+                                .AlignCenter()
+                                .Text(h).FontSize(9).FontColor(Colors.White).Bold();
                         }
                     });
+
+                    // Filas de datos con alternancia D9E2F3 / blanco (igual al Word)
+                    for (int i = 0; i < data.Estudiantes.Count; i++)
+                    {
+                        var est = data.Estudiantes[i];
+                        var bgColor = i % 2 == 0 ? "#FFFFFF" : ColorInstitucionalAzulClaro;
+
+                        table.Cell().Border(0.5f).BorderColor("#000000").Background(bgColor).Padding(4)
+                            .AlignCenter().Text(est.Matricula).FontSize(9);
+                        table.Cell().Border(0.5f).BorderColor("#000000").Background(bgColor).Padding(4)
+                            .AlignCenter().Text(est.Estado).FontSize(9);
+                        table.Cell().Border(0.5f).BorderColor("#000000").Background(bgColor).Padding(4)
+                            .Text(est.NombreCompleto).FontSize(9);
+                    }
                 });
 
                 page.Footer().Element(ComposeFooter);
@@ -722,44 +764,65 @@ public class ReporteAcademicoService : IReporteAcademicoService
     public byte[] GenerarEstudiantesPorGrupoExcel(ReporteEstudiantesGrupoDto data)
     {
         using var workbook = new XLWorkbook();
-        var ws = workbook.Worksheets.Add("Estudiantes");
+        var ws = workbook.Worksheets.Add("Listado Por Grupo");
 
         // Title
-        ws.Cell(1, 1).Value = $"Lista de Estudiantes - {data.NombreGrupo}";
+        ws.Cell(1, 1).Value = "Listado Por Grupo";
         ws.Cell(1, 1).Style.Font.Bold = true;
-        ws.Cell(1, 1).Style.Font.FontSize = 14;
-        ws.Cell(1, 1).Style.Font.FontColor = XLColor.FromHtml(ColorAzulOscuro);
-        ws.Range(1, 1, 1, 6).Merge();
+        ws.Cell(1, 1).Style.Font.FontSize = 16;
+        ws.Cell(1, 1).Style.Font.FontColor = XLColor.FromHtml(ColorInstitucionalAzulOscuro);
+        ws.Range(1, 1, 1, 4).Merge();
 
-        ws.Cell(2, 1).Value = $"Plan: {data.PlanEstudios} | Periodo: {data.PeriodoAcademico} | Turno: {data.Turno} | Total: {data.TotalEstudiantes}";
-        ws.Range(2, 1, 2, 6).Merge();
-        ws.Cell(2, 1).Style.Font.FontColor = XLColor.FromHtml(ColorGris);
+        // Info rows with institutional blue background
+        ws.Cell(3, 1).Value = "CARRERA:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+        ws.Cell(3, 2).Value = data.PlanEstudios;
+        ws.Cell(3, 3).Value = "PERIODO:";
+        ws.Cell(3, 3).Style.Font.Bold = true;
+        ws.Cell(3, 4).Value = data.PeriodoAcademico;
+        ws.Range(3, 1, 3, 4).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorInstitucionalAzulClaro);
 
-        var headers = new[] { "#", "Matrícula", "Nombre Completo", "Email", "Teléfono", "Estado" };
+        ws.Cell(4, 3).Value = "GRUPO:";
+        ws.Cell(4, 3).Style.Font.Bold = true;
+        ws.Cell(4, 4).Value = data.CodigoGrupo;
+        ws.Range(4, 1, 4, 4).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorInstitucionalAzulClaro);
+
+        // Column headers
+        var headers = new[] { "#", "Matrícula", "Nombre Completo", "Estatus" };
         for (int i = 0; i < headers.Length; i++)
         {
-            ws.Cell(4, i + 1).Value = headers[i];
-            ws.Cell(4, i + 1).Style.Font.Bold = true;
-            ws.Cell(4, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorAzulOscuro);
-            ws.Cell(4, i + 1).Style.Font.FontColor = XLColor.White;
+            ws.Cell(6, i + 1).Value = headers[i];
+            ws.Cell(6, i + 1).Style.Font.Bold = true;
+            ws.Cell(6, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorInstitucionalAzulOscuro);
+            ws.Cell(6, i + 1).Style.Font.FontColor = XLColor.White;
+            ws.Cell(6, i + 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
         }
 
         for (int i = 0; i < data.Estudiantes.Count; i++)
         {
             var est = data.Estudiantes[i];
-            int row = i + 5;
+            int row = i + 7;
             ws.Cell(row, 1).Value = i + 1;
             ws.Cell(row, 2).Value = est.Matricula;
             ws.Cell(row, 3).Value = est.NombreCompleto;
-            ws.Cell(row, 4).Value = est.Email ?? "";
-            ws.Cell(row, 5).Value = est.Telefono ?? "";
-            ws.Cell(row, 6).Value = est.Estado;
+            ws.Cell(row, 4).Value = est.Estado;
 
             if (i % 2 != 0)
-                ws.Range(row, 1, row, 6).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorGrisClaro);
+                ws.Range(row, 1, row, 4).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorInstitucionalAzulClaro);
         }
 
-        ws.Columns().AdjustToContents();
+        // Add borders to the data table
+        var lastRow = 6 + data.Estudiantes.Count;
+        if (data.Estudiantes.Count > 0)
+        {
+            ws.Range(6, 1, lastRow, 4).Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            ws.Range(6, 1, lastRow, 4).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        }
+
+        ws.Column(1).Width = 6;
+        ws.Column(2).Width = 16;
+        ws.Column(3).Width = 40;
+        ws.Column(4).Width = 14;
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -962,6 +1025,14 @@ public class ReporteAcademicoService : IReporteAcademicoService
                 });
             });
         });
+    }
+
+    private string? ResolveFilePath(string fileName)
+    {
+        var path = Path.Combine(_env.ContentRootPath, fileName);
+        if (File.Exists(path)) return path;
+        path = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+        return File.Exists(path) ? path : null;
     }
 
     private static int ObtenerOrdenDia(string dia)

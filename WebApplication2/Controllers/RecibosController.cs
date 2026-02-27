@@ -12,7 +12,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/recibos")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.ADMISIONES}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.CAJERO}")]
     public class RecibosController : ControllerBase
     {
         private readonly IReciboService _svc;

@@ -13,6 +13,7 @@ namespace WebApplication2.Services.Interfaces
     {
         Task<RecalcularDescuentosResultDto> RecalcularDescuentosConvenioAspiranteAsync(int idAspirante, CancellationToken ct);
         Task<ReciboDto> GenerarReciboAspiranteConConceptoAsync(int idAspirante, int idConceptoPago, int diasVencimiento, CancellationToken ct);
+        Task<ReciboDto> GenerarReciboAspiranteConConceptoYMontoAsync(int idAspirante, int idConceptoPago, decimal subtotal, decimal descuento, int diasVencimiento, CancellationToken ct);
         Task<IReadOnlyList<ReciboDto>> GenerarRecibosAsync(GenerarRecibosDto dto, CancellationToken ct);
         Task<ReciboDto?> ObtenerAsync(long idRecibo, CancellationToken ct);
         Task<IReadOnlyList<ReciboDto>> ListarPorPeriodoAsync(int idPeriodoAcademico, int? idEstudiante, CancellationToken ct);

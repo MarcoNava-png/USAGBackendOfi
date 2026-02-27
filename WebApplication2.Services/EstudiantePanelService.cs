@@ -829,15 +829,12 @@ namespace WebApplication2.Services
             if (requisito == null)
                 return new AccionPanelResponse { Exitoso = false, Mensaje = "Requisito de documento no encontrado" };
 
-            // Validar extensión
-            var extensionesPermitidas = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
-            var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-            if (!extensionesPermitidas.Contains(extension))
-                return new AccionPanelResponse { Exitoso = false, Mensaje = $"Extensión no permitida. Solo: {string.Join(", ", extensionesPermitidas)}" };
+            // Validar archivo (extensión, tamaño y magic bytes)
+            var (isValid, errorMessage) = await FileValidator.ValidateAsync(archivo);
+            if (!isValid)
+                return new AccionPanelResponse { Exitoso = false, Mensaje = errorMessage! };
 
-            // Validar tamaño (10 MB)
-            if (archivo.Length > 10 * 1024 * 1024)
-                return new AccionPanelResponse { Exitoso = false, Mensaje = "El archivo excede el tamaño máximo de 10 MB" };
+            var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
 
             // Subir archivo usando blob storage
             var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");

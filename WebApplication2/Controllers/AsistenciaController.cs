@@ -20,12 +20,22 @@ namespace WebApplication2.Controllers
     public class AsistenciaController : ControllerBase
     {
         private readonly IAsistenciaService _asistenciaService;
+        private readonly IProfesorService _profesorService;
         private readonly IMapper _mapper;
 
-        public AsistenciaController(IAsistenciaService asistenciaService, IMapper mapper)
+        public AsistenciaController(IAsistenciaService asistenciaService, IProfesorService profesorService, IMapper mapper)
         {
             _asistenciaService = asistenciaService;
+            _profesorService = profesorService;
             _mapper = mapper;
+        }
+
+        private async Task<int> ResolveProfesorId()
+        {
+            var userId = User.FindFirst("userId")?.Value;
+            if (string.IsNullOrEmpty(userId)) return 0;
+            var profesor = await _profesorService.GetProfesorByUsuarioId(userId);
+            return profesor?.IdProfesor ?? 0;
         }
 
         [HttpPost]
@@ -35,7 +45,7 @@ namespace WebApplication2.Controllers
             {
                 var asistencia = _mapper.Map<Asistencia>(request);
 
-                int profesorId = 1; 
+                int profesorId = await ResolveProfesorId();
 
                 var asistenciaCreada = await _asistenciaService.RegistrarAsistencia(asistencia, profesorId);
 
@@ -62,7 +72,7 @@ namespace WebApplication2.Controllers
             {
                 var asistencias = _mapper.Map<List<Asistencia>>(request.Asistencias);
 
-                int profesorId = 1;
+                int profesorId = await ResolveProfesorId();
 
                 var asistenciasCreadas = await _asistenciaService.RegistrarAsistenciaMasiva(asistencias, profesorId);
 
@@ -280,7 +290,7 @@ namespace WebApplication2.Controllers
                     return BadRequest(new { Error = "No se puede registrar asistencia para fechas futuras" });
                 }
 
-                int profesorId = 1; 
+                int profesorId = await ResolveProfesorId();
 
                 var resultado = await _asistenciaService.RegistrarAsistenciasPorFecha(
                     request.IdGrupoMateria,

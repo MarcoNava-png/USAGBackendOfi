@@ -7,5 +7,7 @@ namespace WebApplication2.Core.Requests.Aspirante
         public bool ForzarInscripcion { get; set; } = false;
 
         public string? Observaciones { get; set; }
+
+        public bool CrearCorreoAzure { get; set; } = true;
     }
 }

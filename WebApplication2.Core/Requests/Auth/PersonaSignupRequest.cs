@@ -39,6 +39,8 @@ namespace WebApplication2.Core.Requests.Auth
 
         public string? Nacionalidad { get; set; }
 
+        public string? Celular { get; set; }
+
         public string? NombreContactoEmergencia { get; set; }
 
         public string? TelefonoContactoEmergencia { get; set; }

@@ -3,6 +3,7 @@ using WebApplication2.Core.DTOs.Admision;
 using WebApplication2.Core.DTOs.Comprobante;
 using WebApplication2.Core.DTOs.Documentos;
 using WebApplication2.Core.DTOs.Recibo;
+using WebApplication2.Core.DTOs.TarifaAdmision;
 
 namespace WebApplication2.Services.Interfaces;
 
@@ -17,4 +18,6 @@ public interface IPdfService
     byte[] GenerarComprobantePago(ComprobantePagoDto comprobante);
 
     byte[] GenerarReciboPdf(ReciboPdfDto recibo);
+
+    byte[] GenerarCotizacionAdmisionPdf(CotizacionAdmisionPdfDto cotizacion);
 }

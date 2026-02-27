@@ -10,6 +10,15 @@ namespace WebApplication2.Services
         private readonly string _basePath;
         private readonly string _baseUrl;
 
+        private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
+            ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv",
+            ".txt", ".zip", ".rar"
+        };
+
+        private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
+
         public LocalStorageService(IConfiguration configuration)
         {
             _configuration = configuration;
@@ -19,10 +28,33 @@ namespace WebApplication2.Services
 
         public async Task<string> UploadFile(IFormFile formFile, string blobName, string containerName)
         {
+            if (formFile == null || formFile.Length == 0)
+                throw new ArgumentException("El archivo está vacío.");
+
+            if (formFile.Length > MaxFileSizeBytes)
+                throw new ArgumentException($"El archivo excede el tamaño máximo permitido de {MaxFileSizeBytes / (1024 * 1024)} MB.");
+
+            var extension = Path.GetExtension(blobName);
+            if (string.IsNullOrEmpty(extension) || !AllowedExtensions.Contains(extension))
+                throw new ArgumentException($"Tipo de archivo no permitido: {extension}");
+
+            // Path traversal protection
+            if (containerName.Contains("..") || blobName.Contains(".."))
+                throw new ArgumentException("Nombre de archivo no válido.");
+
+            var sanitizedContainer = Path.GetFileName(containerName);
+            var sanitizedBlob = Path.GetFileName(blobName);
+
             try
             {
-                var containerPath = Path.Combine(_basePath, containerName);
-                var filePath = Path.Combine(containerPath, blobName);
+                var containerPath = Path.Combine(_basePath, sanitizedContainer);
+                var filePath = Path.Combine(containerPath, sanitizedBlob);
+
+                // Verify resolved path is within base path
+                var resolvedPath = Path.GetFullPath(filePath);
+                if (!resolvedPath.StartsWith(Path.GetFullPath(_basePath)))
+                    throw new ArgumentException("Ruta de archivo no válida.");
+
                 var directoryPath = Path.GetDirectoryName(filePath);
 
                 if (!string.IsNullOrEmpty(directoryPath) && !Directory.Exists(directoryPath))
@@ -35,12 +67,16 @@ namespace WebApplication2.Services
                     await formFile.CopyToAsync(stream);
                 }
 
-                var publicUrl = $"{_baseUrl}/{containerName}/{blobName}";
+                var publicUrl = $"{_baseUrl}/{sanitizedContainer}/{sanitizedBlob}";
                 return publicUrl;
             }
-            catch (Exception ex)
+            catch (ArgumentException)
             {
-                throw new Exception("No se pudo cargar el archivo: " + ex.Message);
+                throw;
+            }
+            catch (Exception)
+            {
+                throw new Exception("No se pudo cargar el archivo.");
             }
         }
 
@@ -48,7 +84,16 @@ namespace WebApplication2.Services
         {
             try
             {
-                var filePath = Path.Combine(_basePath, containerName, blobName);
+                if (containerName.Contains("..") || blobName.Contains(".."))
+                    return;
+
+                var sanitizedContainer = Path.GetFileName(containerName);
+                var sanitizedBlob = Path.GetFileName(blobName);
+                var filePath = Path.Combine(_basePath, sanitizedContainer, sanitizedBlob);
+
+                var resolvedPath = Path.GetFullPath(filePath);
+                if (!resolvedPath.StartsWith(Path.GetFullPath(_basePath)))
+                    return;
 
                 if (File.Exists(filePath))
                 {

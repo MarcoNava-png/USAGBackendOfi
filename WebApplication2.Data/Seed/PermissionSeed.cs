@@ -24,6 +24,16 @@ namespace WebApplication2.Data.Seed
             else
             {
                 Console.WriteLine($"Ya existen {context.Permissions.Count()} permisos en la BD.");
+                // Insertar permisos nuevos que no existan aún
+                var existingCodes = context.Permissions.Select(p => p.Code).ToHashSet();
+                var allPermissions = GetInitialPermissions();
+                var newPermissions = allPermissions.Where(p => !existingCodes.Contains(p.Code)).ToList();
+                if (newPermissions.Any())
+                {
+                    Console.WriteLine($"Insertando {newPermissions.Count} permisos nuevos...");
+                    context.Permissions.AddRange(newPermissions);
+                    context.SaveChanges();
+                }
             }
 
             Console.WriteLine("Asignando permisos a roles...");
@@ -93,6 +103,14 @@ namespace WebApplication2.Data.Seed
                 new Permission { Code = "sistema.backup", Name = "Gestionar Backups", Description = "Crear y restaurar backups", Module = "Sistema" },
                 new Permission { Code = "sistema.configuracion", Name = "Configuración Avanzada", Description = "Configuración avanzada del sistema", Module = "Sistema" },
                 new Permission { Code = "admin.manage", Name = "Gestionar Administradores", Description = "Crear, editar y eliminar usuarios admin", Module = "Sistema" },
+
+                // Portal Docente
+                new Permission { Code = "portaldocente.view", Name = "Ver Portal Docente", Description = "Acceso al portal del docente", Module = "PortalDocente" },
+                new Permission { Code = "portaldocente.manage", Name = "Gestionar Portal Docente", Description = "Gestionar asistencia, calificaciones, planeaciones y tareas", Module = "PortalDocente" },
+
+                // Portal Alumno
+                new Permission { Code = "portalalumno.view", Name = "Ver Portal Alumno", Description = "Acceso al portal del alumno", Module = "PortalAlumno" },
+                new Permission { Code = "portalalumno.manage", Name = "Gestionar Portal Alumno", Description = "Subir tareas y ver calificaciones", Module = "PortalAlumno" },
             };
         }
 
@@ -178,20 +196,20 @@ namespace WebApplication2.Data.Seed
                     break;
 
                 case Rol.DOCENTE:
-                    var docentePermissions = new[] { "dashboard.view", "grupos.view", "calificaciones.view",
-                        "calificaciones.manage", "asistencia.view", "asistencia.manage", "estudiantes.view" };
+                    var docentePermissions = new[] { "dashboard.view", "portaldocente.view", "portaldocente.manage" };
                     foreach (var p in allPermissions.Where(p => docentePermissions.Contains(p.Code)))
                     {
-                        var canModify = p.Code.Contains("calificaciones") || p.Code.Contains("asistencia");
+                        var canModify = p.Code.Contains("portaldocente.manage");
                         result.Add((p, true, canModify, canModify, false));
                     }
                     break;
 
                 case Rol.ALUMNO:
-                    var alumnoPermissions = new[] { "dashboard.view" };
+                    var alumnoPermissions = new[] { "dashboard.view", "portalalumno.view", "portalalumno.manage" };
                     foreach (var p in allPermissions.Where(p => alumnoPermissions.Contains(p.Code)))
                     {
-                        result.Add((p, true, false, false, false));
+                        var canModify = p.Code.Contains("portalalumno.manage");
+                        result.Add((p, true, canModify, canModify, false));
                     }
                     break;
 
@@ -221,17 +239,48 @@ namespace WebApplication2.Data.Seed
                     }
                     break;
 
+                case Rol.CAJERO:
+                    // Dashboard + Finanzas: caja, pagos y recibos con gestión completa; conceptos y becas solo lectura
+                    foreach (var p in allPermissions.Where(p => p.Module == "Dashboard"))
+                    {
+                        result.Add((p, true, false, false, false));
+                    }
+                    var cajeroFinanzasOperar = new HashSet<string>
+                    {
+                        "caja.view", "caja.manage",
+                        "pagos.view", "pagos.manage",
+                        "recibos.view", "recibos.manage"
+                    };
+                    foreach (var p in allPermissions.Where(p => p.Module == "Finanzas"))
+                    {
+                        var canOperar = cajeroFinanzasOperar.Contains(p.Code);
+                        result.Add((p, true, canOperar, canOperar, false));
+                    }
+                    // Estudiantes: solo lectura para buscar al cobrar
+                    foreach (var p in allPermissions.Where(p => p.Module == "Estudiantes"))
+                    {
+                        result.Add((p, true, false, false, false));
+                    }
+                    break;
+
                 case Rol.ADMISIONES:
+                    // Módulos completos: Dashboard y Admisiones
                     var admisionesModulesTotal = new[] { "Dashboard", "Admisiones" };
-                    var admisionesViewFinanzas = new[] { "Finanzas" }; 
                     foreach (var p in allPermissions.Where(p => admisionesModulesTotal.Contains(p.Module)))
                     {
                         result.Add((p, true, true, true, false));
                     }
-                    foreach (var p in allPermissions.Where(p => admisionesViewFinanzas.Contains(p.Module)))
+                    // Finanzas: caja, pagos y recibos con gestión completa; conceptos y becas solo lectura
+                    var admisionesFinanzasOperar = new HashSet<string>
                     {
-                        var canManage = p.Code == "caja.manage" || p.Code == "pagos.manage" || p.Code == "recibos.view";
-                        result.Add((p, true, canManage, canManage, false));
+                        "caja.view", "caja.manage",
+                        "pagos.view", "pagos.manage",
+                        "recibos.view", "recibos.manage"
+                    };
+                    foreach (var p in allPermissions.Where(p => p.Module == "Finanzas"))
+                    {
+                        var canOperar = admisionesFinanzasOperar.Contains(p.Code);
+                        result.Add((p, true, canOperar, canOperar, false));
                     }
                     break;
             }

@@ -192,5 +192,14 @@ namespace WebApplication2.Services
                 Conflictos = conflictos
             };
         }
+
+        public async Task<Profesor?> GetProfesorByUsuarioId(string usuarioId, CancellationToken ct = default)
+        {
+            return await _dbContext.Profesor
+                .Include(p => p.IdPersonaNavigation)
+                .Include(p => p.Campus)
+                .Where(p => p.UsuarioId == usuarioId && p.Status == Core.Enums.StatusEnum.Active)
+                .FirstOrDefaultAsync(ct);
+        }
     }
 }

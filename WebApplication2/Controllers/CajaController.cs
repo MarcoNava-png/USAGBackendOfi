@@ -16,7 +16,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/caja")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.DIRECTOR}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.DIRECTOR},{Rol.CAJERO}")]
     public class CajaController : ControllerBase
     {
         private readonly ICajaService _cajaService;

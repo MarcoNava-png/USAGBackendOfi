@@ -8,5 +8,6 @@ namespace WebApplication2.Core.Requests.Profesor
         public string Rfc { get; set; }
         public string EmailInstitucional { get; set; }
         public int CampusId { get; set; }
+        public bool CrearCorreoAzure { get; set; } = true;
     }
 }

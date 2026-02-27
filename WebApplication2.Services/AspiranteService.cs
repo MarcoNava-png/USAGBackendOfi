@@ -21,6 +21,7 @@ namespace WebApplication2.Services
         private readonly IPlantillaCobroService? _plantillaCobroService;
         private readonly IConvenioService? _convenioService;
         private readonly IReciboService? _reciboService;
+        private readonly IMicrosoftGraphService? _graphService;
 
         public AspiranteService(ApplicationDbContext dbContext)
         {
@@ -55,6 +56,26 @@ namespace WebApplication2.Services
             _plantillaCobroService = plantillaCobroService;
             _convenioService = convenioService;
             _reciboService = reciboService;
+        }
+
+        public AspiranteService(
+            ApplicationDbContext dbContext,
+            IMatriculaService matriculaService,
+            IEstudianteService estudianteService,
+            IAuthService authService,
+            IPlantillaCobroService plantillaCobroService,
+            IConvenioService convenioService,
+            IReciboService reciboService,
+            IMicrosoftGraphService graphService)
+        {
+            _dbContext = dbContext;
+            _matriculaService = matriculaService;
+            _estudianteService = estudianteService;
+            _authService = authService;
+            _plantillaCobroService = plantillaCobroService;
+            _convenioService = convenioService;
+            _reciboService = reciboService;
+            _graphService = graphService;
         }
 
         public async Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter)
@@ -197,6 +218,7 @@ namespace WebApplication2.Services
                 persona.Curp = newAspirante.IdPersonaNavigation.Curp;
                 persona.Correo = newAspirante.IdPersonaNavigation.Correo;
                 persona.Telefono = newAspirante.IdPersonaNavigation.Telefono;
+                persona.Celular = newAspirante.IdPersonaNavigation.Celular;
                 persona.Nacionalidad = newAspirante.IdPersonaNavigation.Nacionalidad;
                 persona.NombreContactoEmergencia = newAspirante.IdPersonaNavigation.NombreContactoEmergencia;
                 persona.TelefonoContactoEmergencia = newAspirante.IdPersonaNavigation.TelefonoContactoEmergencia;
@@ -234,11 +256,6 @@ namespace WebApplication2.Services
             aspirante.DomicilioEmpresa = newAspirante.DomicilioEmpresa;
             aspirante.PuestoEmpresa = newAspirante.PuestoEmpresa;
             aspirante.QuienCubreGastos = newAspirante.QuienCubreGastos;
-
-            if (!string.IsNullOrEmpty(aspirante.IdAtendidoPorUsuario) && !int.TryParse(aspirante.IdAtendidoPorUsuario, out _))
-            {
-                throw new Exception("El campo IdAtendidoPorUsuario debe ser un numero entero.");
-            }
 
             _dbContext.Aspirante.Update(aspirante);
 
@@ -891,9 +908,35 @@ namespace WebApplication2.Services
 
                 var estudianteCreado = await _estudianteService.CrearEstudiante(estudiante);
 
-                var dominioEmail = "@usag.edu.mx";
+                var dominioEmail = "@usaguanajuato.edu.mx";
                 var emailUsuario = $"{matricula}{dominioEmail}";
                 var passwordTemporal = matricula;
+
+                // Crear correo en Azure AD si se solicita
+                string? azureUserId = null;
+                if (request.CrearCorreoAzure && _graphService != null)
+                {
+                    var graphRequest = new Core.Requests.MicrosoftGraph.CreateUserRequest
+                    {
+                        DisplayName = $"{persona.Nombre} {persona.ApellidoPaterno}".Trim(),
+                        UserPrincipalName = emailUsuario,
+                        MailNickname = matricula,
+                        GivenName = persona.Nombre ?? "",
+                        Surname = $"{persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim(),
+                        Password = passwordTemporal,
+                        ForceChangePasswordNextSignIn = true,
+                        JobTitle = "Alumno"
+                    };
+
+                    var graphResult = await _graphService.CreateUserAsync(graphRequest);
+                    if (!graphResult.Success)
+                    {
+                        throw new InvalidOperationException(
+                            $"Error al crear correo en Microsoft 365: {graphResult.Message}");
+                    }
+                    azureUserId = graphResult.UserId;
+                    Console.WriteLine($"Correo Azure AD creado: {emailUsuario} (ID: {azureUserId})");
+                }
 
                 var nuevoUsuario = new ApplicationUser
                 {
@@ -914,6 +957,12 @@ namespace WebApplication2.Services
                 }
                 catch (Exception ex)
                 {
+                    // Rollback: eliminar usuario de Azure AD si se creó
+                    if (!string.IsNullOrEmpty(azureUserId) && _graphService != null)
+                    {
+                        await _graphService.DeleteUserAsync(azureUserId);
+                        Console.WriteLine($"Rollback: usuario Azure AD {azureUserId} eliminado");
+                    }
                     Console.WriteLine($"Error al crear usuario: {ex.Message}");
                     Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
                     throw new InvalidOperationException($"Error al crear usuario del sistema: {ex.Message}", ex);
@@ -945,14 +994,14 @@ namespace WebApplication2.Services
 
                 var estatusInscrito = await _dbContext.AspiranteEstatus
                     .Where(e => e.Status == Core.Enums.StatusEnum.Active)
-                    .FirstOrDefaultAsync(e => e.DescEstatus == "Inscrito" || e.DescEstatus == "Admitido");
+                    .FirstOrDefaultAsync(e => e.DescEstatus == "Admitido");
 
                 if (estatusInscrito == null)
                 {
-                    Console.WriteLine("No se encontro estatus 'Inscrito' o 'Admitido', buscando alternativas...");
+                    Console.WriteLine("No se encontro estatus 'Admitido', buscando alternativas...");
                     estatusInscrito = await _dbContext.AspiranteEstatus
                         .Where(e => e.Status == Core.Enums.StatusEnum.Active)
-                        .FirstOrDefaultAsync(e => e.DescEstatus.Contains("Inscrit") || e.DescEstatus.Contains("Admit"));
+                        .FirstOrDefaultAsync(e => e.DescEstatus.Contains("Admit"));
                 }
 
                 if (estatusInscrito != null)
@@ -1006,7 +1055,7 @@ namespace WebApplication2.Services
                 {
                     IdAspirante = aspiranteId,
                     NombreCompleto = $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim(),
-                    NuevoEstatusAspirante = estatusInscrito?.DescEstatus ?? "Inscrito",
+                    NuevoEstatusAspirante = estatusInscrito?.DescEstatus ?? "Admitido",
                     IdEstudiante = estudianteCreado.IdEstudiante,
                     Matricula = matricula,
                     Email = emailUsuario,

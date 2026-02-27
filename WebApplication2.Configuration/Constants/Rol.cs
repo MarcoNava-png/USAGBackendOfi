@@ -14,18 +14,21 @@
         public const string FINANZAS = "finanzas";
         public const string ADMISIONES = "admisiones";
         public const string ACADEMICO = "academico";
+        public const string CAJERO = "cajero";
 
 
         public const string ROLES_ADMINISTRACION = $"{SUPER_ADMIN},{ADMIN}";
 
 
-        public const string ROLES_CAJA = $"{SUPER_ADMIN},{ADMIN},{CONTROL_ESCOLAR},{FINANZAS}";
+        public const string ROLES_CAJA = $"{SUPER_ADMIN},{ADMIN},{CONTROL_ESCOLAR},{FINANZAS},{ADMISIONES},{CAJERO}";
 
         public const string ROLES_ADMISIONES = $"{SUPER_ADMIN},{ADMIN},{CONTROL_ESCOLAR},{ADMISIONES},{DIRECTOR}";
 
         public const string ROLES_REPORTES_FINANCIEROS = $"{SUPER_ADMIN},{ADMIN},{DIRECTOR},{FINANZAS},{CONTROL_ESCOLAR}";
 
         public const string ROLES_CONFIGURACION = $"{SUPER_ADMIN},{ADMIN}";
+
+        public const string ROLES_PORTAL_DOCENTE = $"{DOCENTE},{ADMIN},{COORDINADOR},{DIRECTOR},{ACADEMICO}";
 
         public const string SOLO_SUPER_ADMIN = SUPER_ADMIN;
     }

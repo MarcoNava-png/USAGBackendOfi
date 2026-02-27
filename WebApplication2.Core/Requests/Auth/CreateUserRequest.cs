@@ -21,5 +21,7 @@ namespace WebApplication2.Core.Requests.Auth
         public string? PhotoUrl { get; set; }
 
         public List<string> Roles { get; set; } = new();
+
+        public bool CrearCorreoAzure { get; set; } = true;
     }
 }

@@ -14,7 +14,7 @@ namespace WebApplication2.Controllers
 {
     [Route("api/becas")]
     [ApiController]
-    [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR}")]
+    [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR},{Rol.ADMISIONES}")]
     public class BecaController : ControllerBase
     {
         private readonly IBecaService _becaService;
@@ -25,6 +25,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("asignar")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult<BecaAsignacion>> AsignarBeca(
             [FromBody] AsignarBecaRequest request,
             CancellationToken ct = default)
@@ -59,6 +60,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("asignar-catalogo")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult<BecaAsignacion>> AsignarBecaDesdeCatalogo(
             [FromBody] AsignarBecaCatalogoRequest request,
             CancellationToken ct = default)
@@ -91,6 +93,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult<BecaAsignacion>> ActualizarBeca(
             [FromRoute] long id,
             [FromBody] ActualizarBecaRequest request,
@@ -187,6 +190,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult> CancelarBeca(
             [FromRoute] long id,
             CancellationToken ct = default)
@@ -241,6 +245,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost("recalcular-descuentos")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult<object>> RecalcularDescuentos(
             [FromBody] RecalcularDescuentosRequest request,
             CancellationToken ct = default)

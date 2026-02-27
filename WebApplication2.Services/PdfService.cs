@@ -7,6 +7,7 @@ using WebApplication2.Core.DTOs.Admision;
 using WebApplication2.Core.DTOs.Comprobante;
 using WebApplication2.Core.DTOs.Documentos;
 using WebApplication2.Core.DTOs.Recibo;
+using WebApplication2.Core.DTOs.TarifaAdmision;
 using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2.Services;
@@ -214,6 +215,8 @@ public class PdfService : IPdfService
             row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
                 .Text($"CURP: {dp?.CURP ?? ""}");
         });
+
+        col.Item().MinHeight(5);
 
         col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
         {
@@ -1241,7 +1244,7 @@ public class PdfService : IPdfService
                     col.Item().Text("INFORMACIÓN DE CONTACTO").FontSize(8).Bold().FontColor(ColorAzulOscuro);
                     col.Item().Text(recibo.Institucion?.Telefono ?? "Tel: (477) 123-4567")
                         .FontSize(8).FontColor(ColorGris);
-                    col.Item().Text(recibo.Institucion?.Email ?? "cobranza@usag.edu.mx")
+                    col.Item().Text(recibo.Institucion?.Email ?? "cobranza@usaguanajuato.edu.mx")
                         .FontSize(8).FontColor(ColorGris);
                 });
 
@@ -1343,6 +1346,181 @@ public class PdfService : IPdfService
             resultado += unidades[u];
 
         return resultado.Trim();
+    }
+
+    #endregion
+
+    #region Cotización de Admisión
+
+    public byte[] GenerarCotizacionAdmisionPdf(CotizacionAdmisionPdfDto cotizacion)
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.Letter);
+                page.MarginVertical(30);
+                page.MarginHorizontal(40);
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily(FontePrincipal));
+
+                page.Header().Element(c => ComposeCotizacionHeader(c, cotizacion));
+                page.Content().Element(c => ComposeCotizacionContent(c, cotizacion));
+                page.Footer().Element(c => ComposeCotizacionFooter(c, cotizacion));
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    private void ComposeCotizacionHeader(IContainer container, CotizacionAdmisionPdfDto cotizacion)
+    {
+        container.Column(column =>
+        {
+            column.Item().Row(row =>
+            {
+                if (File.Exists(_logoPath))
+                {
+                    row.ConstantItem(100).Height(60).Image(_logoPath).FitArea();
+                }
+                else
+                {
+                    row.ConstantItem(100).Height(60).Background(ColorGrisClaro)
+                        .AlignCenter().AlignMiddle()
+                        .Text("USAG").FontSize(12).Bold().FontColor(ColorAzulOscuro);
+                }
+
+                row.RelativeItem().Column(col =>
+                {
+                    col.Item().AlignCenter().Text(cotizacion.Institucion?.Nombre ?? "UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO")
+                        .FontSize(13).Bold().FontColor(ColorAzulOscuro);
+                    col.Item().AlignCenter().Text(cotizacion.Institucion?.Campus ?? "CAMPUS LEÓN")
+                        .FontSize(10).SemiBold().FontColor(ColorAzulClaro);
+                    col.Item().PaddingTop(4).AlignCenter().Text("COTIZACIÓN DE COSTOS DE ADMISIÓN")
+                        .FontSize(11).Bold().FontColor(ColorAzulOscuro);
+                });
+
+                row.ConstantItem(100).Column(fechaCol =>
+                {
+                    fechaCol.Item().AlignRight().Text("FECHA").FontSize(8).FontColor(ColorGris);
+                    fechaCol.Item().AlignRight().Text(cotizacion.Fecha.ToString("dd/MM/yyyy"))
+                        .FontSize(11).Bold().FontColor(ColorAzulOscuro);
+                });
+            });
+
+            column.Item().PaddingTop(8).LineHorizontal(2).LineColor(ColorAzulOscuro);
+
+            column.Item().PaddingTop(8).Background(ColorGrisClaro).Padding(10).Column(dataCol =>
+            {
+                dataCol.Item().Row(row =>
+                {
+                    row.RelativeItem(2).Text(t =>
+                    {
+                        t.Span("Aspirante: ").Bold();
+                        t.Span(cotizacion.NombreAspirante);
+                    });
+                });
+                dataCol.Item().PaddingTop(4).Row(row =>
+                {
+                    row.RelativeItem(2).Text(t =>
+                    {
+                        t.Span("Licenciatura: ").Bold();
+                        t.Span(cotizacion.Licenciatura);
+                    });
+                    row.RelativeItem().AlignRight().Text(t =>
+                    {
+                        t.Span("Clave: ").Bold();
+                        t.Span(cotizacion.ClavePlan);
+                    });
+                });
+                dataCol.Item().PaddingTop(4).Text(t =>
+                {
+                    t.Span("Tarifa: ").Bold();
+                    t.Span(cotizacion.NombreTarifa);
+                });
+            });
+
+            column.Item().PaddingTop(8).LineHorizontal(1).LineColor(ColorGris);
+        });
+    }
+
+    private void ComposeCotizacionContent(IContainer container, CotizacionAdmisionPdfDto cotizacion)
+    {
+        container.PaddingTop(15).Column(column =>
+        {
+            column.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(3);
+                    columns.RelativeColumn(2);
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell().Background(ColorAzulOscuro).Padding(10)
+                        .Text("COSTOS").FontColor(Colors.White).Bold().FontSize(10);
+                    header.Cell().Background(ColorAzulOscuro).Padding(10)
+                        .Text("DETALLES").FontColor(Colors.White).Bold().FontSize(10).AlignCenter();
+                });
+
+                for (int i = 0; i < cotizacion.Conceptos.Count; i++)
+                {
+                    var concepto = cotizacion.Conceptos[i];
+                    var bgColor = i % 2 == 0 ? ColorGrisClaro : "#FFFFFF";
+
+                    table.Cell().Background(bgColor).Padding(10)
+                        .Text(concepto.Nombre).FontSize(10).Bold();
+                    table.Cell().Background(bgColor).Padding(10).AlignCenter()
+                        .Text(concepto.Valor).FontSize(10);
+                }
+            });
+
+            column.Item().PaddingTop(20).Background("#EFF6FF").Border(1).BorderColor(ColorAzulClaro).Padding(12).Column(notaCol =>
+            {
+                notaCol.Item().Text("NOTA IMPORTANTE:").FontSize(8).Bold().FontColor(ColorAzulOscuro);
+                notaCol.Item().PaddingTop(3).Text(
+                    "Los montos indicados en esta cotización son referenciales y están sujetos a cambios sin previo aviso. " +
+                    "Esta cotización no representa un compromiso de pago hasta que sea formalizada mediante recibo oficial.")
+                    .FontSize(8).FontColor(ColorGris).Italic();
+            });
+        });
+    }
+
+    private void ComposeCotizacionFooter(IContainer container, CotizacionAdmisionPdfDto cotizacion)
+    {
+        container.Column(column =>
+        {
+            column.Item().LineHorizontal(1).LineColor(ColorGris);
+
+            column.Item().PaddingTop(8).Row(row =>
+            {
+                row.RelativeItem().Column(col =>
+                {
+                    col.Item().Text("INFORMACIÓN DE CONTACTO").FontSize(8).Bold().FontColor(ColorAzulOscuro);
+                    col.Item().Text(cotizacion.Institucion?.Telefono ?? "Tel: (477) 123-4567")
+                        .FontSize(8).FontColor(ColorGris);
+                    col.Item().Text(cotizacion.Institucion?.Email ?? "cobranza@usaguanajuato.edu.mx")
+                        .FontSize(8).FontColor(ColorGris);
+                });
+
+                row.RelativeItem().AlignRight().Column(col =>
+                {
+                    col.Item().AlignRight().Text("Documento generado automáticamente — no requiere firma")
+                        .FontSize(7).Italic().FontColor(ColorGris);
+                    col.Item().AlignRight().Text(t =>
+                    {
+                        t.Span("Generado: ").FontSize(7).FontColor(ColorGris);
+                        t.Span(DateTime.Now.ToString("dd/MM/yyyy HH:mm")).FontSize(7).FontColor(ColorGris);
+                    });
+                    col.Item().AlignRight().Text(t =>
+                    {
+                        t.CurrentPageNumber().FontSize(7).FontColor(ColorGris);
+                        t.Span(" de ").FontSize(7).FontColor(ColorGris);
+                        t.TotalPages().FontSize(7).FontColor(ColorGris);
+                    });
+                });
+            });
+        });
     }
 
     #endregion

@@ -470,7 +470,8 @@ namespace WebApplication2.Services
 
         public async Task<List<UsuarioCajeroDto>> ObtenerCajerosAsync()
         {
-            var usuariosConCobros = await _context.Pago
+            // 1. Obtener estadísticas de cobros por usuario
+            var cobrosDict = await _context.Pago
                 .Where(p => p.IdUsuarioCaja != null && p.Estatus == EstatusPago.CONFIRMADO)
                 .GroupBy(p => p.IdUsuarioCaja)
                 .Select(g => new
@@ -479,26 +480,28 @@ namespace WebApplication2.Services
                     TotalCobros = g.Count(),
                     UltimoCobro = g.Max(p => p.FechaPagoUtc)
                 })
-                .ToListAsync();
+                .ToDictionaryAsync(x => x.IdUsuario!, x => x);
 
+            // 2. Obtener solo usuarios con rol "cajero"
+            var todosUsuarios = await _authService.GetAllUsers();
             var cajeros = new List<UsuarioCajeroDto>();
 
-            foreach (var usuario in usuariosConCobros)
+            foreach (var user in todosUsuarios)
             {
-                if (string.IsNullOrEmpty(usuario.IdUsuario)) continue;
+                var roles = await _authService.GetUserRoles(user);
+                if (!roles.Any(r => r.Equals(Configuration.Constants.Rol.CAJERO, StringComparison.OrdinalIgnoreCase)))
+                    continue;
 
-                var user = await _authService.GetUserById(usuario.IdUsuario);
-                if (user != null)
+                cobrosDict.TryGetValue(user.Id, out var cobros);
+
+                cajeros.Add(new UsuarioCajeroDto
                 {
-                    cajeros.Add(new UsuarioCajeroDto
-                    {
-                        IdUsuario = usuario.IdUsuario,
-                        NombreCompleto = $"{user.Nombres} {user.Apellidos}".Trim(),
-                        Email = user.Email,
-                        TotalCobros = usuario.TotalCobros,
-                        UltimoCobro = usuario.UltimoCobro
-                    });
-                }
+                    IdUsuario = user.Id,
+                    NombreCompleto = $"{user.Nombres} {user.Apellidos}".Trim(),
+                    Email = user.Email,
+                    TotalCobros = cobros?.TotalCobros ?? 0,
+                    UltimoCobro = cobros?.UltimoCobro
+                });
             }
 
             return cajeros.OrderBy(c => c.NombreCompleto).ToList();

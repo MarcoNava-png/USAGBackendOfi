@@ -452,6 +452,67 @@ namespace WebApplication2.Services
             return await GenerarReciboAspiranteAsync(idAspirante, precio.Importe, concepto.Nombre ?? concepto.Clave, diasVencimiento, ct);
         }
 
+        public async Task<ReciboDto> GenerarReciboAspiranteConConceptoYMontoAsync(
+            int idAspirante, int idConceptoPago, decimal subtotal, decimal descuento, int diasVencimiento, CancellationToken ct)
+        {
+            var aspirante = await _db.Aspirante.FindAsync(new object[] { idAspirante }, ct);
+            if (aspirante == null)
+                throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
+
+            var concepto = await _db.ConceptoPago
+                .FirstOrDefaultAsync(c => c.IdConceptoPago == idConceptoPago, ct);
+            if (concepto == null)
+                throw new InvalidOperationException($"No se encontró el ConceptoPago con ID {idConceptoPago}");
+
+            var saldo = Math.Max(0, subtotal - descuento);
+            var fechaEmision = DateOnly.FromDateTime(DateTime.UtcNow);
+            var fechaVencimiento = fechaEmision.AddDays(diasVencimiento);
+            var nombreConcepto = concepto.Nombre ?? concepto.Clave;
+
+            var recibo = new Recibo
+            {
+                Folio = await GenerarFolioAsync(ct),
+                IdAspirante = idAspirante,
+                FechaEmision = fechaEmision,
+                FechaVencimiento = fechaVencimiento,
+                Estatus = EstatusRecibo.PENDIENTE,
+                Subtotal = subtotal,
+                Descuento = descuento,
+                Recargos = 0,
+                Saldo = saldo,
+                Notas = descuento > 0
+                    ? $"Recibo de {nombreConcepto} - Descuento por convenio: ${descuento:N2}"
+                    : $"Recibo de {nombreConcepto} generado automáticamente"
+            };
+
+            _db.Recibo.Add(recibo);
+            await _db.SaveChangesAsync(ct);
+
+            var detalle = new ReciboDetalle
+            {
+                IdRecibo = recibo.IdRecibo,
+                IdConceptoPago = idConceptoPago,
+                Descripcion = nombreConcepto,
+                Cantidad = 1,
+                PrecioUnitario = subtotal
+            };
+
+            _db.ReciboDetalle.Add(detalle);
+            await _db.SaveChangesAsync(ct);
+
+            if (descuento > 0)
+            {
+                var tipoConcepto = concepto.Tipo == Core.Enums.ConceptoTipoEnum.COLEGIATURA ? "COLEGIATURA" : "INSCRIPCION";
+                await _convenioService.IncrementarAplicacionesConvenioAsync(idAspirante, tipoConcepto, ct);
+            }
+
+            var reciboCreado = await _db.Recibo
+                .Include(r => r.Detalles)
+                .FirstOrDefaultAsync(r => r.IdRecibo == recibo.IdRecibo, ct);
+
+            return _mapper.Map<ReciboDto>(reciboCreado);
+        }
+
         public async Task<int> RepararRecibosSinDetallesAsync(CancellationToken ct)
         {
             var recibosSinDetalles = await _db.Recibo

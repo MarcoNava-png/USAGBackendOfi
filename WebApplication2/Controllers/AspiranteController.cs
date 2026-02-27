@@ -280,6 +280,58 @@ namespace WebApplication2.Controllers
             return Ok(aspiranteDto);
         }
 
+        [HttpGet("{id:int}/editar")]
+        public async Task<ActionResult<AspiranteEditDto>> GetForEdit(int id)
+        {
+            var aspirante = await _aspiranteService.GetAspiranteById(id);
+            var persona = aspirante.IdPersonaNavigation;
+            var direccion = persona?.IdDireccionNavigation;
+
+            var dto = new AspiranteEditDto
+            {
+                IdAspirante = aspirante.IdAspirante,
+                Nombre = persona?.Nombre,
+                ApellidoPaterno = persona?.ApellidoPaterno,
+                ApellidoMaterno = persona?.ApellidoMaterno,
+                FechaNacimiento = persona?.FechaNacimiento,
+                GeneroId = persona?.IdGenero,
+                Correo = persona?.Correo,
+                Telefono = persona?.Telefono,
+                Celular = persona?.Celular,
+                CURP = persona?.Curp,
+                Calle = direccion?.Calle,
+                NumeroExterior = direccion?.NumeroExterior,
+                NumeroInterior = direccion?.NumeroInterior,
+                CodigoPostalId = direccion?.CodigoPostalId,
+                IdEstadoCivil = persona?.IdEstadoCivil,
+                Nacionalidad = persona?.Nacionalidad,
+                CampusId = aspirante.IdPlanNavigation?.IdCampus,
+                PlanEstudiosId = aspirante.IdPlan,
+                MedioContactoId = aspirante.IdMedioContacto,
+                Notas = aspirante.Observaciones,
+                HorarioId = aspirante.TurnoId,
+                CuatrimestreInteres = aspirante.CuatrimestreInteres,
+                InstitucionProcedencia = aspirante.InstitucionProcedencia,
+                IdModalidad = aspirante.IdModalidad,
+                IdPeriodoAcademico = aspirante.IdPeriodoAcademico,
+                RecorridoPlantel = aspirante.RecorridoPlantel,
+                Trabaja = aspirante.Trabaja,
+                NombreEmpresa = aspirante.NombreEmpresa,
+                DomicilioEmpresa = aspirante.DomicilioEmpresa,
+                PuestoEmpresa = aspirante.PuestoEmpresa,
+                QuienCubreGastos = aspirante.QuienCubreGastos,
+                AtendidoPorUsuarioId = aspirante.IdAtendidoPorUsuario,
+                NombreContactoEmergencia = persona?.NombreContactoEmergencia,
+                TelefonoContactoEmergencia = persona?.TelefonoContactoEmergencia,
+                ParentescoContactoEmergencia = persona?.ParentescoContactoEmergencia,
+                IdAspiranteEstatus = aspirante.IdAspiranteEstatus,
+                EstadoId = direccion?.CodigoPostal?.Municipio?.EstadoId,
+                MunicipioId = direccion?.CodigoPostal?.MunicipioId,
+            };
+
+            return Ok(dto);
+        }
+
         [HttpPost]
         public async Task<ActionResult<AspiranteDto>> Post([FromBody] AspiranteSignupRequest request)
         {
@@ -312,6 +364,7 @@ namespace WebApplication2.Controllers
 
                     Correo = request.Correo,
                     Telefono = request.Telefono,
+                    Celular = request.Celular,
 
                     IdDireccionNavigation = direccion,
                     IdEstadoCivil = request.IdEstadoCivil,
@@ -382,6 +435,7 @@ namespace WebApplication2.Controllers
 
                     Correo = request.Correo,
                     Telefono = request.Telefono,
+                    Celular = request.Celular,
 
                     IdDireccionNavigation = direccion,
                     Nacionalidad = request.Nacionalidad,
@@ -538,6 +592,13 @@ namespace WebApplication2.Controllers
             return Ok(list);
         }
 
+        [HttpGet("documentos/requisitos")]
+        public async Task<ActionResult<IReadOnlyList<DocumentoRequisitoDto>>> GetRequisitos()
+        {
+            var list = await _docsSvc.ListarRequisitosAsync(new ListarRequisitosRequest());
+            return Ok(list);
+        }
+
         [HttpPatch("documentos/{idDocumento:long}/validar")]
         public async Task<ActionResult> ValidarDocumento(long idDocumento, [FromBody] ValidarDocumentoRequestDto request)
         {
@@ -576,6 +637,10 @@ namespace WebApplication2.Controllers
                 var docId = await _docsSvc.CargarDocumentoConArchivoAsync(idAspirante, idDocumentoRequisito, archivo, notas);
 
                 return Ok(new { IdAspiranteDocumento = docId, Mensaje = "Documento cargado exitosamente" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Error = ex.Message });
             }
             catch (Exception ex)
             {

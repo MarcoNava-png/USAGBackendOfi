@@ -5,6 +5,7 @@ using WebApplication2.Configuration.Constants;
 using WebApplication2.Core.DTOs;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.Auth;
+using WebApplication2.Services;
 using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2
@@ -17,13 +18,15 @@ namespace WebApplication2
         private readonly IBlobStorageService _blobStorageService;
         private readonly IConfiguration _configuration;
         private readonly IMapper _mapper;
+        private readonly IMicrosoftGraphService _graphService;
 
-        public AuthController(IAuthService authService, IBlobStorageService blobStorageService, IConfiguration configuration, IMapper mapper)
+        public AuthController(IAuthService authService, IBlobStorageService blobStorageService, IConfiguration configuration, IMapper mapper, IMicrosoftGraphService graphService)
         {
             _authService = authService;
             _blobStorageService = blobStorageService;
             _configuration = configuration;
             _mapper = mapper;
+            _graphService = graphService;
         }
 
         [HttpPost("login")]
@@ -98,28 +101,70 @@ namespace WebApplication2
         [Authorize(Roles = Rol.ADMIN)]
         public async Task<IActionResult> CreateUser(CreateUserRequest request)
         {
-            var user = new ApplicationUser
+            // 1. Crear correo en Azure AD si se solicita
+            string? azureUserId = null;
+            if (request.CrearCorreoAzure)
             {
-                UserName = request.Email,
-                Email = request.Email,
-                Nombres = request.Nombres,
-                Apellidos = request.Apellidos,
-                Telefono = request.Telefono,
-                Biografia = request.Biografia,
-                PhotoUrl = request.PhotoUrl,
-                MustChangePassword = true
-            };
+                var rolLabel = request.Roles.FirstOrDefault() ?? "Staff";
+                var mailNickname = request.Email.Contains("@")
+                    ? request.Email.Substring(0, request.Email.IndexOf("@"))
+                    : request.Email;
 
-            var createdUser = await _authService.Signup(user, request.Password, request.Roles);
+                var graphRequest = new Core.Requests.MicrosoftGraph.CreateUserRequest
+                {
+                    DisplayName = $"{request.Nombres} {request.Apellidos}".Trim(),
+                    UserPrincipalName = request.Email,
+                    MailNickname = mailNickname,
+                    GivenName = request.Nombres,
+                    Surname = request.Apellidos,
+                    Password = request.Password,
+                    ForceChangePasswordNextSignIn = true,
+                    JobTitle = rolLabel
+                };
 
-            var userLoginInfoDto = await _authService.Login(request.Email, request.Password);
+                var graphResult = await _graphService.CreateUserAsync(graphRequest);
+                if (!graphResult.Success)
+                {
+                    return BadRequest(new { message = $"Error al crear correo en Microsoft 365: {graphResult.Message}" });
+                }
+                azureUserId = graphResult.UserId;
+            }
 
-            var response = new Response<UserLoginInfoDto>
+            try
             {
-                Data = userLoginInfoDto
-            };
+                // 2. Crear usuario local
+                var user = new ApplicationUser
+                {
+                    UserName = request.Email,
+                    Email = request.Email,
+                    Nombres = request.Nombres,
+                    Apellidos = request.Apellidos,
+                    Telefono = request.Telefono,
+                    Biografia = request.Biografia,
+                    PhotoUrl = request.PhotoUrl,
+                    MustChangePassword = true
+                };
 
-            return Created($"/api/auth/user/{createdUser.Id}", response);
+                var createdUser = await _authService.Signup(user, request.Password, request.Roles);
+
+                var userLoginInfoDto = await _authService.Login(request.Email, request.Password);
+
+                var response = new Response<UserLoginInfoDto>
+                {
+                    Data = userLoginInfoDto
+                };
+
+                return Created($"/api/auth/user/{createdUser.Id}", response);
+            }
+            catch (Exception)
+            {
+                // Rollback: eliminar usuario de Azure AD si se creó
+                if (!string.IsNullOrEmpty(azureUserId))
+                {
+                    await _graphService.DeleteUserAsync(azureUserId);
+                }
+                throw;
+            }
         }
 
         [HttpPost("refresh")]

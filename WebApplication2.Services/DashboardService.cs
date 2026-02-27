@@ -12,6 +12,9 @@ namespace WebApplication2.Services
     public class DashboardService : IDashboardService
     {
         private readonly ApplicationDbContext _context;
+        private static readonly TimeZoneInfo _tzMexico = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
+
+        private static DateTime AhoraMexico => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _tzMexico);
 
         public DashboardService(ApplicationDbContext context)
         {
@@ -42,9 +45,10 @@ namespace WebApplication2.Services
 
         public async Task<AdminDashboardDto> GetAdminDashboardAsync()
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+            var ahora = AhoraMexico;
+            var hoy = DateOnly.FromDateTime(ahora);
             var inicioMes = new DateOnly(hoy.Year, hoy.Month, 1);
-            var hoyDateTime = DateTime.UtcNow.Date;
+            var hoyDateTime = ahora.Date;
             var inicioMesDateTime = new DateTime(hoy.Year, hoy.Month, 1);
 
             var pagosHoy = await _context.Pago
@@ -128,7 +132,8 @@ namespace WebApplication2.Services
 
         public async Task<DirectorDashboardDto> GetDirectorDashboardAsync()
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+            var ahora = AhoraMexico;
+            var hoy = DateOnly.FromDateTime(ahora);
             var inicioMes = new DateOnly(hoy.Year, hoy.Month, 1);
             var inicioMesDateTime = new DateTime(hoy.Year, hoy.Month, 1);
 
@@ -192,8 +197,9 @@ namespace WebApplication2.Services
 
         public async Task<FinanzasDashboardDto> GetFinanzasDashboardAsync()
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
-            var hoyDateTime = DateTime.UtcNow.Date;
+            var ahora = AhoraMexico;
+            var hoy = DateOnly.FromDateTime(ahora);
+            var hoyDateTime = ahora.Date;
             var inicioSemana = hoyDateTime.AddDays(-(int)hoyDateTime.DayOfWeek);
             var inicioMes = new DateOnly(hoy.Year, hoy.Month, 1);
             var inicioMesDateTime = new DateTime(hoy.Year, hoy.Month, 1);
@@ -304,8 +310,9 @@ namespace WebApplication2.Services
 
         public async Task<ControlEscolarDashboardDto> GetControlEscolarDashboardAsync()
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
-            var hoyDateTime = DateTime.UtcNow.Date;
+            var ahora = AhoraMexico;
+            var hoy = DateOnly.FromDateTime(ahora);
+            var hoyDateTime = ahora.Date;
             var inicioSemana = hoyDateTime.AddDays(-(int)hoyDateTime.DayOfWeek);
             var inicioMesDateTime = new DateTime(hoy.Year, hoy.Month, 1);
 
@@ -356,7 +363,7 @@ namespace WebApplication2.Services
                     Nombre = p.Nombre,
                     FechaInicio = p.FechaInicio.ToDateTime(TimeOnly.MinValue),
                     FechaFin = p.FechaFin.ToDateTime(TimeOnly.MinValue),
-                    DiasRestantes = (int)(p.FechaFin.ToDateTime(TimeOnly.MinValue) - DateTime.UtcNow).TotalDays,
+                    DiasRestantes = (int)(p.FechaFin.ToDateTime(TimeOnly.MinValue) - AhoraMexico).TotalDays,
                     EsActivo = p.EsPeriodoActual
                 })
                 .FirstOrDefaultAsync();
@@ -382,7 +389,8 @@ namespace WebApplication2.Services
 
         public async Task<AdmisionesDashboardDto> GetAdmisionesDashboardAsync()
         {
-            var hoy = DateTime.UtcNow.Date;
+            var ahora = AhoraMexico;
+            var hoy = ahora.Date;
             var inicioSemana = hoy.AddDays(-(int)hoy.DayOfWeek);
             var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
 
@@ -514,7 +522,7 @@ namespace WebApplication2.Services
 
         public async Task<DocenteDashboardDto> GetDocenteDashboardAsync(string userId)
         {
-            var hoy = DateTime.UtcNow;
+            var hoy = AhoraMexico;
             var diaSemana = (int)hoy.DayOfWeek;
             if (diaSemana == 0) diaSemana = 7;
 
@@ -537,22 +545,34 @@ namespace WebApplication2.Services
                 };
             }
 
-            var clasesDeHoy = await _context.Horario
+            var clasesDeHoyRaw = await _context.Horario
                 .Where(h => h.IdDiaSemana == diaSemana &&
                             h.IdGrupoMateriaNavigation.IdProfesor == profesor.IdProfesor &&
                             h.IdGrupoMateriaNavigation.IdGrupoNavigation.IdPeriodoAcademicoNavigation.EsPeriodoActual)
-                .Select(h => new ClaseHoyDto
+                .OrderBy(h => h.HoraInicio)
+                .Select(h => new
                 {
-                    IdGrupoMateria = h.IdGrupoMateria,
+                    h.IdGrupoMateria,
                     Materia = h.IdGrupoMateriaNavigation.IdMateriaPlanNavigation.IdMateriaNavigation.Nombre,
-                    Grupo = $"Grupo {h.IdGrupoMateriaNavigation.IdGrupoNavigation.NumeroGrupo}",
+                    NumeroGrupo = h.IdGrupoMateriaNavigation.IdGrupoNavigation.NumeroGrupo,
                     Aula = h.Aula ?? h.IdGrupoMateriaNavigation.Aula ?? "Sin asignar",
-                    HoraInicio = h.HoraInicio.ToTimeSpan(),
-                    HoraFin = h.HoraFin.ToTimeSpan(),
+                    h.HoraInicio,
+                    h.HoraFin,
                     TotalEstudiantes = h.IdGrupoMateriaNavigation.Inscripcion.Count(i => i.Estado == "Inscrito")
                 })
-                .OrderBy(c => c.HoraInicio)
                 .ToListAsync();
+
+            var clasesDeHoy = clasesDeHoyRaw.Select(h => new ClaseHoyDto
+                {
+                    IdGrupoMateria = h.IdGrupoMateria,
+                    Materia = h.Materia,
+                    Grupo = $"Grupo {h.NumeroGrupo}",
+                    Aula = h.Aula,
+                    HoraInicio = h.HoraInicio.ToTimeSpan(),
+                    HoraFin = h.HoraFin.ToTimeSpan(),
+                    TotalEstudiantes = h.TotalEstudiantes
+                })
+                .ToList();
 
             var gruposConCalificaciones = await _context.CalificacionesParciales
                 .Select(cp => cp.GrupoMateriaId)
@@ -596,8 +616,9 @@ namespace WebApplication2.Services
 
         public async Task<AlumnoDashboardDto> GetAlumnoDashboardAsync(string userId)
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
-            var diaSemana = (int)DateTime.UtcNow.DayOfWeek;
+            var ahora = AhoraMexico;
+            var hoy = DateOnly.FromDateTime(ahora);
+            var diaSemana = (int)ahora.DayOfWeek;
             if (diaSemana == 0) diaSemana = 7;
 
             var estudiante = await _context.Estudiante
@@ -803,7 +824,7 @@ namespace WebApplication2.Services
             for (int i = 1; i <= 3; i++)
             {
                 var fechaParcial = fechaInicio.AddDays(duracion / 3 * i);
-                var diasRestantes = (int)(fechaParcial - DateTime.UtcNow).TotalDays;
+                var diasRestantes = (int)(fechaParcial - AhoraMexico).TotalDays;
 
                 if (diasRestantes > 0)
                 {
@@ -882,7 +903,7 @@ namespace WebApplication2.Services
         private async Task<List<AlertaDto>> GenerarAlertasFinanzasAsync()
         {
             var alertas = new List<AlertaDto>();
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+            var hoy = DateOnly.FromDateTime(AhoraMexico);
             var en7Dias = hoy.AddDays(7);
 
             var recibosProxVencer = await _context.Recibo
@@ -932,7 +953,7 @@ namespace WebApplication2.Services
         private async Task<List<AlertaDto>> GenerarAlertasAdmisionesAsync()
         {
             var alertas = new List<AlertaDto>();
-            var hace7Dias = DateTime.UtcNow.AddDays(-7);
+            var hace7Dias = AhoraMexico.AddDays(-7);
 
             var sinSeguimiento = await _context.Aspirante
                 .Where(a => a.IdAspiranteEstatus == 1 || a.IdAspiranteEstatus == 2)

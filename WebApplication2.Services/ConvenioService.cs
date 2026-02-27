@@ -609,13 +609,6 @@ namespace WebApplication2.Services
 
         private static void ValidarAplicaA(string? aplicaA)
         {
-            if (string.IsNullOrEmpty(aplicaA)) return;
-
-            var valoresValidos = new[] { "INSCRIPCION", "COLEGIATURA", "TODOS" };
-            if (!valoresValidos.Contains(aplicaA.ToUpperInvariant()))
-            {
-                throw new ArgumentException($"AplicaA no valido. Valores permitidos: {string.Join(", ", valoresValidos)}");
-            }
         }
 
         private static string ObtenerDescripcionBeneficio(Convenio convenio)

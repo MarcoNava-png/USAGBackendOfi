@@ -32,6 +32,8 @@ if (builder.Environment.IsProduction())
 {
     if (string.IsNullOrWhiteSpace(jwtKey))
         throw new InvalidOperationException("PRODUCCIÓN: Jwt:Key es requerido. Configure Jwt__Key como variable de entorno.");
+    if (jwtKey!.Length < 32)
+        throw new InvalidOperationException("PRODUCCIÓN: Jwt:Key debe tener al menos 32 caracteres (256 bits) para HMAC-SHA256.");
     if (string.IsNullOrWhiteSpace(jwtIssuer))
         throw new InvalidOperationException("PRODUCCIÓN: Jwt:Issuer es requerido. Configure Jwt__Issuer como variable de entorno.");
     if (string.IsNullOrWhiteSpace(jwtAudience))
@@ -186,7 +188,8 @@ builder.Services.AddScoped<IAspiranteService, AspiranteService>(sp =>
     var plantillaCobroService = sp.GetRequiredService<IPlantillaCobroService>();
     var convenioService = sp.GetRequiredService<IConvenioService>();
     var reciboService = sp.GetRequiredService<IReciboService>();
-    return new AspiranteService(dbContext, matriculaService, estudianteService, authService, plantillaCobroService, convenioService, reciboService);
+    var graphService = sp.GetRequiredService<IMicrosoftGraphService>();
+    return new AspiranteService(dbContext, matriculaService, estudianteService, authService, plantillaCobroService, convenioService, reciboService, graphService);
 });
 
 builder.Services.AddScoped<IEstudianteService, EstudianteService>();
@@ -233,6 +236,10 @@ builder.Services.AddScoped<IEstudiantePanelService, EstudiantePanelService>();
 builder.Services.AddScoped<IBitacoraAccionService, BitacoraAccionService>();
 builder.Services.AddScoped<INotificacionInternalService, NotificacionInternalService>();
 builder.Services.AddScoped<IReporteAcademicoService, ReporteAcademicoService>();
+builder.Services.AddScoped<IPlaneacionDocenteService, PlaneacionDocenteService>();
+builder.Services.AddScoped<ITareaDocenteService, TareaDocenteService>();
+builder.Services.AddScoped<ITarifaAdmisionService, TarifaAdmisionService>();
+builder.Services.AddScoped<ITicketSoporteService, TicketSoporteService>();
 builder.Services.AddHostedService<TareasAutomaticasService>();
 
 
@@ -259,6 +266,8 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 app.Services.InsertInitialData();
+
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {

@@ -3,6 +3,7 @@ namespace WebApplication2.Core.DTOs.Reportes;
 public class ReporteEstudiantesGrupoDto
 {
     public string NombreGrupo { get; set; } = null!;
+    public string CodigoGrupo { get; set; } = null!;
     public string PlanEstudios { get; set; } = null!;
     public string PeriodoAcademico { get; set; } = null!;
     public string Turno { get; set; } = null!;

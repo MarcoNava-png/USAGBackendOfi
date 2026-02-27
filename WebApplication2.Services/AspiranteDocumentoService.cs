@@ -148,19 +148,13 @@ namespace WebApplication2.Services
 
         public async Task<long> CargarDocumentoConArchivoAsync(int idAspirante, int idDocumentoRequisito, IFormFile archivo, string? notas)
         {
-            var extensionesPermitidas = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
+            var (isValid, errorMessage) = await FileValidator.ValidateAsync(archivo);
+            if (!isValid)
+            {
+                throw new InvalidOperationException(errorMessage!);
+            }
+
             var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
-
-            if (!extensionesPermitidas.Contains(extension))
-            {
-                throw new InvalidOperationException($"Extensión de archivo no permitida. Solo se permiten: {string.Join(", ", extensionesPermitidas)}");
-            }
-
-            const long maxFileSize = 10 * 1024 * 1024;
-            if (archivo.Length > maxFileSize)
-            {
-                throw new InvalidOperationException("El archivo excede el tamaño máximo permitido de 10 MB");
-            }
 
             var requisito = await _db.DocumentoRequisito.FindAsync(idDocumentoRequisito);
             if (requisito == null)
