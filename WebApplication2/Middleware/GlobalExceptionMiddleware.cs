@@ -22,6 +22,17 @@ public class GlobalExceptionMiddleware
         {
             await _next(context);
         }
+        catch (WebApplication2.Configuration.CustomExceptions.ValidationException ex)
+        {
+            _logger.LogWarning(ex, "Validation error on {Path}", context.Request.Path);
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                isSuccess = false,
+                messageError = ex.Message
+            });
+        }
         catch (ArgumentException ex)
         {
             _logger.LogWarning(ex, "Validation error on {Path}", context.Request.Path);

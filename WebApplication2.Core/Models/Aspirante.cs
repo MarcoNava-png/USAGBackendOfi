@@ -26,6 +26,8 @@ public partial class Aspirante : BaseEntity
 
     public int? IdModalidad { get; set; }
 
+    public int? GrupoDiasImparticion { get; set; }
+
     public int? IdPeriodoAcademico { get; set; }
 
     public bool? RecorridoPlantel { get; set; }
@@ -39,6 +41,10 @@ public partial class Aspirante : BaseEntity
     public string? PuestoEmpresa { get; set; }
 
     public string? QuienCubreGastos { get; set; }
+
+    public int? IdEmpresa { get; set; }
+
+    public virtual Empresa? IdEmpresaNavigation { get; set; }
 
     public virtual ICollection<AspiranteConvenio> AspiranteConvenio { get; set; } = new List<AspiranteConvenio>();
 

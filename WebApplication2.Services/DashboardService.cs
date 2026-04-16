@@ -60,7 +60,7 @@ namespace WebApplication2.Services
                 .SumAsync(p => (decimal?)p.Monto) ?? 0;
 
             var deudaTotal = await _context.Recibo
-                .Where(r => r.Estatus != EstatusRecibo.PAGADO && r.Estatus != EstatusRecibo.CANCELADO)
+                .Where(r => r.Estatus == EstatusRecibo.VENCIDO)
                 .SumAsync(r => (decimal?)r.Saldo) ?? 0;
 
             var estudiantesConDeuda = await _context.Recibo
@@ -221,7 +221,7 @@ namespace WebApplication2.Services
                 .CountAsync();
 
             var deudaTotal = await _context.Recibo
-                .Where(r => r.Estatus != EstatusRecibo.PAGADO && r.Estatus != EstatusRecibo.CANCELADO)
+                .Where(r => r.Estatus == EstatusRecibo.VENCIDO)
                 .SumAsync(r => (decimal?)r.Saldo) ?? 0;
 
             var totalMorosos = await _context.Recibo
@@ -237,29 +237,36 @@ namespace WebApplication2.Services
                 {
                     IdEstudiante = g.Key!.Value,
                     MontoAdeudado = g.Sum(r => r.Saldo),
+                    RecibosVencidos = g.Count(),
                     FechaVencimiento = g.Min(r => r.FechaVencimiento)
                 })
                 .OrderByDescending(m => m.MontoAdeudado)
-                .Take(10)
                 .ToListAsync();
 
             var estudianteIds = topMorosos.Select(m => m.IdEstudiante).ToList();
             var estudiantes = await _context.Estudiante
                 .Include(e => e.IdPersonaNavigation)
+                .Include(e => e.IdPlanActualNavigation)
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == Core.Enums.StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                    .ThenInclude(eg => eg.IdGrupoNavigation)
                 .Where(e => estudianteIds.Contains(e.IdEstudiante))
                 .ToDictionaryAsync(e => e.IdEstudiante);
 
             var topMorososDto = topMorosos.Select(m =>
             {
                 var estudiante = estudiantes.GetValueOrDefault(m.IdEstudiante);
+                var grupo = estudiante?.EstudianteGrupo.FirstOrDefault()?.IdGrupoNavigation;
                 return new MorosoDto
                 {
                     IdEstudiante = m.IdEstudiante,
                     Matricula = estudiante?.Matricula ?? "",
                     NombreCompleto = estudiante != null
-                        ? $"{estudiante.IdPersonaNavigation?.Nombre} {estudiante.IdPersonaNavigation?.ApellidoPaterno}"
+                        ? $"{estudiante.IdPersonaNavigation?.Nombre} {estudiante.IdPersonaNavigation?.ApellidoPaterno} {estudiante.IdPersonaNavigation?.ApellidoMaterno}".Trim()
                         : "",
+                    Carrera = estudiante?.IdPlanActualNavigation?.NombrePlanEstudios,
+                    Grupo = grupo?.CodigoGrupo ?? null,
                     MontoAdeudado = m.MontoAdeudado,
+                    RecibosVencidos = m.RecibosVencidos,
                     DiasVencido = (int)(hoy.ToDateTime(TimeOnly.MinValue) - m.FechaVencimiento.ToDateTime(TimeOnly.MinValue)).TotalDays
                 };
             }).ToList();
@@ -750,6 +757,157 @@ namespace WebApplication2.Services
                 Anuncios = new List<AnuncioDto>(),
                 TramitesDisponibles = tramitesDisponibles,
                 Alertas = alertas
+            };
+        }
+
+        public async Task<FinanzasIndicadoresDto> GetFinanzasIndicadoresAsync()
+        {
+            var ahora = AhoraMexico;
+            var hoy = ahora.Date;
+            var hoyDateOnly = DateOnly.FromDateTime(ahora);
+
+            // 1. Ingresos por día (últimos 7 días)
+            var hace7Dias = hoy.AddDays(-6);
+            var diasSemana = new[] { "Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb" };
+
+            var pagosSemana = await _context.Pago
+                .Where(p => p.FechaPagoUtc.Date >= hace7Dias && p.Estatus == 0)
+                .GroupBy(p => p.FechaPagoUtc.Date)
+                .Select(g => new
+                {
+                    Fecha = g.Key,
+                    Monto = g.Sum(p => p.Monto),
+                    Transacciones = g.Count()
+                })
+                .ToListAsync();
+
+            var ingresosPorDia = new List<IngresoDiarioDto>();
+            for (int i = 0; i < 7; i++)
+            {
+                var fecha = hace7Dias.AddDays(i);
+                var pago = pagosSemana.FirstOrDefault(p => p.Fecha == fecha);
+                ingresosPorDia.Add(new IngresoDiarioDto
+                {
+                    Dia = diasSemana[(int)fecha.DayOfWeek],
+                    Fecha = fecha.ToString("yyyy-MM-dd"),
+                    Monto = pago?.Monto ?? 0,
+                    Transacciones = pago?.Transacciones ?? 0
+                });
+            }
+
+            // 2. Ingresos mensuales (últimos 6 meses)
+            var hace6Meses = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-5);
+            var mesesEs = new[] { "", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic" };
+
+            var pagosMensuales = await _context.Pago
+                .Where(p => p.FechaPagoUtc >= hace6Meses && p.Estatus == 0)
+                .GroupBy(p => new { p.FechaPagoUtc.Year, p.FechaPagoUtc.Month })
+                .Select(g => new
+                {
+                    Anio = g.Key.Year,
+                    Mes = g.Key.Month,
+                    Monto = g.Sum(p => p.Monto),
+                    Transacciones = g.Count()
+                })
+                .OrderBy(g => g.Anio).ThenBy(g => g.Mes)
+                .ToListAsync();
+
+            var ingresosMensuales = new List<IngresoMensualDto>();
+            for (int i = 0; i < 6; i++)
+            {
+                var mesDate = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-5 + i);
+                var pago = pagosMensuales.FirstOrDefault(p => p.Anio == mesDate.Year && p.Mes == mesDate.Month);
+                ingresosMensuales.Add(new IngresoMensualDto
+                {
+                    Mes = $"{mesesEs[mesDate.Month]} {mesDate.Year}",
+                    Monto = pago?.Monto ?? 0,
+                    Transacciones = pago?.Transacciones ?? 0
+                });
+            }
+
+            // 3. Distribución de recibos por estatus
+            var distribucionRecibos = await _context.Recibo
+                .GroupBy(r => r.Estatus)
+                .Select(g => new
+                {
+                    Estatus = g.Key,
+                    Cantidad = g.Count(),
+                    Monto = g.Sum(r => r.Saldo)
+                })
+                .ToListAsync();
+
+            var nombresEstatus = new Dictionary<EstatusRecibo, string>
+            {
+                { EstatusRecibo.PENDIENTE, "Pendiente" },
+                { EstatusRecibo.PARCIAL, "Parcial" },
+                { EstatusRecibo.PAGADO, "Pagado" },
+                { EstatusRecibo.VENCIDO, "Vencido" },
+                { EstatusRecibo.CANCELADO, "Cancelado" },
+                { EstatusRecibo.BONIFICADO, "Bonificado" }
+            };
+
+            var distribucionDto = distribucionRecibos.Select(d => new DistribucionRecibosDto
+            {
+                Estatus = nombresEstatus.GetValueOrDefault(d.Estatus, d.Estatus.ToString()),
+                Cantidad = d.Cantidad,
+                Monto = d.Monto
+            }).ToList();
+
+            // 4. Morosidad por rango de antigüedad
+            var recibosVencidos = await _context.Recibo
+                .Where(r => r.Estatus == EstatusRecibo.VENCIDO && r.IdEstudiante != null)
+                .Select(r => new
+                {
+                    r.IdEstudiante,
+                    r.Saldo,
+                    DiasVencido = (int)(hoyDateOnly.ToDateTime(TimeOnly.MinValue) - r.FechaVencimiento.ToDateTime(TimeOnly.MinValue)).TotalDays
+                })
+                .ToListAsync();
+
+            var rangos = new (string Nombre, int Min, int Max)[]
+            {
+                ("1-15 días", 1, 15),
+                ("16-30 días", 16, 30),
+                ("31-60 días", 31, 60),
+                ("61-90 días", 61, 90),
+                (">90 días", 91, int.MaxValue)
+            };
+
+            var morosidadPorRango = rangos.Select(rango => new MorosidadRangoDto
+            {
+                Rango = rango.Nombre,
+                Estudiantes = recibosVencidos
+                    .Where(r => r.DiasVencido >= rango.Min && r.DiasVencido <= rango.Max)
+                    .Select(r => r.IdEstudiante)
+                    .Distinct()
+                    .Count(),
+                MontoTotal = recibosVencidos
+                    .Where(r => r.DiasVencido >= rango.Min && r.DiasVencido <= rango.Max)
+                    .Sum(r => r.Saldo)
+            }).ToList();
+
+            // 5. Ingresos por método de pago (mes actual)
+            var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+
+            var ingresosPorMetodo = await _context.Pago
+                .Include(p => p.MedioPago)
+                .Where(p => p.FechaPagoUtc >= inicioMes && p.Estatus == 0)
+                .GroupBy(p => p.MedioPago.Descripcion ?? p.MedioPago.Clave)
+                .Select(g => new IngresoMetodoPagoDto
+                {
+                    MetodoPago = g.Key,
+                    Monto = g.Sum(p => p.Monto),
+                    Transacciones = g.Count()
+                })
+                .ToListAsync();
+
+            return new FinanzasIndicadoresDto
+            {
+                IngresosPorDia = ingresosPorDia,
+                IngresosMensuales = ingresosMensuales,
+                DistribucionRecibos = distribucionDto,
+                MorosidadPorRango = morosidadPorRango,
+                IngresosPorMetodoPago = ingresosPorMetodo
             };
         }
 

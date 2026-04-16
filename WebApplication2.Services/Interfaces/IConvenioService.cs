@@ -51,6 +51,8 @@ namespace WebApplication2.Services.Interfaces
             decimal montoOriginal,
             CancellationToken ct = default);
 
+        Task<IReadOnlyList<ConvenioDisponibleDto>> ObtenerPromocionesActivasAsync(CancellationToken ct = default);
+
         Task<decimal> CalcularDescuentoTotalAspiranteAsync(
             int idAspirante,
             decimal montoOriginal,

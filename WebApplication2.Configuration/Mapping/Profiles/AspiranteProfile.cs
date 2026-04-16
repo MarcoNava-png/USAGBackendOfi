@@ -13,13 +13,16 @@ namespace WebApplication2.Configuration.Mapping.Profiles
                 .ForMember(dto => dto.PersonaId, map => map.MapFrom(model => model.IdPersonaNavigation!.IdPersona))
                 .ForMember(dto => dto.Email, map => map.MapFrom(model => model.IdPersonaNavigation!.Correo))
                 .ForMember(dto => dto.Telefono, map => map.MapFrom(model => model.IdPersonaNavigation!.Telefono))
+                .ForMember(dto => dto.Celular, map => map.MapFrom(model => model.IdPersonaNavigation!.Celular))
                 .ForMember(dto => dto.AspiranteEstatus, map => map.MapFrom(model => model.IdAspiranteEstatusNavigation.DescEstatus))
                 .ForMember(dto => dto.PlanEstudios, map => map.MapFrom(model => model.IdPlanNavigation.NombrePlanEstudios))
+                .ForMember(dto => dto.PlanEstudiosId, map => map.MapFrom(model => model.IdPlan))
                 .ForMember(dto => dto.IdDireccion, map => map.MapFrom(model => model.IdPersonaNavigation!.IdDireccion))
                 .ForMember(dto => dto.CodigoPostalId, map => map.MapFrom(model => model.IdPersonaNavigation!.IdDireccionNavigation!.CodigoPostalId))
                 .ForMember(dto => dto.MunicipioId, map => map.MapFrom(model => model.IdPersonaNavigation!.IdDireccionNavigation!.CodigoPostal!.MunicipioId))
                 .ForMember(dto => dto.EstadoId, map => map.MapFrom(model => model.IdPersonaNavigation!.IdDireccionNavigation!.CodigoPostal!.Municipio.EstadoId))
                 .ForMember(dto => dto.CreatedBy, map => map.MapFrom(model => model.CreatedBy))
+                .ForMember(dto => dto.IdEmpresa, map => map.MapFrom(model => model.IdEmpresa))
                 .ForMember(dto => dto.UsuarioRegistroNombre, map => map.Ignore()); 
         }
     }

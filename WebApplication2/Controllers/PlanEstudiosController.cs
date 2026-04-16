@@ -1,11 +1,15 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using WebApplication2.Configuration.Constants;
 using WebApplication2.Core.Common;
 using WebApplication2.Core.DTOs;
+using StatusEnum = WebApplication2.Core.Enums.StatusEnum;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.PlanEstudios;
+using WebApplication2.Data.DbContexts;
 using WebApplication2.Services.Interfaces;
 using System.Collections.Generic;
 
@@ -18,18 +22,24 @@ namespace WebApplication2.Controllers
     {
         private readonly IPlanEstudioService _planEstudioService;
         private readonly IMapper _mapper;
+        private readonly ApplicationDbContext _db;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly INotificacionInternalService _notifService;
 
-        public PlanEstudiosController(IPlanEstudioService planEstudioService, IMapper mapper)
+        public PlanEstudiosController(IPlanEstudioService planEstudioService, IMapper mapper, ApplicationDbContext db, UserManager<ApplicationUser> userManager, INotificacionInternalService notifService)
         {
             _planEstudioService = planEstudioService;
             _mapper = mapper;
+            _db = db;
+            _userManager = userManager;
+            _notifService = notifService;
         }
 
         [HttpGet]
         [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.CONTROL_ESCOLAR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.ACADEMICO}")]
         public async Task<ActionResult<PagedResult<PlanEstudioDto>>> Get(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 1000,
+            [FromQuery] int pageSize = 100,
             [FromQuery] int? idCampus = null,
             [FromQuery] bool incluirInactivos = false)
         {
@@ -64,23 +74,110 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult<PlanEstudioDto>> Post([FromBody] PlanEstudiosRequest request)
         {
             try
             {
-                var planEstudios = _mapper.Map<PlanEstudios>(request);
+                var esAdmin = User.IsInRole(Rol.ADMIN);
 
+                var planEstudios = _mapper.Map<PlanEstudios>(request);
                 await _planEstudioService.CrearPlanEstudios(planEstudios);
 
-                var planEstudiosDto = _mapper.Map<PlanEstudioDto>(planEstudios);
+                if (!esAdmin)
+                {
+                    planEstudios.Status = StatusEnum.Disabled;
+                    await _db.SaveChangesAsync();
 
+                    var campus = planEstudios.IdCampus > 0
+                        ? await _db.Campus.FindAsync(planEstudios.IdCampus)
+                        : null;
+
+                    var solicitud = new SolicitudPlanEstudios
+                    {
+                        IdPlanEstudios = planEstudios.IdPlanEstudios,
+                        ClavePlanEstudios = planEstudios.ClavePlanEstudios,
+                        NombrePlanEstudios = planEstudios.NombrePlanEstudios,
+                        Campus = campus?.Nombre,
+                        Rvoe = planEstudios.RVOE,
+                        EstatusSolicitud = "Pendiente",
+                        SolicitadoPor = User.Identity?.Name ?? "Sistema",
+                        FechaSolicitud = DateTime.UtcNow,
+                        CreatedAt = DateTime.UtcNow,
+                        Status = StatusEnum.Active
+                    };
+                    _db.SolicitudesPlanEstudios.Add(solicitud);
+                    await _db.SaveChangesAsync();
+
+                    var academicos = await _userManager.GetUsersInRoleAsync("academico");
+                    var admins = await _userManager.GetUsersInRoleAsync("admin");
+                    var destinatarios = academicos.Union(admins).Select(u => u.Id).Distinct();
+
+                    foreach (var userId in destinatarios)
+                    {
+                        await _notifService.CrearAsync(
+                            userId,
+                            "Solicitud de nuevo plan de estudios",
+                            $"{User.Identity?.Name} solicita dar de alta el plan '{planEstudios.NombrePlanEstudios}'. Requiere aprobación.",
+                            "info",
+                            "Academico",
+                            "/dashboard/solicitudes-plan"
+                        );
+                    }
+                }
+
+                var planEstudiosDto = _mapper.Map<PlanEstudioDto>(planEstudios);
                 return Ok(planEstudiosDto);
             }
             catch (Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpGet("solicitudes")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.ACADEMICO},{Rol.DIRECTOR}")]
+        public async Task<ActionResult> ListarSolicitudes([FromQuery] string? estatus, CancellationToken ct)
+        {
+            var query = _db.SolicitudesPlanEstudios.Where(s => s.Status == StatusEnum.Active).AsQueryable();
+            if (!string.IsNullOrEmpty(estatus)) query = query.Where(s => s.EstatusSolicitud == estatus);
+
+            return Ok(await query.OrderByDescending(s => s.FechaSolicitud).ToListAsync(ct));
+        }
+
+        [HttpPut("solicitudes/{id:int}/aprobar")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.ACADEMICO},{Rol.DIRECTOR}")]
+        public async Task<ActionResult> AprobarSolicitud(int id, [FromBody] ComentarioSolicitudRequest request, CancellationToken ct)
+        {
+            var solicitud = await _db.SolicitudesPlanEstudios.FirstOrDefaultAsync(s => s.IdSolicitudPlanEstudios == id, ct);
+            if (solicitud == null) return NotFound();
+
+            solicitud.EstatusSolicitud = "Aprobada";
+            solicitud.AprobadoPor = User.Identity?.Name;
+            solicitud.ComentarioRevision = request.Comentario;
+            solicitud.FechaResolucion = DateTime.UtcNow;
+
+            var plan = await _db.PlanEstudios.FindAsync(new object[] { solicitud.IdPlanEstudios }, ct);
+            if (plan != null) plan.Status = StatusEnum.Active;
+
+            await _db.SaveChangesAsync(ct);
+            return Ok(new { mensaje = "Plan de estudios aprobado y activado" });
+        }
+
+        [HttpPut("solicitudes/{id:int}/rechazar")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.ACADEMICO},{Rol.DIRECTOR}")]
+        public async Task<ActionResult> RechazarSolicitud(int id, [FromBody] ComentarioSolicitudRequest request, CancellationToken ct)
+        {
+            var solicitud = await _db.SolicitudesPlanEstudios.FirstOrDefaultAsync(s => s.IdSolicitudPlanEstudios == id, ct);
+            if (solicitud == null) return NotFound();
+
+            solicitud.EstatusSolicitud = "Rechazada";
+            solicitud.AprobadoPor = User.Identity?.Name;
+            solicitud.ComentarioRevision = request.Comentario;
+            solicitud.FechaResolucion = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync(ct);
+            return Ok(new { mensaje = "Solicitud rechazada" });
         }
 
         [HttpPut]
@@ -119,7 +216,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPut("{id}/toggle")]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult<PlanEstudioDto>> ToggleEstado(int id)
         {
             try
@@ -164,5 +261,10 @@ namespace WebApplication2.Controllers
             var docs = await _planEstudioService.GetTodosDocumentosRequisitoAsync();
             return Ok(docs);
         }
+    }
+
+    public class ComentarioSolicitudRequest
+    {
+        public string? Comentario { get; set; }
     }
 }

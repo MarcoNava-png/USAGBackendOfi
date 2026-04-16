@@ -11,6 +11,10 @@ namespace WebApplication2.Core.Requests.Estudiante
         public string? FechaNacimiento { get; set; }
         public string? Genero { get; set; }
         public string? Direccion { get; set; }
+        public string? Calle { get; set; }
+        public string? NumeroExterior { get; set; }
+        public string? NumeroInterior { get; set; }
+        public int? CodigoPostalId { get; set; }
         public string? NombreContactoEmergencia { get; set; }
         public string? TelefonoContactoEmergencia { get; set; }
         public string? ParentescoContactoEmergencia { get; set; }

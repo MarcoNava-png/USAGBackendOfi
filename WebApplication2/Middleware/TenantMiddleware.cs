@@ -8,6 +8,7 @@ public class TenantMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<TenantMiddleware> _logger;
+    private readonly string _baseDomain;
 
     private static readonly string[] ExcludedPaths = new[]
     {
@@ -16,16 +17,18 @@ public class TenantMiddleware
         "/api/admin",
         "/api/superadmin",
         "/api/email",
+        "/api/onlyoffice",
         "/.well-known",
         "/favicon.ico"
     };
 
     private const string DefaultTenantCode = "USAG";
 
-    public TenantMiddleware(RequestDelegate next, ILogger<TenantMiddleware> logger)
+    public TenantMiddleware(RequestDelegate next, ILogger<TenantMiddleware> logger, IConfiguration configuration)
     {
         _next = next;
         _logger = logger;
+        _baseDomain = configuration["BaseDomain"] ?? "saciusag.com.mx";
     }
 
     public async Task InvokeAsync(HttpContext context, ITenantService tenantService)
@@ -157,41 +160,35 @@ public class TenantMiddleware
     {
         host = host.Split(':')[0].ToLower();
 
-        return host == "saciusag.com.mx" ||
-               host == "www.saciusag.com.mx" ||
-               host == "api.saciusag.com.mx" ||
+        return host == _baseDomain ||
+               host == $"www.{_baseDomain}" ||
+               host == $"api.{_baseDomain}" ||
                host == "localhost" ||
                host == "127.0.0.1";
     }
 
     private string? ExtractSubdomain(string host)
     {
-        host = host.Split(':')[0];
+        host = host.Split(':')[0].ToLower();
 
-        
         if (host.Contains("localhost") || host == "127.0.0.1")
         {
-            return null; 
+            return null;
         }
 
-        var parts = host.Split('.');
-
-        if (parts.Length >= 4)
+        if (host == _baseDomain || host == $"www.{_baseDomain}" || host == $"api.{_baseDomain}")
         {
-            var subdomain = parts[0];
+            return null;
+        }
 
+        if (host.EndsWith($".{_baseDomain}"))
+        {
+            var subdomain = host.Replace($".{_baseDomain}", "");
             if (subdomain != "www" && subdomain != "api" && subdomain != "admin")
             {
                 return subdomain;
             }
-        }
-        else if (parts.Length == 3) 
-        {
-            if (parts[1] == "saciusag" || parts[2] == "mx")
-            {
-                return null;
-            }
-            return parts[0];
+            return null;
         }
 
         return null;

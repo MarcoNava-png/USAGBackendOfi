@@ -44,6 +44,7 @@ namespace WebApplication2.Services
                 Prioridad = dto.Prioridad,
                 Estatus = TicketEstatusEnum.Abierto,
                 Categoria = dto.Categoria,
+                AreaDestino = dto.AreaDestino,
                 UsuarioCreadorId = userId,
                 NombreCreador = nombreUsuario
             };
@@ -59,17 +60,32 @@ namespace WebApplication2.Services
             _db.TicketsSoporte.Add(ticket);
             await _db.SaveChangesAsync();
 
-            // Notificar a admins
+            var destinatarios = new List<ApplicationUser>();
+
+            if (!string.IsNullOrEmpty(dto.AreaDestino))
+            {
+                var rolName = dto.AreaDestino.ToLower().Replace(" ", "");
+                var usersInRole = await _userManager.GetUsersInRoleAsync(rolName);
+                destinatarios.AddRange(usersInRole);
+            }
+
             var admins = await _userManager.GetUsersInRoleAsync("admin");
             foreach (var admin in admins)
             {
+                if (!destinatarios.Any(d => d.Id == admin.Id))
+                    destinatarios.Add(admin);
+            }
+
+            var areaTexto = !string.IsNullOrEmpty(dto.AreaDestino) ? $" para {dto.AreaDestino}" : "";
+            foreach (var dest in destinatarios)
+            {
                 await _notificaciones.CrearAsync(
-                    admin.Id,
-                    "Nuevo ticket de soporte",
+                    dest.Id,
+                    $"Nuevo ticket{areaTexto}",
                     $"{nombreUsuario} creó el ticket {folio}: {dto.Titulo}",
                     "ticket",
                     "Soporte",
-                    $"/dashboard/tickets"
+                    $"/dashboard/tickets?ticketId={ticket.IdTicket}"
                 );
             }
 
@@ -87,7 +103,13 @@ namespace WebApplication2.Services
                 .Where(t => t.Status == StatusEnum.Active);
 
             if (!esAdmin)
-                query = query.Where(t => t.UsuarioCreadorId == userId);
+            {
+                var user = await _userManager.FindByIdAsync(userId);
+                var userRoles = user != null ? await _userManager.GetRolesAsync(user) : (IList<string>)new List<string>();
+                query = query.Where(t => t.UsuarioCreadorId == userId
+                    || t.UsuarioAsignadoId == userId
+                    || (t.AreaDestino != null && userRoles.Contains(t.AreaDestino)));
+            }
 
             if (filtro.Estatus.HasValue)
                 query = query.Where(t => t.Estatus == filtro.Estatus.Value);
@@ -116,6 +138,8 @@ namespace WebApplication2.Services
                 .Select(t => MapToDto(t))
                 .ToListAsync();
 
+            await ResolverNombresAsync(items);
+
             return new PagedResult<TicketResponseDto>
             {
                 Items = items,
@@ -136,7 +160,9 @@ namespace WebApplication2.Services
             if (!esAdmin && ticket.UsuarioCreadorId != userId)
                 throw new Exception("No tiene permiso para ver este ticket.");
 
-            return MapToDto(ticket);
+            var dto = MapToDto(ticket);
+            await ResolverNombresAsync(new List<TicketResponseDto> { dto });
+            return dto;
         }
 
         public async Task<TicketResponseDto> ActualizarAsync(int id, ActualizarTicketDto dto, string userId, bool esAdmin)
@@ -200,7 +226,7 @@ namespace WebApplication2.Services
                     $"Se ha respondido a tu ticket {ticket.Folio}: {ticket.Titulo}",
                     "ticket",
                     "Soporte",
-                    $"/dashboard/tickets"
+                    $"/dashboard/tickets?ticketId={ticket.IdTicket}"
                 );
             }
             else
@@ -214,7 +240,7 @@ namespace WebApplication2.Services
                         $"{nombreUsuario} comentó en el ticket {ticket.Folio}",
                         "ticket",
                         "Soporte",
-                        $"/dashboard/tickets"
+                        $"/dashboard/tickets?ticketId={ticket.IdTicket}"
                     );
                 }
             }
@@ -253,7 +279,7 @@ namespace WebApplication2.Services
                 $"Tu ticket {ticket.Folio} ha sido marcado como {estatusNombre}.",
                 "ticket",
                 "Soporte",
-                $"/dashboard/tickets"
+                $"/dashboard/tickets?ticketId={ticket.IdTicket}"
             );
         }
 
@@ -292,14 +318,15 @@ namespace WebApplication2.Services
                 TotalEnProgreso = tickets.FirstOrDefault(t => t.Estatus == TicketEstatusEnum.EnProgreso)?.Count ?? 0,
                 TotalResueltos = tickets.FirstOrDefault(t => t.Estatus == TicketEstatusEnum.Resuelto)?.Count ?? 0,
                 TotalCerrados = tickets.FirstOrDefault(t => t.Estatus == TicketEstatusEnum.Cerrado)?.Count ?? 0,
+                TotalEnValidacion = tickets.FirstOrDefault(t => t.Estatus == TicketEstatusEnum.EnValidacion)?.Count ?? 0,
                 Total = tickets.Sum(t => t.Count)
             };
         }
 
         private async Task<string> GenerarFolioAsync()
         {
-            var hoy = DateTime.UtcNow.ToString("yyyyMMdd");
-            var prefijo = $"TK-{hoy}-";
+            var año = DateTime.UtcNow.Year;
+            var prefijo = $"TK-{año}-";
 
             var ultimoFolio = await _db.TicketsSoporte
                 .AsNoTracking()
@@ -316,7 +343,65 @@ namespace WebApplication2.Services
                     siguiente = num + 1;
             }
 
-            return $"{prefijo}{siguiente:D4}";
+            return $"{prefijo}{siguiente:D6}";
+        }
+
+        private async Task ResolverNombresAsync(List<TicketResponseDto> items)
+        {
+            var guids = new HashSet<string>();
+
+            foreach (var item in items)
+            {
+                if (Guid.TryParse(item.NombreCreador, out _))
+                    guids.Add(item.NombreCreador);
+                if (!string.IsNullOrEmpty(item.NombreAsignado) && Guid.TryParse(item.NombreAsignado, out _))
+                    guids.Add(item.NombreAsignado);
+                if (!string.IsNullOrEmpty(item.UsuarioCreadorId))
+                    guids.Add(item.UsuarioCreadorId);
+                if (!string.IsNullOrEmpty(item.UsuarioAsignadoId))
+                    guids.Add(item.UsuarioAsignadoId);
+                foreach (var c in item.Comentarios)
+                {
+                    if (Guid.TryParse(c.NombreUsuario, out _))
+                        guids.Add(c.NombreUsuario);
+                    if (!string.IsNullOrEmpty(c.UsuarioId))
+                        guids.Add(c.UsuarioId);
+                }
+            }
+
+            if (guids.Count == 0) return;
+
+            var usuarios = await _db.Users
+                .AsNoTracking()
+                .Where(u => guids.Contains(u.Id))
+                .Select(u => new { u.Id, Nombre = (u.Nombres + " " + u.Apellidos).Trim() })
+                .ToDictionaryAsync(u => u.Id, u => u.Nombre);
+
+            foreach (var item in items)
+            {
+                if (Guid.TryParse(item.NombreCreador, out _) && usuarios.TryGetValue(item.NombreCreador, out var nc))
+                    item.NombreCreador = nc;
+
+                if (string.IsNullOrEmpty(item.NombreAsignado) && !string.IsNullOrEmpty(item.UsuarioAsignadoId)
+                    && usuarios.TryGetValue(item.UsuarioAsignadoId, out var na1))
+                    item.NombreAsignado = na1;
+                else if (!string.IsNullOrEmpty(item.NombreAsignado) && Guid.TryParse(item.NombreAsignado, out _)
+                    && usuarios.TryGetValue(item.NombreAsignado, out var na2))
+                    item.NombreAsignado = na2;
+
+                if (string.IsNullOrEmpty(item.NombreCreador) && !string.IsNullOrEmpty(item.UsuarioCreadorId)
+                    && usuarios.TryGetValue(item.UsuarioCreadorId, out var nc2))
+                    item.NombreCreador = nc2;
+
+                foreach (var c in item.Comentarios)
+                {
+                    if (Guid.TryParse(c.NombreUsuario, out _) && usuarios.TryGetValue(c.NombreUsuario, out var nu))
+                        c.NombreUsuario = nu;
+                    else if (string.IsNullOrEmpty(c.NombreUsuario) && !string.IsNullOrEmpty(c.UsuarioId)
+                        && usuarios.TryGetValue(c.UsuarioId, out var nu2))
+                        c.NombreUsuario = nu2;
+                }
+            }
         }
 
         private static TicketResponseDto MapToDto(TicketSoporte t)
@@ -335,6 +420,7 @@ namespace WebApplication2.Services
                 CategoriaNombre = t.Categoria.ToString(),
                 UsuarioCreadorId = t.UsuarioCreadorId,
                 NombreCreador = t.NombreCreador,
+                AreaDestino = t.AreaDestino,
                 UsuarioAsignadoId = t.UsuarioAsignadoId,
                 NombreAsignado = t.NombreAsignado,
                 ArchivoAdjuntoUrl = t.ArchivoAdjuntoUrl,

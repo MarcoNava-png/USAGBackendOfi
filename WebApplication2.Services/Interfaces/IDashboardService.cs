@@ -22,5 +22,7 @@ namespace WebApplication2.Services.Interfaces
         Task<DocenteDashboardDto> GetDocenteDashboardAsync(string userId);
 
         Task<AlumnoDashboardDto> GetAlumnoDashboardAsync(string userId);
+
+        Task<FinanzasIndicadoresDto> GetFinanzasIndicadoresAsync();
     }
 }

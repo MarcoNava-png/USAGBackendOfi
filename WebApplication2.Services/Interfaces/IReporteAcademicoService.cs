@@ -20,6 +20,11 @@ public interface IReporteAcademicoService
     byte[] GenerarHorarioPdf(HorarioReporteDto data);
     byte[] GenerarListaAsistenciaPdf(ListaAsistenciaDto data);
 
+    // Bajas
+    Task<ReporteBajasDto> GetReporteBajasAsync(int? idCampus, int? idPlanEstudios, int? idPeriodo, int? mes, int? anio, CancellationToken ct = default);
+    byte[] GenerarReporteBajasPdf(ReporteBajasDto data);
+    byte[] GenerarReporteBajasExcel(ReporteBajasDto data);
+
     // Excel
     byte[] GenerarEstudiantesPorGrupoExcel(ReporteEstudiantesGrupoDto data);
     byte[] GenerarHorarioExcel(HorarioReporteDto data);

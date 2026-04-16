@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using WebApplication2.Core.DTOs.MultiTenant;
@@ -16,6 +17,7 @@ namespace WebApplication2.Controllers;
 
 [ApiController]
 [Route("api/superadmin/auth")]
+[EnableRateLimiting("auth")]
 public class SuperAdminAuthController : ControllerBase
 {
     private readonly MasterDbContext _masterDb;

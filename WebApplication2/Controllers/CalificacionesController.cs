@@ -9,6 +9,8 @@ using WebApplication2.Core.Enums;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.Aspirante;
 using WebApplication2.Core.Requests.PlanEstudios;
+using Microsoft.EntityFrameworkCore;
+using WebApplication2.Data.DbContexts;
 using WebApplication2.Services;
 using WebApplication2.Services.Interfaces;
 
@@ -21,11 +23,13 @@ namespace WebApplication2.Controllers
     {
         private readonly ICalificacionesService _calificacionesService;
         private readonly IMapper _mapper;
+        private readonly ApplicationDbContext _dbContext;
 
-        public CalificacionesController(ICalificacionesService CalificacionesService, IMapper mapper)
+        public CalificacionesController(ICalificacionesService CalificacionesService, IMapper mapper, ApplicationDbContext dbContext)
         {
             _calificacionesService = CalificacionesService;
             _mapper = mapper;
+            _dbContext = dbContext;
         }
 
         [HttpGet("{grupoMateriaId}/{parcialId}")]
@@ -45,6 +49,19 @@ namespace WebApplication2.Controllers
             var acta = _mapper.Map<CalificacionParcial>(req);
             acta.StatusParcial = StatusParcialEnum.Abierto;
             acta.FechaApertura = req.FechaApertura ?? DateTime.UtcNow;
+
+            if (acta.InscripcionId <= 0)
+            {
+                var primeraInscripcion = await _dbContext.Inscripcion
+                    .Where(i => i.IdGrupoMateria == req.GrupoMateriaId && i.Status == Core.Enums.StatusEnum.Active)
+                    .Select(i => i.IdInscripcion)
+                    .FirstOrDefaultAsync();
+
+                if (primeraInscripcion <= 0)
+                    return BadRequest(new { Error = "No hay estudiantes inscritos en esta materia." });
+
+                acta.InscripcionId = primeraInscripcion;
+            }
 
             var creado = await _calificacionesService.AbrirParcial(acta);
 

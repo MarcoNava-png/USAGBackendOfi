@@ -24,5 +24,6 @@ namespace WebApplication2.Core.Models
 
         public MedioPago MedioPago { get; set; } = null!;
         public ICollection<PagoAplicacion> Aplicaciones { get; set; } = new List<PagoAplicacion>();
+        public ICollection<PagoMetodo> MetodosPago { get; set; } = new List<PagoMetodo>();
     }
 }

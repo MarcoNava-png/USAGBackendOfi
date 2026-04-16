@@ -25,7 +25,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<PagedResult<PeriodoAcademicoDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
+        public async Task<ActionResult<PagedResult<PeriodoAcademicoDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
         {
             var pagination = await _periodoAcademicoervice.GetPeriodosAcademicos(page, pageSize);
 

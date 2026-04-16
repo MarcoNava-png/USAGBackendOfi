@@ -23,6 +23,9 @@ public interface IMicrosoftGraphService
     Task<UserInfoDto?> GetUserByIdAsync(string userIdOrEmail, CancellationToken ct = default);
     Task<string> ResetPasswordAsync(string userId, CancellationToken ct = default);
     Task<List<string>> GetDomainsAsync(CancellationToken ct = default);
+    Task<List<LicenseInfoDto>> GetSubscribedSkusAsync(CancellationToken ct = default);
+    Task<bool> AssignLicenseAsync(string userId, string skuId, CancellationToken ct = default);
+    Task<bool> UpdateUserPrincipalNameAsync(string userId, string newUpn, CancellationToken ct = default);
 }
 
 public class MicrosoftGraphService : IMicrosoftGraphService
@@ -316,6 +319,7 @@ public class MicrosoftGraphService : IMicrosoftGraphService
                 JobTitle = request.JobTitle,
                 Department = request.Department,
                 MobilePhone = request.MobilePhone,
+                UsageLocation = _settings.UsageLocation ?? "MX",
                 PasswordProfile = new PasswordProfile
                 {
                     ForceChangePasswordNextSignIn = request.ForceChangePasswordNextSignIn,
@@ -327,13 +331,21 @@ public class MicrosoftGraphService : IMicrosoftGraphService
 
             _logger.LogInformation("Usuario creado en Azure AD: {UserPrincipalName}", request.UserPrincipalName);
 
+            var licenseAssigned = false;
+            if (!string.IsNullOrEmpty(_settings.LicenseSkuId) && createdUser?.Id != null)
+            {
+                licenseAssigned = await AssignLicenseAsync(createdUser.Id, _settings.LicenseSkuId, ct);
+            }
+
             return new CreateUserResponse
             {
                 Success = true,
                 UserId = createdUser?.Id,
                 UserPrincipalName = createdUser?.UserPrincipalName,
                 Email = createdUser?.Mail ?? createdUser?.UserPrincipalName,
-                Message = "Usuario creado exitosamente"
+                Message = licenseAssigned
+                    ? "Usuario creado y licencia asignada exitosamente"
+                    : "Usuario creado exitosamente (sin licencia asignada)"
             };
         }
         catch (Exception ex)
@@ -383,6 +395,27 @@ public class MicrosoftGraphService : IMicrosoftGraphService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al actualizar usuario {UserId}", userId);
+            return false;
+        }
+    }
+
+    public async Task<bool> UpdateUserPrincipalNameAsync(string userId, string newUpn, CancellationToken ct = default)
+    {
+        try
+        {
+            var user = new User
+            {
+                UserPrincipalName = newUpn,
+                MailNickname = newUpn.Split('@')[0]
+            };
+
+            await _graphClient.Users[userId].PatchAsync(user, cancellationToken: ct);
+            _logger.LogInformation("UPN actualizado en Azure AD: {UserId} -> {NewUpn}", userId, newUpn);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al actualizar UPN de usuario {UserId}", userId);
             return false;
         }
     }
@@ -465,6 +498,60 @@ public class MicrosoftGraphService : IMicrosoftGraphService
         {
             _logger.LogError(ex, "Error al obtener dominios");
             return new List<string>();
+        }
+    }
+
+    public async Task<List<LicenseInfoDto>> GetSubscribedSkusAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var skus = await _graphClient.SubscribedSkus.GetAsync(cancellationToken: ct);
+
+            if (skus?.Value == null)
+                return new List<LicenseInfoDto>();
+
+            return skus.Value
+                .Where(s => s.CapabilityStatus == "Enabled")
+                .Select(s => new LicenseInfoDto
+                {
+                    SkuId = s.SkuId?.ToString() ?? "",
+                    SkuPartNumber = s.SkuPartNumber ?? "",
+                    DisplayName = s.SkuPartNumber ?? "",
+                    TotalUnits = s.PrepaidUnits?.Enabled ?? 0,
+                    ConsumedUnits = s.ConsumedUnits ?? 0,
+                    AvailableUnits = (s.PrepaidUnits?.Enabled ?? 0) - (s.ConsumedUnits ?? 0)
+                })
+                .OrderBy(s => s.SkuPartNumber)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener licencias suscritas");
+            return new List<LicenseInfoDto>();
+        }
+    }
+
+    public async Task<bool> AssignLicenseAsync(string userId, string skuId, CancellationToken ct = default)
+    {
+        try
+        {
+            await _graphClient.Users[userId].AssignLicense.PostAsync(
+                new Microsoft.Graph.Users.Item.AssignLicense.AssignLicensePostRequestBody
+                {
+                    AddLicenses = new List<AssignedLicense>
+                    {
+                        new AssignedLicense { SkuId = Guid.Parse(skuId) }
+                    },
+                    RemoveLicenses = new List<Guid?>()
+                }, cancellationToken: ct);
+
+            _logger.LogInformation("Licencia {SkuId} asignada al usuario {UserId}", skuId, userId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al asignar licencia {SkuId} al usuario {UserId}", skuId, userId);
+            return false;
         }
     }
 

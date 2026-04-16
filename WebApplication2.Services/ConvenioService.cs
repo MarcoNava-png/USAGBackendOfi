@@ -451,6 +451,32 @@ namespace WebApplication2.Services
             };
         }
 
+        public async Task<IReadOnlyList<ConvenioDisponibleDto>> ObtenerPromocionesActivasAsync(CancellationToken ct = default)
+        {
+            var hoy = DateOnly.FromDateTime(DateTime.Today);
+
+            var convenios = await _dbContext.Convenio
+                .Where(c => c.Status == StatusEnum.Active
+                         && c.Activo
+                         && (!c.VigenteDesde.HasValue || c.VigenteDesde <= hoy)
+                         && (!c.VigenteHasta.HasValue || c.VigenteHasta >= hoy))
+                .OrderBy(c => c.Nombre)
+                .ToListAsync(ct);
+
+            return convenios.Select(c => new ConvenioDisponibleDto
+            {
+                IdConvenio = c.IdConvenio,
+                ClaveConvenio = c.ClaveConvenio,
+                Nombre = c.Nombre,
+                TipoBeneficio = c.TipoBeneficio,
+                DescuentoPct = c.DescuentoPct,
+                Monto = c.Monto,
+                DescripcionBeneficio = ObtenerDescripcionBeneficio(c),
+                AplicaA = c.AplicaA ?? "TODOS",
+                MaxAplicaciones = c.MaxAplicaciones
+            }).ToList();
+        }
+
         public async Task<decimal> CalcularDescuentoTotalAspiranteAsync(
             int idAspirante,
             decimal montoOriginal,

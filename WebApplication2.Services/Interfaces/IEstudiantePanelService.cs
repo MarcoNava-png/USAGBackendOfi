@@ -35,6 +35,8 @@ namespace WebApplication2.Services.Interfaces
 
         Task<AccionPanelResponse> ActualizarDatosEstudianteAsync(int idEstudiante, ActualizarDatosEstudianteRequest request, CancellationToken ct = default);
 
+        Task<AccionPanelResponse> CambiarMatriculaAsync(int idEstudiante, string nuevaMatricula, CancellationToken ct = default);
+
         #endregion
 
         #region Becas
@@ -59,6 +61,8 @@ namespace WebApplication2.Services.Interfaces
 
         Task<AccionPanelResponse> ValidarDocumentoPersonalAsync(int idEstudiante, long idAspiranteDocumento, bool aprobar, string? notas, string? usuarioId, CancellationToken ct = default);
 
+        Task<AccionPanelResponse> ResetearDocumentoPersonalAsync(int idEstudiante, long idAspiranteDocumento, string? motivo, string? usuarioId, CancellationToken ct = default);
+
         Task<DocumentosDisponiblesDto> ObtenerDocumentosDisponiblesAsync(int idEstudiante, CancellationToken ct = default);
 
         Task<AccionPanelResponse> GenerarDocumentoAsync(GenerarDocumentoPanelRequest request, string usuarioId, CancellationToken ct = default);
@@ -73,7 +77,7 @@ namespace WebApplication2.Services.Interfaces
 
         Task<AccionPanelResponse> EnviarRecordatorioPagoAsync(int idEstudiante, long? idRecibo = null, CancellationToken ct = default);
 
-        Task<AccionPanelResponse> ActualizarEstatusEstudianteAsync(int idEstudiante, bool activo, string? motivo, CancellationToken ct = default);
+        Task<AccionPanelResponse> ActualizarEstatusEstudianteAsync(int idEstudiante, bool activo, string? motivo, int? tipoBaja = null, int? estadoBaja = null, CancellationToken ct = default);
 
         #endregion
 

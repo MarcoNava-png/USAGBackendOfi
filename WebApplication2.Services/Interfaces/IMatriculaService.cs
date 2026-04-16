@@ -5,6 +5,6 @@ namespace WebApplication2.Services.Interfaces
         Task<string> GenerarMatriculaAsync(string nombrePlanEstudios);
         string ObtenerPrefijo(string nombrePlanEstudios);
         bool ValidarFormatoMatricula(string matricula);
-        Task<bool> ExisteMatriculaAsync(string matricula);
+        Task<bool> ExisteMatriculaAsync(string matricula, int? excluirEstudianteId = null);
     }
 }

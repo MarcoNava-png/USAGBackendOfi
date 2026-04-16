@@ -5,6 +5,8 @@
         public string ClavePlanEstudios { get; set; }
         public string NombrePlanEstudios { get; set; }
         public string RVOE { get; set; }
+        public DateTime? FechaExpedicionRvoe { get; set; }
+        public int? IdCarreraSEP { get; set; }
         public bool PermiteAdelantar { get; set; }
         public string Version { get; set; }
         public int DuracionMeses { get; set; }
@@ -13,5 +15,6 @@
         public int IdPeriodicidad { get; set; }
         public int IdNivelEducativo { get; set; }
         public int IdCampus {  get; set; }
+        public bool EsOficial { get; set; } = true;
     }
 }

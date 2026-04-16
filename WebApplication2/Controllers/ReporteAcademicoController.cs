@@ -11,8 +11,13 @@ namespace WebApplication2.Controllers;
 public class ReporteAcademicoController : ControllerBase
 {
     private readonly IReporteAcademicoService _svc;
+    private readonly IPlantillaReporteService? _plantillaSvc;
 
-    public ReporteAcademicoController(IReporteAcademicoService svc) => _svc = svc;
+    public ReporteAcademicoController(IReporteAcademicoService svc, IPlantillaReporteService plantillaSvc)
+    {
+        _svc = svc;
+        _plantillaSvc = plantillaSvc;
+    }
 
     // ──────── Estudiantes por Grupo ────────
 
@@ -33,6 +38,32 @@ public class ReporteAcademicoController : ControllerBase
         try
         {
             var data = await _svc.GetEstudiantesPorGrupoAsync(idGrupo, ct);
+
+            if (_plantillaSvc != null)
+            {
+                var plantilla = await _plantillaSvc.ObtenerPorCodigoAsync("listado_grupo", ct);
+                if (plantilla != null)
+                {
+                    var variables = new Dictionary<string, string>
+                    {
+                        { "carrera", data.PlanEstudios ?? "" },
+                        { "periodo", data.PeriodoAcademico ?? "" },
+                        { "grupo", data.CodigoGrupo ?? "" }
+                    };
+                    var tablaEstudiantes = data.Estudiantes.Select(e => new Dictionary<string, string>
+                    {
+                        { "matricula", e.Matricula ?? "" },
+                        { "estatus", e.Estado ?? "Inscrito" },
+                        { "nombre", e.NombreCompleto ?? "" }
+                    }).ToList();
+                    var tablas = new Dictionary<string, List<Dictionary<string, string>>> { { "tabla_estudiantes", tablaEstudiantes } };
+
+                    var docxBytes = await _plantillaSvc.GenerarDocumentoAsync("listado_grupo", variables, tablas, ct);
+                    var pdfBytes = await Services.DocxToPdfConverter.ConvertAsync(docxBytes, ct);
+                    return File(pdfBytes, "application/pdf", $"Listado_{data.CodigoGrupo}_{DateTime.Now:yyyyMMdd}.pdf");
+                }
+            }
+
             var pdf = _svc.GenerarEstudiantesPorGrupoPdf(data);
             return File(pdf, "application/pdf", $"Estudiantes_{data.NombreGrupo}_{DateTime.Now:yyyyMMdd}.pdf");
         }
@@ -60,6 +91,39 @@ public class ReporteAcademicoController : ControllerBase
         try
         {
             var data = await _svc.GetBoletaCalificacionesAsync(idEstudiante, idPeriodo, ct);
+
+            var plantilla = _plantillaSvc != null
+                ? await _plantillaSvc.ObtenerPorCodigoAsync("boleta_calificaciones", ct)
+                : null;
+
+            if (plantilla != null)
+            {
+                var variables = new Dictionary<string, string>
+                {
+                    { "CARRERA", data.PlanEstudios },
+                    { "PERIODO", data.PeriodoAcademico },
+                    { "NOMBRE_ALUMNO", data.NombreEstudiante },
+                    { "MATRICULA", data.Matricula },
+                    { "GRUPO", data.Grupo ?? "" },
+                };
+
+                var filasTabla = data.Materias.Select(m => new Dictionary<string, string>
+                {
+                    { "clave", m.ClaveMateria },
+                    { "nombre_materia", m.NombreMateria },
+                    { "calificacion", m.CalificacionFinal.HasValue ? m.CalificacionFinal.Value.ToString("F1") : "-" },
+                }).ToList();
+
+                var tablas = new Dictionary<string, List<Dictionary<string, string>>>
+                {
+                    { "tabla_materias", filasTabla }
+                };
+
+                var docxBytes = await _plantillaSvc.GenerarDocumentoAsync("boleta_calificaciones", variables, tablas, ct);
+                var pdfBytes = await Services.DocxToPdfConverter.ConvertAsync(docxBytes, ct);
+                return File(pdfBytes, "application/pdf", $"Boleta_{data.Matricula}_{DateTime.Now:yyyyMMdd}.pdf");
+            }
+
             var pdf = _svc.GenerarBoletaCalificacionesPdf(data);
             return File(pdf, "application/pdf", $"Boleta_{data.Matricula}_{DateTime.Now:yyyyMMdd}.pdf");
         }
@@ -160,5 +224,31 @@ public class ReporteAcademicoController : ControllerBase
                 $"PlanesEstudio_{DateTime.Now:yyyyMMdd}.xlsx");
         }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    // ──────── Reporte de Bajas ────────
+
+    [HttpGet("bajas")]
+    public async Task<IActionResult> GetReporteBajas([FromQuery] int? idCampus, [FromQuery] int? idPlanEstudios, [FromQuery] int? idPeriodo, [FromQuery] int? mes, [FromQuery] int? anio, CancellationToken ct)
+    {
+        var data = await _svc.GetReporteBajasAsync(idCampus, idPlanEstudios, idPeriodo, mes, anio, ct);
+        return Ok(data);
+    }
+
+    [HttpGet("bajas/pdf")]
+    public async Task<IActionResult> GetReporteBajasPdf([FromQuery] int? idCampus, [FromQuery] int? idPlanEstudios, [FromQuery] int? idPeriodo, [FromQuery] int? mes, [FromQuery] int? anio, CancellationToken ct)
+    {
+        var data = await _svc.GetReporteBajasAsync(idCampus, idPlanEstudios, idPeriodo, mes, anio, ct);
+        var pdf = _svc.GenerarReporteBajasPdf(data);
+        return File(pdf, "application/pdf", $"ReporteBajas_{DateTime.Now:yyyyMMdd}.pdf");
+    }
+
+    [HttpGet("bajas/excel")]
+    public async Task<IActionResult> GetReporteBajasExcel([FromQuery] int? idCampus, [FromQuery] int? idPlanEstudios, [FromQuery] int? idPeriodo, [FromQuery] int? mes, [FromQuery] int? anio, CancellationToken ct)
+    {
+        var data = await _svc.GetReporteBajasAsync(idCampus, idPlanEstudios, idPeriodo, mes, anio, ct);
+        var excel = _svc.GenerarReporteBajasExcel(data);
+        return File(excel, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"ReporteBajas_{DateTime.Now:yyyyMMdd}.xlsx");
     }
 }

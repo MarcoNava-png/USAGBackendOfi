@@ -8,13 +8,14 @@ RUN dotnet publish ./WebApplication2/WebApplication2.csproj -c Release -o /app/p
 # ===== run =====
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 
-# Instalar dependencias nativas para SkiaSharp/QuestPDF (libfontconfig, libfreetype, fuentes)
+# Instalar dependencias nativas para SkiaSharp/QuestPDF + LibreOffice para conversión docx->pdf
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfontconfig1 \
     libfreetype6 \
     fonts-liberation \
     fonts-dejavu-core \
     fontconfig \
+    libreoffice-writer-nogui \
     && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,8 +28,11 @@ ENV ASPNETCORE_URLS=http://+:8080
 # Copiar archivos publicados
 COPY --from=build --chown=appuser:appuser /app/publish .
 
-# Crear directorio de uploads con permisos para appuser
-RUN mkdir -p /app/uploads && chown appuser:appuser /app/uploads
+# Copiar recursos (logos, marcas de agua)
+COPY --chown=appuser:appuser logo_usag.png header_logo.png watermark_listado.png ./
+
+# Crear directorios con permisos para appuser
+RUN mkdir -p /app/uploads /app/tmp && chown -R appuser:appuser /app/uploads /app/tmp /home/appuser
 
 # Cambiar a usuario no-root
 USER appuser

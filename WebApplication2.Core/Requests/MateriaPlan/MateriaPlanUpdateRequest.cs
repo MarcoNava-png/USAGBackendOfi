@@ -5,6 +5,7 @@ namespace WebApplication2.Core.Requests.NewFolder
     public class MateriaPlanUpdateRequest : MateriaPlanRequest
     {
         public int IdMateriaPlan { get; set; }
+        public string? NombreMateria { get; set; }
         public StatusEnum Status { get; set; } = StatusEnum.Active;
     }
 }

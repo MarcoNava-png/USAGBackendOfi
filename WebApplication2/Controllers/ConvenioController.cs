@@ -134,6 +134,14 @@ namespace WebApplication2.Controllers
         }
 
 
+        [HttpGet("promociones-activas")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.FINANZAS},{Rol.ADMISIONES},{Rol.CONTROL_ESCOLAR}")]
+        public async Task<ActionResult<IEnumerable<ConvenioDisponibleDto>>> GetPromocionesActivas(CancellationToken ct = default)
+        {
+            var promociones = await _convenioService.ObtenerPromocionesActivasAsync(ct);
+            return Ok(promociones);
+        }
+
         [HttpGet("aspirante/{idAspirante}/disponibles")]
         [Authorize(Roles = Rol.ROLES_ADMISIONES)]
         public async Task<ActionResult<IEnumerable<ConvenioDisponibleDto>>> GetConveniosDisponiblesParaAspirante(

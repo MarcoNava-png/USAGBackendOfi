@@ -7,17 +7,19 @@ namespace WebApplication2.Data.Seed
 {
     public static class UserSeed
     {
-        public static void Seed(UserManager<ApplicationUser> userManager)
+        public static async Task SeedAsync(UserManager<ApplicationUser> userManager)
         {
-            userManager.InsertUser("admin@usag.com", "Admin123", Rol.ADMIN, "Administrador", "Sistema");
-            userManager.InsertUser("marconava@usag.com.mx", "Admin123", Rol.ADMIN, "Marco", "Nava");
-            userManager.InsertUser("director@usag.com", "Director123", Rol.DIRECTOR, "Director", "General");
-            userManager.InsertUser("control@usag.com", "Control123", Rol.CONTROL_ESCOLAR, "Control", "Escolar");
+            var seedPassword = Environment.GetEnvironmentVariable("SEED_DEFAULT_PASSWORD") ?? "Dev@2024Secure!";
+
+            await userManager.InsertUserAsync("admin@usag.com", seedPassword, Rol.ADMIN, "Administrador", "Sistema");
+            await userManager.InsertUserAsync("marconava@usag.com.mx", seedPassword, Rol.ADMIN, "Marco", "Nava");
+            await userManager.InsertUserAsync("director@usag.com", seedPassword, Rol.DIRECTOR, "Director", "General");
+            await userManager.InsertUserAsync("control@usag.com", seedPassword, Rol.CONTROL_ESCOLAR, "Control", "Escolar");
         }
 
-        private static void InsertUser(this UserManager<ApplicationUser> userManager, string email, string password, string rol, string nombres = "", string apellidos = "")
+        private static async Task InsertUserAsync(this UserManager<ApplicationUser> userManager, string email, string password, string rol, string nombres = "", string apellidos = "")
         {
-            if (userManager.FindByEmailAsync(email).Result == null)
+            if (await userManager.FindByEmailAsync(email) == null)
             {
                 var user = new ApplicationUser
                 {
@@ -27,12 +29,12 @@ namespace WebApplication2.Data.Seed
                     Apellidos = apellidos
                 };
 
-                var result = userManager.CreateAsync(user, password).Result;
+                var result = await userManager.CreateAsync(user, password);
 
                 if (result.Succeeded)
                 {
-                    userManager.AddClaimAsync(user, new Claim(ClaimTypes.Role, rol)).Wait();
-                    userManager.AddToRoleAsync(user, rol).Wait();
+                    await userManager.AddClaimAsync(user, new Claim(ClaimTypes.Role, rol));
+                    await userManager.AddToRoleAsync(user, rol);
                 }
             }
         }

@@ -81,10 +81,10 @@ public class PdfService : IPdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.Letter);
-                page.MarginTop(48);
-                page.MarginBottom(42);
-                page.MarginHorizontal(57);
-                page.DefaultTextStyle(x => x.FontSize(10).FontFamily(FontePrincipal).Bold());
+                page.MarginTop(20);
+                page.MarginBottom(15);
+                page.MarginHorizontal(25);
+                page.DefaultTextStyle(x => x.FontSize(8).FontFamily(FontePrincipal).Bold());
 
                 page.Content().Column(col =>
                 {
@@ -109,36 +109,36 @@ public class PdfService : IPdfService
 
         container.Row(row =>
         {
-            row.ConstantItem(77).BorderRight(0.5f).BorderColor(ColorBorde)
-                .AlignCenter().AlignMiddle().Padding(4).Column(logoCol =>
+            row.ConstantItem(60).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignCenter().AlignMiddle().Padding(2).Column(logoCol =>
                 {
                     if (File.Exists(_logoPath))
-                        logoCol.Item().MaxHeight(45).Image(_logoPath).FitArea();
+                        logoCol.Item().MaxHeight(35).Image(_logoPath).FitArea();
                 });
 
-            row.ConstantItem(274).Border(0.5f).BorderColor(ColorBorde)
+            row.ConstantItem(350).Border(0.5f).BorderColor(ColorBorde)
                 .Background(ColorTitulo).AlignCenter().AlignMiddle()
-                .Text("FORMATO DEL ASPIRANTE").Bold().FontSize(14).FontColor(Colors.White);
+                .Text("FORMATO DEL ASPIRANTE").Bold().FontSize(13).FontColor(Colors.White);
 
             row.RelativeItem().Column(infoCol =>
             {
-                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(20)
-                    .PaddingHorizontal(5).AlignMiddle().Row(r =>
+                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(14)
+                    .PaddingHorizontal(4).AlignMiddle().Row(r =>
                     {
-                        r.AutoItem().Text("FOLIO: ").Bold();
-                        r.RelativeItem().Text(folio).Bold();
+                        r.AutoItem().Text("FOLIO: ").Bold().FontSize(7);
+                        r.RelativeItem().Text(folio).Bold().FontSize(7);
                     });
-                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(20)
-                    .PaddingHorizontal(5).AlignMiddle().Row(r =>
+                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(14)
+                    .PaddingHorizontal(4).AlignMiddle().Row(r =>
                     {
-                        r.AutoItem().Text("PERIODO: ").Bold().FontSize(8);
-                        r.RelativeItem().Text(periodo).Bold().FontSize(8);
+                        r.AutoItem().Text("PERIODO: ").Bold().FontSize(7);
+                        r.RelativeItem().Text(periodo).Bold().FontSize(7);
                     });
-                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(20)
-                    .PaddingHorizontal(5).AlignMiddle().Row(r =>
+                infoCol.Item().Border(0.5f).BorderColor(ColorBorde).MinHeight(14)
+                    .PaddingHorizontal(4).AlignMiddle().Row(r =>
                     {
-                        r.AutoItem().Text("FECHA: ").Bold();
-                        r.RelativeItem().Text(fecha).Bold();
+                        r.AutoItem().Text("FECHA: ").Bold().FontSize(7);
+                        r.RelativeItem().Text(fecha).Bold().FontSize(7);
                     });
             });
         });
@@ -161,71 +161,73 @@ public class PdfService : IPdfService
         var dp = ficha.DatosPersonales;
         var dc = ficha.DatosContacto;
         var dir = dc?.Direccion;
-        col.Item().Background(ColorSeccionHeader).MinHeight(20)
+        col.Item().Background(ColorSeccionHeader).MinHeight(14)
             .AlignCenter().AlignMiddle()
-            .Text("DATOS GENERALES DEL ALUMNO");
+            .Text("DATOS GENERALES DEL ALUMNO").FontSize(8);
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
-            row.ConstantItem(323).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"NOMBRE: {dp?.NombreCompleto ?? ""}");
-            row.ConstantItem(98).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"GENERO: {dp?.Genero ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"EDAD: {dp?.Edad?.ToString() ?? ""}");
+            row.ConstantItem(370).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"NOMBRE: {dp?.NombreCompleto ?? ""}").FontSize(7);
+            row.ConstantItem(100).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"GENERO: {dp?.Genero ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"EDAD: {dp?.Edad?.ToString() ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(141).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"ESTADO CIVIL: {dp?.EstadoCivil ?? ""}");
-            row.ConstantItem(183).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"CALLE: {dir?.Calle ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"COLONIA: {dir?.Colonia ?? ""}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"ESTADO CIVIL: {dp?.EstadoCivil ?? ""}").FontSize(7);
+            row.ConstantItem(200).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"CALLE: {dir?.Calle ?? ""}").FontSize(7);
+            row.ConstantItem(60).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"NO. EXT: {dir?.NumeroExterior ?? ""}").FontSize(7);
+            row.ConstantItem(60).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"NO. INT: {dir?.NumeroInterior ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"COLONIA: {dir?.Colonia ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(77).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"C.P. {dir?.CodigoPostal ?? ""}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"C.P. {dir?.CodigoPostal ?? ""}").FontSize(7);
             row.ConstantItem(175).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"TELEFONO: {dc?.Telefono ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"CORREO: {dc?.Email ?? ""}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"TELEFONO: {dc?.Telefono ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"CORREO: {dc?.Email ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(190).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"NACIONALIDAD: {dp?.Nacionalidad ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"CIUDAD Y ESTADO: {(dir != null ? $"{dir.Municipio}, {dir.Estado}" : "")}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"NACIONALIDAD: {dp?.Nacionalidad ?? ""}").FontSize(7);
+            row.ConstantItem(200).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"CURP: {dp?.CURP ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"CIUDAD Y ESTADO: {(dir != null ? $"{dir.Municipio}, {dir.Estado}" : "")}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
-        {
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"CURP: {dp?.CURP ?? ""}");
-        });
-
-        col.Item().MinHeight(5);
-
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(253).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"TELEFONO ALTERNO: {dc?.Celular ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"PARENTESCO: {dc?.ParentescoContactoEmergencia ?? ""}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"TELEFONO ALTERNO: {dc?.Celular ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"PARENTESCO: {dc?.ParentescoContactoEmergencia ?? ""}").FontSize(7);
         });
+
     }
 
     private void FichaFilasProgramaEducativo(ColumnDescriptor col, FichaAdmisionDto ficha)
@@ -235,56 +237,54 @@ public class PdfService : IPdfService
         var recorrido = ia?.RecorridoPlantel;
 
         col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
-            .Background(ColorSeccionHeader).MinHeight(20)
+            .Background(ColorSeccionHeader).MinHeight(14)
             .AlignCenter().AlignMiddle()
-            .Text("DATOS DEL PROGRAMA EDUCATIVO");
+            .Text("DATOS DEL PROGRAMA EDUCATIVO").FontSize(8);
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"PROGRAMA DE INTERES: {ia?.NombrePlan ?? ""}");
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"PROGRAMA DE INTERES: {ia?.NombrePlan ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"INSTITUCION DE PROCEDENCIA: {ia?.InstitucionProcedencia ?? ""}");
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"INSTITUCION DE PROCEDENCIA: {ia?.InstitucionProcedencia ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(63).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle().Text("CAMPUS:");
+                .PaddingHorizontal(3).AlignMiddle().Text("CAMPUS:").FontSize(7);
             row.ConstantItem(112).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle().Text(ia?.Campus ?? "");
+                .PaddingHorizontal(3).AlignMiddle().Text((ia?.Campus ?? "").Replace("Campus ", "", StringComparison.OrdinalIgnoreCase)).FontSize(7);
             row.ConstantItem(126).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"TURNO: {ia?.Turno ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"MODALIDAD: {ia?.Modalidad ?? ""}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"TURNO: {ia?.Turno ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"MODALIDAD: {ia?.Modalidad ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
-            row.ConstantItem(140).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"HORARIO: {ia?.Turno ?? ""}");
-            row.ConstantItem(140).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle().Text($"DIAS: {ia?.Dias ?? ""}");
-            row.ConstantItem(121).BorderRight(0.5f).BorderColor(ColorBorde)
+            row.ConstantItem(200).BorderRight(0.5f).BorderColor(ColorBorde)
                 .PaddingHorizontal(3).AlignMiddle()
-                .Text("RECORRIDO POR EL CAMPUS").FontSize(8);
+                .Text($"DIAS: {ia?.Dias ?? ""}").FontSize(7);
+            row.ConstantItem(121).BorderRight(0.5f).BorderColor(ColorBorde)
+                .PaddingHorizontal(2).AlignMiddle()
+                .Text("RECORRIDO POR PLANTEL").FontSize(6);
             row.ConstantItem(28).BorderRight(0.5f).BorderColor(ColorBorde)
                 .AlignMiddle().AlignCenter()
-                .Text(recorrido == true ? "SI X" : "SI").FontSize(9);
+                .Text(recorrido == true ? "SI X" : "SI").FontSize(7);
             row.RelativeItem().AlignMiddle().AlignCenter()
-                .Text(recorrido == false ? "NO X" : "NO").FontSize(9);
+                .Text(recorrido == false ? "NO X" : "NO").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"COMO NOS CONOCISTE: {seg?.MedioContacto ?? ""}");
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"COMO NOS CONOCISTE: {seg?.MedioContacto ?? ""}").FontSize(7);
         });
     }
 
@@ -293,37 +293,37 @@ public class PdfService : IPdfService
         var se = ficha.DatosSocioeconomicos;
 
         col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
-            .Background(ColorSeccionHeader).MinHeight(20)
+            .Background(ColorSeccionHeader).MinHeight(14)
             .AlignCenter().AlignMiddle()
-            .Text("DATOS SOCIOECONOMICOS");
+            .Text("DATOS SOCIOECONOMICOS").FontSize(8);
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(70).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle().Text("TRABAJAS:");
+                .PaddingHorizontal(3).AlignMiddle().Text("TRABAJAS:").FontSize(7);
             row.ConstantItem(27).BorderRight(0.5f).BorderColor(ColorBorde)
                 .AlignMiddle().AlignCenter()
-                .Text(se?.Trabaja == true ? "SI X" : "SI").FontSize(9);
+                .Text(se?.Trabaja == true ? "SI X" : "SI").FontSize(7);
             row.ConstantItem(36).BorderRight(0.5f).BorderColor(ColorBorde)
                 .AlignMiddle().AlignCenter()
-                .Text(se?.Trabaja == false ? "NO X" : "NO").FontSize(9);
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"NOMBRE DE LA EMPRESA: {se?.NombreEmpresa ?? ""}");
+                .Text(se?.Trabaja == false ? "NO X" : "NO").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"EMPRESA: {se?.NombreEmpresa ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
             row.ConstantItem(323).BorderRight(0.5f).BorderColor(ColorBorde)
-                .PaddingHorizontal(5).AlignMiddle()
-                .Text($"DOMICILIO: {se?.DomicilioEmpresa ?? ""}");
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"PUESTO: {se?.PuestoEmpresa ?? ""}");
+                .PaddingHorizontal(3).AlignMiddle()
+                .Text($"DOMICILIO: {se?.DomicilioEmpresa ?? ""}").FontSize(7);
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"PUESTO: {se?.PuestoEmpresa ?? ""}").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(20).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(14).Row(row =>
         {
-            row.RelativeItem().PaddingHorizontal(5).AlignMiddle()
-                .Text($"QUIEN CUBRIRA TUS GASTOS: {se?.QuienCubreGastos ?? ""}");
+            row.RelativeItem().PaddingHorizontal(3).AlignMiddle()
+                .Text($"QUIEN CUBRIRA TUS GASTOS: {se?.QuienCubreGastos ?? ""}").FontSize(7);
         });
     }
 
@@ -333,53 +333,76 @@ public class PdfService : IPdfService
         var costos = pagos?.CostosDesglose ?? new List<CostoDesglosePdfDto>();
         var tieneConvenio = pagos?.TieneConvenio ?? false;
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
-            .Background(ColorSeccionHeader).MinHeight(20)
-            .AlignCenter().AlignMiddle()
-            .Text("DATOS FINANCIEROS");
+        var tituloFinanciero = tieneConvenio ? "DATOS FINANCIEROS — CONVENIO" : "DATOS FINANCIEROS";
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(18).Row(row =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+            .Background(ColorSeccionHeader).MinHeight(14)
+            .AlignCenter().AlignMiddle()
+            .Text(tituloFinanciero).FontSize(8);
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(13).Row(row =>
         {
-            row.ConstantItem(203).BorderRight(0.5f).BorderColor(ColorBorde)
-                .AlignMiddle().AlignCenter().Text("COSTOS");
+            row.ConstantItem(250).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignMiddle().AlignCenter().Text("CONCEPTO").FontSize(7);
+            row.ConstantItem(80).BorderRight(0.5f).BorderColor(ColorBorde)
+                .AlignMiddle().AlignCenter().Text("MONTO").FontSize(7);
             row.RelativeItem().AlignMiddle().AlignCenter()
-                .Text("DETALLES");
+                .Text("NOTAS").FontSize(7);
         });
 
-        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).Row(mainRow =>
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde).Column(allRows =>
         {
-            mainRow.ConstantItem(203).BorderRight(0.5f).BorderColor(ColorBorde).Column(costCol =>
+            decimal totalCostos = 0;
+            for (int i = 0; i < costos.Count; i++)
             {
-                for (int i = 0; i < costos.Count; i++)
-                {
-                    var costo = costos[i];
-                    var item = i > 0
-                        ? costCol.Item().BorderTop(0.5f).BorderColor(ColorBorde)
-                        : costCol.Item();
+                var costo = costos[i];
+                if (costo.Monto.HasValue) totalCostos += costo.Monto.Value;
 
-                    item.MinHeight(17).Row(r =>
-                    {
-                        r.ConstantItem(133).BorderRight(0.5f).BorderColor(ColorBorde)
-                            .PaddingHorizontal(5).AlignMiddle()
-                            .Text(costo.Concepto).FontSize(9);
-                        r.RelativeItem().PaddingHorizontal(3).AlignMiddle().AlignRight()
-                            .Text(costo.Monto.HasValue ? $"${costo.Monto.Value:N2}" : "N/A").FontSize(9);
-                    });
-                }
+                var item = i > 0
+                    ? allRows.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+                    : allRows.Item();
 
-                // Fila de CONVENIO
-                costCol.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(17).Row(r =>
+                var notaTexto = costo.Nota ?? "";
+                var notaColor = "#666666";
+                if (notaTexto == "Pagado") notaColor = "#16a34a";
+                else if (notaTexto == "Pendiente") notaColor = "#d97706";
+                else if (notaTexto.Contains("Descuento")) notaColor = "#2563eb";
+
+                item.MinHeight(13).Row(r =>
                 {
-                    r.ConstantItem(133).BorderRight(0.5f).BorderColor(ColorBorde)
-                        .PaddingHorizontal(5).AlignMiddle()
-                        .Text("CONVENIO").FontSize(9);
-                    r.RelativeItem().PaddingHorizontal(3).AlignMiddle().AlignCenter()
-                        .Text(tieneConvenio ? "SI" : "NO").FontSize(9);
+                    r.ConstantItem(250).BorderRight(0.5f).BorderColor(ColorBorde)
+                        .PaddingHorizontal(4).AlignMiddle()
+                        .Text(costo.Concepto).FontSize(7);
+                    r.ConstantItem(80).BorderRight(0.5f).BorderColor(ColorBorde)
+                        .PaddingHorizontal(4).AlignMiddle().AlignRight()
+                        .Text(costo.Monto.HasValue ? $"${costo.Monto.Value:N2}" : "$0.00").FontSize(7);
+                    r.RelativeItem().PaddingHorizontal(4).AlignMiddle()
+                        .Text(notaTexto).FontSize(6).FontColor(notaColor);
                 });
+            }
+
+            allRows.Item().BorderTop(1f).BorderColor(ColorBorde).MinHeight(14)
+                .Background(ColorGrisClaro).Row(r =>
+            {
+                r.ConstantItem(250).BorderRight(0.5f).BorderColor(ColorBorde)
+                    .PaddingHorizontal(4).AlignMiddle().AlignRight()
+                    .Text("TOTAL:").Bold().FontSize(8);
+                r.ConstantItem(80).BorderRight(0.5f).BorderColor(ColorBorde)
+                    .PaddingHorizontal(4).AlignMiddle().AlignRight()
+                    .Text($"${totalCostos:N2}").Bold().FontSize(8);
+                r.RelativeItem();
             });
 
-            mainRow.RelativeItem().Padding(5)
-                .Text(ficha.Observaciones ?? "").FontSize(9);
+            allRows.Item().BorderTop(0.5f).BorderColor(ColorBorde).MinHeight(13).Row(r =>
+            {
+                r.ConstantItem(250).BorderRight(0.5f).BorderColor(ColorBorde)
+                    .PaddingHorizontal(4).AlignMiddle()
+                    .Text("CONVENIO").FontSize(7);
+                r.ConstantItem(80).BorderRight(0.5f).BorderColor(ColorBorde)
+                    .PaddingHorizontal(4).AlignMiddle().AlignCenter()
+                    .Text(tieneConvenio ? "SI" : "NO").Bold().FontSize(7);
+                r.RelativeItem();
+            });
         });
     }
 
@@ -388,37 +411,37 @@ public class PdfService : IPdfService
         var nombreAspirante = ficha.DatosPersonales?.NombreCompleto ?? "";
         var nombreEntrevistador = ficha.Seguimiento?.AsesorAsignado?.NombreCompleto ?? "";
 
-        container.PaddingTop(25).Row(row =>
+        container.PaddingTop(15).Row(row =>
         {
             row.RelativeItem().Column(col =>
             {
-                col.Item().PaddingBottom(35).Text("");
-                col.Item().PaddingHorizontal(20).LineHorizontal(0.5f).LineColor(Colors.Black);
-                col.Item().AlignCenter().PaddingTop(3).Text(nombreAspirante).Bold().FontSize(9);
-                col.Item().AlignCenter().PaddingTop(1).Text("Firma del aspirante").FontSize(8);
+                col.Item().PaddingBottom(20).Text("");
+                col.Item().PaddingHorizontal(15).LineHorizontal(0.5f).LineColor(Colors.Black);
+                col.Item().AlignCenter().PaddingTop(2).Text(nombreAspirante).Bold().FontSize(7);
+                col.Item().AlignCenter().PaddingTop(1).Text("Firma del aspirante").FontSize(6);
             });
 
-            row.ConstantItem(60);
+            row.ConstantItem(40);
 
             row.RelativeItem().Column(col =>
             {
-                col.Item().PaddingBottom(35).Text("");
-                col.Item().PaddingHorizontal(20).LineHorizontal(0.5f).LineColor(Colors.Black);
-                col.Item().AlignCenter().PaddingTop(3).Text(nombreEntrevistador).Bold().FontSize(9);
-                col.Item().AlignCenter().PaddingTop(1).Text("Entrevistador").FontSize(8);
+                col.Item().PaddingBottom(20).Text("");
+                col.Item().PaddingHorizontal(15).LineHorizontal(0.5f).LineColor(Colors.Black);
+                col.Item().AlignCenter().PaddingTop(2).Text(nombreEntrevistador).Bold().FontSize(7);
+                col.Item().AlignCenter().PaddingTop(1).Text("Entrevistador").FontSize(6);
             });
         });
     }
 
     private void FichaAvisoPrivacidad(IContainer container)
     {
-        container.PaddingTop(6).Column(col =>
+        container.PaddingTop(4).Column(col =>
         {
             col.Item().Text("Declaro bajo protesta de decir verdad que la información y documentación proporcionada es verídica, por lo que, en caso de existir falsedad en ella, tengo pleno conocimiento que se aplicarán las sanciones administrativas y penas establecidas en los ordenamientos respectivos para quienes se conducen con falsedad ante la autoridad competente.")
-                .FontSize(6);
-            col.Item().PaddingTop(2)
+                .FontSize(5);
+            col.Item().PaddingTop(1)
                 .Text("Usted puede consultar en cualquier momento nuestro Aviso de Privacidad en la página de internet https://usaguanajuato.edu.mx; o https://usaguanajuato.edu.mx/docs/AVISO%DE%20PRIVACIDAD.PDF")
-                .FontSize(6);
+                .FontSize(5);
         });
     }
 
@@ -464,8 +487,8 @@ public class PdfService : IPdfService
                 {
                     col.Item().AlignCenter().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO")
                         .FontSize(14).Bold().FontColor(ColorAzulOscuro);
-                    col.Item().AlignCenter().Text("KARDEX ACADÉMICO")
-                        .FontSize(12).SemiBold().FontColor(ColorAzulClaro);
+                    col.Item().AlignCenter().Text("DEPARTAMENTO DE CONTROL ESCOLAR")
+                        .FontSize(10).SemiBold().FontColor(ColorAzulClaro);
                 });
 
                 row.ConstantItem(100).AlignRight().Column(col =>
@@ -477,44 +500,15 @@ public class PdfService : IPdfService
 
             column.Item().PaddingTop(8).LineHorizontal(2).LineColor(ColorAzulOscuro);
 
-            column.Item().PaddingTop(10).Background(ColorGrisClaro).Padding(10).Column(dataCol =>
+            column.Item().PaddingTop(10).Column(dataCol =>
             {
-                dataCol.Item().Row(row =>
+                dataCol.Item().Text(t => { t.Span("RVOE: ").Bold(); t.Span(kardex.RVOE ?? "________________"); });
+                dataCol.Item().PaddingTop(5).Text(t => { t.Span("NOMBRE DEL ALUMNO: ").Bold(); t.Span(kardex.NombreCompleto.ToUpper()); });
+                dataCol.Item().PaddingTop(5).Text(t => { t.Span("CARRERA: ").Bold(); t.Span(kardex.Carrera.ToUpper()); });
+                dataCol.Item().PaddingTop(5).Row(row =>
                 {
-                    row.RelativeItem().Text(t => { t.Span("Matrícula: ").Bold(); t.Span(kardex.Matricula); });
-                    row.RelativeItem().Text(t => { t.Span("Nombre: ").Bold(); t.Span(kardex.NombreCompleto); });
-                });
-                dataCol.Item().PaddingTop(3).Row(row =>
-                {
-                    row.RelativeItem().Text(t => { t.Span("Carrera: ").Bold(); t.Span(kardex.Carrera); });
-                    row.RelativeItem().Text(t => { t.Span("Plan: ").Bold(); t.Span(kardex.PlanEstudios); });
-                });
-                dataCol.Item().PaddingTop(3).Row(row =>
-                {
-                    row.RelativeItem().Text(t => { t.Span("RVOE: ").Bold(); t.Span(kardex.RVOE ?? "N/A"); });
-                    row.RelativeItem().Text(t => { t.Span("Ingreso: ").Bold(); t.Span(kardex.FechaIngreso.ToString("dd/MM/yyyy")); });
-                    row.RelativeItem().Text(t => { t.Span("Estatus: ").Bold(); t.Span(kardex.Estatus); });
-                });
-            });
-
-            column.Item().PaddingTop(8).Row(row =>
-            {
-                row.RelativeItem().Background("#E3F2FD").Padding(8).Column(col =>
-                {
-                    col.Item().AlignCenter().Text("Promedio General").FontSize(8).FontColor(ColorGris);
-                    col.Item().AlignCenter().Text($"{kardex.PromedioGeneral:F2}").FontSize(16).Bold().FontColor(ColorAzulOscuro);
-                });
-                row.ConstantItem(10);
-                row.RelativeItem().Background("#E8F5E9").Padding(8).Column(col =>
-                {
-                    col.Item().AlignCenter().Text("Créditos Cursados").FontSize(8).FontColor(ColorGris);
-                    col.Item().AlignCenter().Text($"{kardex.CreditosCursados}/{kardex.CreditosTotales}").FontSize(16).Bold().FontColor("#2E7D32");
-                });
-                row.ConstantItem(10);
-                row.RelativeItem().Background("#FFF3E0").Padding(8).Column(col =>
-                {
-                    col.Item().AlignCenter().Text("Avance").FontSize(8).FontColor(ColorGris);
-                    col.Item().AlignCenter().Text($"{kardex.PorcentajeAvance:F1}%").FontSize(16).Bold().FontColor("#E65100");
+                    row.RelativeItem().Text(t => { t.Span("CICLO ESCOLAR DE INGRESO: ").Bold(); t.Span(kardex.FechaIngreso.ToString("dd/MM/yyyy")); });
+                    row.RelativeItem().Text(t => { t.Span("MATRÍCULA: ").Bold(); t.Span(kardex.Matricula); });
                 });
             });
 
@@ -531,52 +525,75 @@ public class PdfService : IPdfService
                 column.Item().Element(c => ComposeKardexPeriodo(c, periodo));
                 column.Item().PaddingVertical(5);
             }
+
+            column.Item().PaddingTop(30).AlignCenter().Column(col =>
+            {
+                col.Item().AlignCenter().LineHorizontal(1).LineColor(Colors.Black);
+                col.Item().PaddingTop(5).AlignCenter().Text("DIRECCIÓN DE SERVICIOS ESCOLARES").Bold().FontSize(9);
+            });
         });
     }
+
+    private static readonly string[] CuatrimestreNombres = {
+        "", "PRIMER", "SEGUNDO", "TERCER", "CUARTO", "QUINTO", "SEXTO",
+        "SÉPTIMO", "OCTAVO", "NOVENO", "DÉCIMO", "UNDÉCIMO", "DUODÉCIMO"
+    };
 
     private void ComposeKardexPeriodo(IContainer container, KardexPeriodoDto periodo)
     {
         container.Column(column =>
         {
-            column.Item().Background(ColorAzulOscuro).Padding(6).Row(row =>
-            {
-                row.RelativeItem().Text($"Período: {periodo.Periodo}").FontColor(Colors.White).Bold();
-                row.ConstantItem(150).AlignRight().Text($"Promedio: {periodo.PromedioPeriodo:F2} | Créditos: {periodo.CreditosPeriodo}")
-                    .FontColor(Colors.White).FontSize(8);
-            });
+            int.TryParse(periodo.Periodo, out var cuatNum);
+
+            var cuatLabel = cuatNum > 0 && cuatNum < CuatrimestreNombres.Length
+                ? $"{CuatrimestreNombres[cuatNum]} CUATRIMESTRE"
+                : $"{periodo.Periodo}° CUATRIMESTRE";
+
+            column.Item().Background(ColorAzulOscuro).Padding(5).Text(cuatLabel).FontColor(Colors.White).Bold().FontSize(9);
 
             column.Item().Table(table =>
             {
                 table.ColumnsDefinition(columns =>
                 {
-                    columns.ConstantColumn(60);
                     columns.RelativeColumn(3);
+                    columns.ConstantColumn(65);
+                    columns.ConstantColumn(55);
+                    columns.ConstantColumn(40);
+                    columns.ConstantColumn(40);
+                    columns.ConstantColumn(40);
+                    columns.ConstantColumn(40);
                     columns.ConstantColumn(50);
-                    columns.ConstantColumn(70);
-                    columns.ConstantColumn(70);
                 });
 
                 table.Header(header =>
                 {
-                    header.Cell().Background(ColorGrisClaro).Padding(4).Text("Clave").Bold().FontSize(8);
-                    header.Cell().Background(ColorGrisClaro).Padding(4).Text("Materia").Bold().FontSize(8);
-                    header.Cell().Background(ColorGrisClaro).Padding(4).AlignCenter().Text("Créditos").Bold().FontSize(8);
-                    header.Cell().Background(ColorGrisClaro).Padding(4).AlignCenter().Text("Calificación").Bold().FontSize(8);
-                    header.Cell().Background(ColorGrisClaro).Padding(4).AlignCenter().Text("Estatus").Bold().FontSize(8);
+                    header.Cell().RowSpan(2).Background(ColorGrisClaro).Padding(3).AlignMiddle().Text("MATERIA").Bold().FontSize(7);
+                    header.Cell().RowSpan(2).Background(ColorGrisClaro).Padding(3).AlignMiddle().AlignCenter().Text("CLAVE").Bold().FontSize(7);
+                    header.Cell().RowSpan(2).Background(ColorGrisClaro).Padding(3).AlignMiddle().AlignCenter().Text("SERIACIÓN").Bold().FontSize(7);
+                    header.Cell().ColumnSpan(2).Background(ColorGrisClaro).Padding(2).AlignCenter().Text("EXAMEN ORDINARIO").Bold().FontSize(6);
+                    header.Cell().ColumnSpan(2).Background(ColorGrisClaro).Padding(2).AlignCenter().Text("EXAMEN EXTRAORDINARIO").Bold().FontSize(6);
+                    header.Cell().RowSpan(2).Background(ColorGrisClaro).Padding(3).AlignMiddle().AlignCenter().Text("PROMEDIO").Bold().FontSize(7);
+
+                    header.Cell().Background("#E8EAF6").Padding(2).AlignCenter().Text("CICLO").FontSize(6);
+                    header.Cell().Background("#E8EAF6").Padding(2).AlignCenter().Text("CALIF.").FontSize(6);
+                    header.Cell().Background("#E8EAF6").Padding(2).AlignCenter().Text("CICLO").FontSize(6);
+                    header.Cell().Background("#E8EAF6").Padding(2).AlignCenter().Text("CALIF.").FontSize(6);
                 });
 
                 foreach (var materia in periodo.Materias)
                 {
-                    var colorEstatus = materia.Estatus == "Aprobada" ? Colors.Green.Medium :
-                                      materia.Estatus == "Reprobada" ? Colors.Red.Medium : Colors.Orange.Medium;
+                    var calif = materia.CalificacionFinal?.ToString("F1") ?? "";
+                    var ciclo = materia.Ciclo ?? "";
+                    var promedio = materia.CalificacionFinal?.ToString("F1") ?? "";
 
-                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).Text(materia.ClaveMateria).FontSize(8);
-                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).Text(materia.NombreMateria).FontSize(8);
-                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).AlignCenter().Text(materia.Creditos.ToString()).FontSize(8);
-                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).AlignCenter()
-                        .Text(materia.CalificacionFinal?.ToString("F1") ?? "-").FontSize(8).Bold();
-                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).AlignCenter()
-                        .Text(materia.Estatus).FontSize(8).FontColor(colorEstatus);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).Text(materia.NombreMateria).FontSize(7);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text(materia.ClaveMateria).FontSize(7);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text("").FontSize(7);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text(ciclo).FontSize(6);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text(calif).FontSize(7).Bold();
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text("").FontSize(7);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text("").FontSize(7);
+                    table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(3).AlignCenter().Text(promedio).FontSize(7).Bold();
                 }
             });
         });
@@ -653,30 +670,35 @@ public class PdfService : IPdfService
 
             column.Item().PaddingTop(20).Text(text =>
             {
-                text.Span("Por medio de la presente se hace constar que ");
-                text.Span(constancia.NombreCompleto.ToUpper()).Bold();
-                text.Span(", con matrícula ");
-                text.Span(constancia.Matricula).Bold();
-                text.Span(", se encuentra actualmente inscrito(a) como alumno(a) regular de esta institución en la carrera de ");
-                text.Span(constancia.Carrera).Bold();
-                text.Span(", con plan de estudios ");
-                text.Span(constancia.PlanEstudios).Bold();
-                if (!string.IsNullOrEmpty(constancia.RVOE))
-                {
-                    text.Span(", con RVOE: ");
-                    text.Span(constancia.RVOE).Bold();
-                }
+                text.Span("Por medio de la presente la que suscribe, en mi carácter de Directora de Servicios Escolares de la ");
+                text.Span("Universidad San Andrés de Guanajuato").Bold();
+                text.Span(", con clave de centro de trabajo C.C.T: ");
+                text.Span("11PSU0329U").Bold();
                 text.Span(".");
             });
 
-            column.Item().PaddingTop(15).Text(text =>
+            column.Item().PaddingTop(20).AlignCenter().Text("H A C E   C O N S T A R").Bold().FontSize(13).FontColor(ColorAzulOscuro);
+
+            column.Item().PaddingTop(20).Text(text =>
             {
-                text.Span("El alumno(a) se encuentra cursando el período académico ");
+                text.Span("Según Historial Académico que obra en el departamento de Dirección de Servicios Escolares, que el (la) Alumno(a) C. ");
+                text.Span(constancia.NombreCompleto.ToUpper()).Bold();
+                if (!string.IsNullOrEmpty(constancia.Curp))
+                {
+                    text.Span(", CURP: ");
+                    text.Span(constancia.Curp.ToUpper()).Bold();
+                }
+                text.Span(", se encuentra inscrito(a) en la ");
+                text.Span(constancia.Carrera).Bold();
+                if (!string.IsNullOrEmpty(constancia.RVOE))
+                {
+                    text.Span(", RVOE: ");
+                    text.Span(constancia.RVOE).Bold();
+                }
+                text.Span(", ");
+                text.Span(constancia.Grado).Bold();
+                text.Span(", en el periodo comprendido ");
                 text.Span(constancia.PeriodoActual).Bold();
-                text.Span(" en el turno ");
-                text.Span(constancia.Turno).Bold();
-                text.Span(", en el campus ");
-                text.Span(constancia.Campus).Bold();
                 text.Span(".");
             });
 
@@ -727,9 +749,10 @@ public class PdfService : IPdfService
 
             column.Item().PaddingTop(50).AlignCenter().Column(col =>
             {
-                col.Item().AlignCenter().Text("ATENTAMENTE").Bold();
+                col.Item().AlignCenter().Text("Atentamente").Bold();
                 col.Item().PaddingTop(40).AlignCenter().LineHorizontal(1).LineColor(Colors.Black);
-                col.Item().PaddingTop(5).AlignCenter().Text("Director(a) Académico").FontSize(10);
+                col.Item().PaddingTop(5).AlignCenter().Text("Lic. Margarita Anda Valdez").Bold().FontSize(10);
+                col.Item().AlignCenter().Text("Directora de Servicios Escolares").FontSize(10);
                 col.Item().AlignCenter().Text("Universidad San Andrés de Guanajuato").FontSize(9).FontColor(ColorGris);
             });
         });
@@ -1094,6 +1117,18 @@ public class PdfService : IPdfService
                         t.Span(recibo.Periodo ?? "N/A");
                     });
                 });
+
+                if (!string.IsNullOrEmpty(recibo.NombreEmpresa))
+                {
+                    dataCol.Item().PaddingTop(5).Row(row =>
+                    {
+                        row.RelativeItem().Text(t =>
+                        {
+                            t.Span("Empresa: ").Bold();
+                            t.Span(recibo.NombreEmpresa);
+                        });
+                    });
+                }
             });
 
             column.Item().PaddingTop(8).LineHorizontal(1).LineColor(ColorGris);
@@ -1167,7 +1202,24 @@ public class PdfService : IPdfService
 
                 if (recibo.Descuento > 0)
                 {
-                    totalesTable.Cell().Padding(5).AlignRight().Text("Descuento (Beca):").Bold().FontColor(Colors.Green.Medium);
+                    // Extraer nombre real de la promoción desde Notas si existe
+                    var etiquetaDescuento = "Descuento:";
+                    if (!string.IsNullOrEmpty(recibo.Notas))
+                    {
+                        var idx = recibo.Notas.IndexOf("Descuento por ", StringComparison.OrdinalIgnoreCase);
+                        if (idx >= 0)
+                        {
+                            var resto = recibo.Notas.Substring(idx + 14);
+                            var finIdx = resto.IndexOf(':');
+                            if (finIdx > 0)
+                            {
+                                var nombrePromo = resto.Substring(0, finIdx).Trim();
+                                etiquetaDescuento = $"Descuento ({nombrePromo}):";
+                            }
+                        }
+                    }
+
+                    totalesTable.Cell().Padding(5).AlignRight().Text(etiquetaDescuento).Bold().FontColor(Colors.Green.Medium);
                     totalesTable.Cell().Padding(5).AlignRight().Text($"-${recibo.Descuento:N2}").FontColor(Colors.Green.Medium);
                 }
 
@@ -1202,7 +1254,18 @@ public class PdfService : IPdfService
                 });
             }
 
-            if (recibo.EstaPagado)
+            if (recibo.EstaCancelado)
+            {
+                column.Item().PaddingTop(20).AlignCenter().Layers(layers =>
+                {
+                    layers.PrimaryLayer().Element(stampContainer =>
+                    {
+                        stampContainer.Border(4).BorderColor(Colors.Red.Medium).Padding(15)
+                            .Text("CANCELADO").FontSize(32).Bold().FontColor(Colors.Red.Medium);
+                    });
+                });
+            }
+            else if (recibo.EstaPagado)
             {
                 column.Item().PaddingTop(20).AlignCenter().Layers(layers =>
                 {
@@ -1445,33 +1508,153 @@ public class PdfService : IPdfService
 
     private void ComposeCotizacionContent(IContainer container, CotizacionAdmisionPdfDto cotizacion)
     {
+        var tienePromociones = cotizacion.Conceptos.Any(c => c.NombrePromocion != null);
+        var tieneTotales = cotizacion.TotalOriginal > 0;
+
         container.PaddingTop(15).Column(column =>
         {
+            // Empresa si aplica
+            if (!string.IsNullOrEmpty(cotizacion.NombreEmpresa))
+            {
+                column.Item().PaddingBottom(8).Background("#F3E8FF").Border(1).BorderColor("#9333EA").Padding(8).Row(row =>
+                {
+                    row.RelativeItem().Text(t =>
+                    {
+                        t.Span("EMPRESA: ").Bold().FontSize(9).FontColor("#7C3AED");
+                        t.Span(cotizacion.NombreEmpresa).FontSize(9).FontColor("#7C3AED");
+                    });
+                });
+            }
+
             column.Item().Table(table =>
             {
-                table.ColumnsDefinition(columns =>
+                if (tienePromociones)
                 {
-                    columns.RelativeColumn(3);
-                    columns.RelativeColumn(2);
-                });
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(3);   // Concepto
+                        columns.RelativeColumn(1.5f); // Monto original
+                        columns.RelativeColumn(3);   // Promoción
+                        columns.RelativeColumn(1.5f); // Monto final
+                    });
 
-                table.Header(header =>
+                    table.Header(header =>
+                    {
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("CONCEPTO").FontColor(Colors.White).Bold().FontSize(9);
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("MONTO").FontColor(Colors.White).Bold().FontSize(9).AlignRight();
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("CONVENIO").FontColor(Colors.White).Bold().FontSize(9);
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("MONTO FINAL").FontColor(Colors.White).Bold().FontSize(9).AlignRight();
+                    });
+                }
+                else
                 {
-                    header.Cell().Background(ColorAzulOscuro).Padding(10)
-                        .Text("COSTOS").FontColor(Colors.White).Bold().FontSize(10);
-                    header.Cell().Background(ColorAzulOscuro).Padding(10)
-                        .Text("DETALLES").FontColor(Colors.White).Bold().FontSize(10).AlignCenter();
-                });
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(3);
+                        columns.RelativeColumn(2);
+                    });
+
+                    table.Header(header =>
+                    {
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("CONCEPTO").FontColor(Colors.White).Bold().FontSize(9);
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("MONTO").FontColor(Colors.White).Bold().FontSize(9).AlignRight();
+                    });
+                }
 
                 for (int i = 0; i < cotizacion.Conceptos.Count; i++)
                 {
                     var concepto = cotizacion.Conceptos[i];
                     var bgColor = i % 2 == 0 ? ColorGrisClaro : "#FFFFFF";
+                    var textColor = concepto.Incluido ? "#000000" : ColorGris;
 
-                    table.Cell().Background(bgColor).Padding(10)
-                        .Text(concepto.Nombre).FontSize(10).Bold();
-                    table.Cell().Background(bgColor).Padding(10).AlignCenter()
-                        .Text(concepto.Valor).FontSize(10);
+                    // Columna: Nombre concepto
+                    table.Cell().Background(bgColor).Padding(8)
+                        .Text(concepto.Nombre).FontSize(9).Bold().FontColor(textColor);
+
+                    if (tienePromociones)
+                    {
+                        // Columna: Monto original
+                        table.Cell().Background(bgColor).Padding(8).AlignRight()
+                            .Text(concepto.Incluido ? $"${concepto.Monto:N2}" : "—").FontSize(9).FontColor(textColor);
+
+                        // Columna: Promoción
+                        table.Cell().Background(bgColor).Padding(8).Text(t =>
+                        {
+                            if (concepto.NombrePromocion != null && concepto.Incluido)
+                            {
+                                t.Span(concepto.NombrePromocion).FontSize(8).FontColor("#16A34A").Italic();
+                                t.Span($"  -${concepto.MontoDescuento:N2}").FontSize(8).Bold().FontColor("#DC2626");
+                            }
+                            else if (concepto.Incluido)
+                            {
+                                t.Span("Sin promoción").FontSize(8).FontColor(ColorGris).Italic();
+                            }
+                            else
+                            {
+                                t.Span("No incluido").FontSize(8).FontColor(ColorGris).Italic();
+                            }
+                        });
+
+                        // Columna: Monto final
+                        table.Cell().Background(bgColor).Padding(8).AlignRight()
+                            .Text(concepto.Incluido ? $"${concepto.MontoFinal:N2}" : "—")
+                            .FontSize(9).Bold().FontColor(concepto.MontoDescuento > 0 ? "#16A34A" : textColor);
+                    }
+                    else
+                    {
+                        // Columna: Valor simple
+                        table.Cell().Background(bgColor).Padding(8).AlignRight()
+                            .Text(concepto.Valor).FontSize(9).FontColor(textColor);
+                    }
+                }
+
+                // Fila de totales (solo si hay datos numéricos)
+                if (tieneTotales)
+                {
+                    if (tienePromociones)
+                    {
+                        // Fila separadora
+                        table.Cell().ColumnSpan(4).PaddingTop(2).LineHorizontal(1).LineColor(ColorAzulOscuro);
+
+                        if (cotizacion.TotalDescuento > 0)
+                        {
+                            // Fila subtotal
+                            table.Cell().ColumnSpan(2).Background("#FFFFFF").PaddingHorizontal(8).PaddingVertical(4)
+                                .Text("SUBTOTAL").FontSize(9).Bold().FontColor(ColorAzulOscuro);
+                            table.Cell().Background("#FFFFFF").PaddingHorizontal(8).PaddingVertical(4);
+                            table.Cell().Background("#FFFFFF").PaddingHorizontal(8).PaddingVertical(4).AlignRight()
+                                .Text($"${cotizacion.TotalOriginal:N2}").FontSize(9).FontColor(ColorAzulOscuro);
+
+                            // Fila descuento
+                            table.Cell().ColumnSpan(2).Background("#FFFFFF").PaddingHorizontal(8).PaddingVertical(4)
+                                .Text("DESCUENTO POR CONVENIO").FontSize(9).Bold().FontColor("#DC2626");
+                            table.Cell().Background("#FFFFFF").PaddingHorizontal(8).PaddingVertical(4);
+                            table.Cell().Background("#FFFFFF").PaddingHorizontal(8).PaddingVertical(4).AlignRight()
+                                .Text($"-${cotizacion.TotalDescuento:N2}").FontSize(9).Bold().FontColor("#DC2626");
+                        }
+
+                        // Fila total final
+                        table.Cell().ColumnSpan(2).Background(ColorAzulOscuro).Padding(8)
+                            .Text("TOTAL A PAGAR").FontColor(Colors.White).Bold().FontSize(10);
+                        table.Cell().Background(ColorAzulOscuro).Padding(8);
+                        table.Cell().Background(ColorAzulOscuro).Padding(8).AlignRight()
+                            .Text($"${cotizacion.TotalFinal:N2}").FontColor(Colors.White).Bold().FontSize(10);
+                    }
+                    else
+                    {
+                        table.Cell().ColumnSpan(2).PaddingTop(2).LineHorizontal(1).LineColor(ColorAzulOscuro);
+
+                        table.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("TOTAL A PAGAR").FontColor(Colors.White).Bold().FontSize(10);
+                        table.Cell().Background(ColorAzulOscuro).Padding(8).AlignRight()
+                            .Text($"${cotizacion.TotalFinal:N2}").FontColor(Colors.White).Bold().FontSize(10);
+                    }
                 }
             });
 

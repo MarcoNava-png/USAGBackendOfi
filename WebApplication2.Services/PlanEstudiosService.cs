@@ -118,6 +118,8 @@ namespace WebApplication2.Services
             planEstudios.ClavePlanEstudios = newPlanEstudios.ClavePlanEstudios;
             planEstudios.NombrePlanEstudios = newPlanEstudios.NombrePlanEstudios;
             planEstudios.RVOE = newPlanEstudios.RVOE;
+            planEstudios.FechaExpedicionRvoe = newPlanEstudios.FechaExpedicionRvoe;
+            planEstudios.IdCarreraSEP = newPlanEstudios.IdCarreraSEP;
             planEstudios.PermiteAdelantar = newPlanEstudios.PermiteAdelantar;
             planEstudios.Version = newPlanEstudios.Version;
             planEstudios.DuracionMeses = newPlanEstudios.DuracionMeses;
@@ -127,6 +129,7 @@ namespace WebApplication2.Services
             planEstudios.IdNivelEducativo = newPlanEstudios.IdNivelEducativo;
             planEstudios.IdCampus = newPlanEstudios.IdCampus;
             planEstudios.Status = newPlanEstudios.Status;
+            planEstudios.EsOficial = newPlanEstudios.EsOficial;
 
             _dbContext.PlanEstudios.Update(planEstudios);
 

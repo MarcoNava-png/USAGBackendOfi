@@ -317,7 +317,7 @@ namespace WebApplication2.Services
                 IdAspirante = idAspirante,
                 FechaEmision = fechaEmision,
                 FechaVencimiento = fechaVencimiento,
-                Estatus = EstatusRecibo.PENDIENTE,
+                Estatus = saldoFinal <= 0 ? EstatusRecibo.PAGADO : EstatusRecibo.PENDIENTE,
                 Subtotal = monto,
                 Descuento = descuentoConvenio,
                 Recargos = 0,
@@ -431,10 +431,28 @@ namespace WebApplication2.Services
             if (aspirante == null)
                 throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
 
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
             var idPlan = aspirante.IdPlan;
             var idCampus = aspirante.IdPlanNavigation?.IdCampus;
 
+            var esConvenio = await _db.AspiranteConvenio
+                .AnyAsync(ac => ac.IdAspirante == idAspirante && ac.Status == Core.Enums.StatusEnum.Active, ct);
+
+            var tarifaDetalle = await _db.TarifasAdmisionDetalles
+                .Include(td => td.IdTarifaAdmisionNavigation)
+                .FirstOrDefaultAsync(td =>
+                    td.IdConceptoPago == idConceptoPago
+                    && td.IdTarifaAdmisionNavigation.IdPlanEstudios == idPlan
+                    && td.IdTarifaAdmisionNavigation.Activo
+                    && td.IdTarifaAdmisionNavigation.Status != Core.Enums.StatusEnum.Deleted
+                    && td.IdTarifaAdmisionNavigation.EsConvenioEmpresarial == esConvenio
+                    && td.EsAplicable, ct);
+
+            if (tarifaDetalle != null && tarifaDetalle.Monto > 0)
+            {
+                return await GenerarReciboAspiranteAsync(idAspirante, tarifaDetalle.Monto, concepto.Nombre ?? concepto.Clave, diasVencimiento, ct);
+            }
+
+            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
             var precio = concepto.Precios
                 .Where(p => p.Activo && p.VigenciaDesde <= hoy && (p.VigenciaHasta == null || p.VigenciaHasta >= hoy))
                 .OrderByDescending(p => p.IdPlanEstudios.HasValue && p.IdCampus.HasValue ? 3
@@ -475,7 +493,7 @@ namespace WebApplication2.Services
                 IdAspirante = idAspirante,
                 FechaEmision = fechaEmision,
                 FechaVencimiento = fechaVencimiento,
-                Estatus = EstatusRecibo.PENDIENTE,
+                Estatus = saldo <= 0 ? EstatusRecibo.PAGADO : EstatusRecibo.PENDIENTE,
                 Subtotal = subtotal,
                 Descuento = descuento,
                 Recargos = 0,
@@ -505,6 +523,67 @@ namespace WebApplication2.Services
                 var tipoConcepto = concepto.Tipo == Core.Enums.ConceptoTipoEnum.COLEGIATURA ? "COLEGIATURA" : "INSCRIPCION";
                 await _convenioService.IncrementarAplicacionesConvenioAsync(idAspirante, tipoConcepto, ct);
             }
+
+            var reciboCreado = await _db.Recibo
+                .Include(r => r.Detalles)
+                .FirstOrDefaultAsync(r => r.IdRecibo == recibo.IdRecibo, ct);
+
+            return _mapper.Map<ReciboDto>(reciboCreado);
+        }
+
+        public async Task<ReciboDto> GenerarReciboAspiranteConConceptoYMontoAsync(
+            int idAspirante, int idConceptoPago, decimal subtotal, decimal descuento, int diasVencimiento, string? nombrePromocion, CancellationToken ct)
+        {
+            var aspirante = await _db.Aspirante.FindAsync(new object[] { idAspirante }, ct);
+            if (aspirante == null)
+                throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
+
+            var concepto = await _db.ConceptoPago
+                .FirstOrDefaultAsync(c => c.IdConceptoPago == idConceptoPago, ct);
+            if (concepto == null)
+                throw new InvalidOperationException($"No se encontró el ConceptoPago con ID {idConceptoPago}");
+
+            var saldo = Math.Max(0, subtotal - descuento);
+            var fechaEmision = DateOnly.FromDateTime(DateTime.UtcNow);
+            var fechaVencimiento = fechaEmision.AddDays(diasVencimiento);
+            var nombreConcepto = concepto.Nombre ?? concepto.Clave;
+
+            string notas;
+            if (descuento > 0 && !string.IsNullOrEmpty(nombrePromocion))
+                notas = $"Recibo de {nombreConcepto} - Descuento por {nombrePromocion}: ${descuento:N2}";
+            else if (descuento > 0)
+                notas = $"Recibo de {nombreConcepto} - Descuento por promoción: ${descuento:N2}";
+            else
+                notas = $"Recibo de {nombreConcepto} generado automáticamente";
+
+            var recibo = new Recibo
+            {
+                Folio = await GenerarFolioAsync(ct),
+                IdAspirante = idAspirante,
+                FechaEmision = fechaEmision,
+                FechaVencimiento = fechaVencimiento,
+                Estatus = saldo <= 0 ? EstatusRecibo.PAGADO : EstatusRecibo.PENDIENTE,
+                Subtotal = subtotal,
+                Descuento = descuento,
+                Recargos = 0,
+                Saldo = saldo,
+                Notas = notas
+            };
+
+            _db.Recibo.Add(recibo);
+            await _db.SaveChangesAsync(ct);
+
+            var detalle = new ReciboDetalle
+            {
+                IdRecibo = recibo.IdRecibo,
+                IdConceptoPago = idConceptoPago,
+                Descripcion = nombreConcepto,
+                Cantidad = 1,
+                PrecioUnitario = subtotal
+            };
+
+            _db.ReciboDetalle.Add(detalle);
+            await _db.SaveChangesAsync(ct);
 
             var reciboCreado = await _db.Recibo
                 .Include(r => r.Detalles)
@@ -662,6 +741,15 @@ namespace WebApplication2.Services
 
             var totalConRecargos = recibo.Subtotal - recibo.Descuento + recargosCalculados;
 
+            // Obtener nombre de empresa si existe IdEmpresa
+            string? nombreEmpresa = null;
+            if (recibo.IdEmpresa.HasValue)
+            {
+                var empresa = await _db.Empresas
+                    .FirstOrDefaultAsync(e => e.IdEmpresa == recibo.IdEmpresa, ct);
+                nombreEmpresa = empresa?.Nombre;
+            }
+
             return new ReciboPdfDto
             {
                 IdRecibo = recibo.IdRecibo,
@@ -678,7 +766,9 @@ namespace WebApplication2.Services
                 Total = totalConRecargos,
                 Saldo = recibo.Saldo + recargosCalculados,
                 Notas = recibo.Notas,
-                EstaPagado = recibo.Estatus == EstatusRecibo.PAGADO || recibo.Saldo == 0,
+                NombreEmpresa = nombreEmpresa,
+                EstaPagado = recibo.Estatus != EstatusRecibo.CANCELADO && (recibo.Estatus == EstatusRecibo.PAGADO || recibo.Saldo == 0),
+                EstaCancelado = recibo.Estatus == EstatusRecibo.CANCELADO,
                 FechaPago = fechaPago,
                 Detalles = recibo.Detalles.Select((d, idx) => new ReciboDetallePdfDto
                 {
@@ -704,7 +794,28 @@ namespace WebApplication2.Services
             if (!string.IsNullOrWhiteSpace(filtros.Folio))
             {
                 var folioLower = filtros.Folio.Trim().ToLower();
-                query = query.Where(r => r.Folio != null && r.Folio.ToLower().Contains(folioLower));
+
+                // Si buscan por folio de solicitud de documento (DOC-...), buscar el recibo asociado
+                if (folioLower.StartsWith("doc-"))
+                {
+                    var idsRecibo = await _db.SolicitudesDocumento
+                        .Where(s => s.FolioSolicitud != null && s.FolioSolicitud.ToLower().Contains(folioLower) && s.IdRecibo.HasValue)
+                        .Select(s => s.IdRecibo!.Value)
+                        .ToListAsync(ct);
+
+                    if (idsRecibo.Count > 0)
+                    {
+                        query = query.Where(r => idsRecibo.Contains(r.IdRecibo));
+                    }
+                    else
+                    {
+                        query = query.Where(r => false);
+                    }
+                }
+                else
+                {
+                    query = query.Where(r => r.Folio != null && r.Folio.ToLower().Contains(folioLower));
+                }
             }
 
             if (filtros.Estatus.HasValue)
@@ -830,7 +941,7 @@ namespace WebApplication2.Services
             var estudiantes = await _db.Estudiante
                 .Include(e => e.IdPersonaNavigation)
                 .Include(e => e.IdPlanActualNavigation)
-                .Include(e => e.EstudianteGrupo.OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
                     .ThenInclude(eg => eg.IdGrupoNavigation)
                 .Where(e => estudianteIdsRecibos.Contains(e.IdEstudiante))
                 .ToDictionaryAsync(e => e.IdEstudiante, ct);
@@ -921,7 +1032,10 @@ namespace WebApplication2.Services
                         Cantidad = d.Cantidad,
                         PrecioUnitario = d.PrecioUnitario,
                         Importe = d.Importe
-                    }).ToList()
+                    }).ToList(),
+                    ConceptoResumen = r.Detalles.Count == 0 ? null
+                        : r.Detalles.Count == 1 ? r.Detalles.First().Descripcion
+                        : $"{r.Detalles.First().Descripcion} (+{r.Detalles.Count - 1} más)"
                 };
             }).ToList();
 
@@ -1115,7 +1229,7 @@ namespace WebApplication2.Services
 
             var wsDetalle = workbook.Worksheets.Add("Detalle Recibos");
 
-            var headers = new[] { "Folio", "Estudiante", "Matrícula", "Periodo", "Fecha Emisión", "Fecha Vencimiento",
+            var headers = new[] { "Folio", "Concepto", "Estudiante", "Matrícula", "Periodo", "Fecha Emisión", "Fecha Vencimiento",
                                    "Días Vencido", "Estatus", "Subtotal", "Descuento", "Recargos", "Total", "Saldo" };
 
             for (int i = 0; i < headers.Length; i++)
@@ -1131,26 +1245,27 @@ namespace WebApplication2.Services
             foreach (var recibo in resultado.Recibos)
             {
                 wsDetalle.Cell(filaDetalle, 1).Value = recibo.Folio ?? $"#${recibo.IdRecibo}";
-                wsDetalle.Cell(filaDetalle, 2).Value = recibo.NombreCompleto ?? "-";
-                wsDetalle.Cell(filaDetalle, 3).Value = recibo.Matricula ?? "-";
-                wsDetalle.Cell(filaDetalle, 4).Value = recibo.NombrePeriodo ?? "-";
-                wsDetalle.Cell(filaDetalle, 5).Value = recibo.FechaEmision.ToString("dd/MM/yyyy");
-                wsDetalle.Cell(filaDetalle, 6).Value = recibo.FechaVencimiento.ToString("dd/MM/yyyy");
-                wsDetalle.Cell(filaDetalle, 7).Value = recibo.DiasVencido;
-                wsDetalle.Cell(filaDetalle, 8).Value = recibo.Estatus;
-                wsDetalle.Cell(filaDetalle, 9).Value = recibo.Subtotal;
-                wsDetalle.Cell(filaDetalle, 10).Value = recibo.Descuento;
-                wsDetalle.Cell(filaDetalle, 11).Value = recibo.Recargos;
-                wsDetalle.Cell(filaDetalle, 12).Value = recibo.Total;
-                wsDetalle.Cell(filaDetalle, 13).Value = recibo.Saldo;
+                wsDetalle.Cell(filaDetalle, 2).Value = recibo.ConceptoResumen ?? "-";
+                wsDetalle.Cell(filaDetalle, 3).Value = recibo.NombreCompleto ?? "-";
+                wsDetalle.Cell(filaDetalle, 4).Value = recibo.Matricula ?? "-";
+                wsDetalle.Cell(filaDetalle, 5).Value = recibo.NombrePeriodo ?? "-";
+                wsDetalle.Cell(filaDetalle, 6).Value = recibo.FechaEmision.ToString("dd/MM/yyyy");
+                wsDetalle.Cell(filaDetalle, 7).Value = recibo.FechaVencimiento.ToString("dd/MM/yyyy");
+                wsDetalle.Cell(filaDetalle, 8).Value = recibo.DiasVencido;
+                wsDetalle.Cell(filaDetalle, 9).Value = recibo.Estatus;
+                wsDetalle.Cell(filaDetalle, 10).Value = recibo.Subtotal;
+                wsDetalle.Cell(filaDetalle, 11).Value = recibo.Descuento;
+                wsDetalle.Cell(filaDetalle, 12).Value = recibo.Recargos;
+                wsDetalle.Cell(filaDetalle, 13).Value = recibo.Total;
+                wsDetalle.Cell(filaDetalle, 14).Value = recibo.Saldo;
 
-                wsDetalle.Cell(filaDetalle, 9).Style.NumberFormat.Format = "$#,##0.00";
                 wsDetalle.Cell(filaDetalle, 10).Style.NumberFormat.Format = "$#,##0.00";
                 wsDetalle.Cell(filaDetalle, 11).Style.NumberFormat.Format = "$#,##0.00";
                 wsDetalle.Cell(filaDetalle, 12).Style.NumberFormat.Format = "$#,##0.00";
                 wsDetalle.Cell(filaDetalle, 13).Style.NumberFormat.Format = "$#,##0.00";
+                wsDetalle.Cell(filaDetalle, 14).Style.NumberFormat.Format = "$#,##0.00";
 
-                var estatusCell = wsDetalle.Cell(filaDetalle, 8);
+                var estatusCell = wsDetalle.Cell(filaDetalle, 9);
                 switch (recibo.Estatus.ToUpper())
                 {
                     case "PAGADO":
@@ -1168,8 +1283,8 @@ namespace WebApplication2.Services
 
                 if (recibo.EstaVencido)
                 {
-                    wsDetalle.Cell(filaDetalle, 7).Style.Font.FontColor = colorRojo;
-                    wsDetalle.Cell(filaDetalle, 7).Style.Font.Bold = true;
+                    wsDetalle.Cell(filaDetalle, 8).Style.Font.FontColor = colorRojo;
+                    wsDetalle.Cell(filaDetalle, 8).Style.Font.Bold = true;
                 }
 
                 if (filaDetalle % 2 == 0)
@@ -1184,15 +1299,15 @@ namespace WebApplication2.Services
             }
 
             filaDetalle++;
-            wsDetalle.Cell(filaDetalle, 8).Value = "TOTALES:";
-            wsDetalle.Cell(filaDetalle, 8).Style.Font.Bold = true;
-            wsDetalle.Cell(filaDetalle, 9).Value = resultado.Recibos.Sum(r => r.Subtotal);
-            wsDetalle.Cell(filaDetalle, 10).Value = resultado.Recibos.Sum(r => r.Descuento);
-            wsDetalle.Cell(filaDetalle, 11).Value = resultado.Recibos.Sum(r => r.Recargos);
-            wsDetalle.Cell(filaDetalle, 12).Value = resultado.Recibos.Sum(r => r.Total);
-            wsDetalle.Cell(filaDetalle, 13).Value = resultado.Recibos.Sum(r => r.Saldo);
+            wsDetalle.Cell(filaDetalle, 9).Value = "TOTALES:";
+            wsDetalle.Cell(filaDetalle, 9).Style.Font.Bold = true;
+            wsDetalle.Cell(filaDetalle, 10).Value = resultado.Recibos.Sum(r => r.Subtotal);
+            wsDetalle.Cell(filaDetalle, 11).Value = resultado.Recibos.Sum(r => r.Descuento);
+            wsDetalle.Cell(filaDetalle, 12).Value = resultado.Recibos.Sum(r => r.Recargos);
+            wsDetalle.Cell(filaDetalle, 13).Value = resultado.Recibos.Sum(r => r.Total);
+            wsDetalle.Cell(filaDetalle, 14).Value = resultado.Recibos.Sum(r => r.Saldo);
 
-            for (int i = 9; i <= 13; i++)
+            for (int i = 10; i <= 14; i++)
             {
                 wsDetalle.Cell(filaDetalle, i).Style.NumberFormat.Format = "$#,##0.00";
                 wsDetalle.Cell(filaDetalle, i).Style.Font.Bold = true;
@@ -1202,17 +1317,18 @@ namespace WebApplication2.Services
 
             wsDetalle.Column(1).Width = 20;
             wsDetalle.Column(2).Width = 35;
-            wsDetalle.Column(3).Width = 15;
-            wsDetalle.Column(4).Width = 30;
-            wsDetalle.Column(5).Width = 15;
+            wsDetalle.Column(3).Width = 35;
+            wsDetalle.Column(4).Width = 15;
+            wsDetalle.Column(5).Width = 30;
             wsDetalle.Column(6).Width = 15;
-            wsDetalle.Column(7).Width = 12;
+            wsDetalle.Column(7).Width = 15;
             wsDetalle.Column(8).Width = 12;
-            wsDetalle.Column(9).Width = 15;
-            wsDetalle.Column(10).Width = 12;
+            wsDetalle.Column(9).Width = 12;
+            wsDetalle.Column(10).Width = 15;
             wsDetalle.Column(11).Width = 12;
-            wsDetalle.Column(12).Width = 15;
+            wsDetalle.Column(12).Width = 12;
             wsDetalle.Column(13).Width = 15;
+            wsDetalle.Column(14).Width = 15;
 
             wsDetalle.Range(1, 1, filaDetalle - 1, headers.Length).SetAutoFilter();
 
@@ -1224,7 +1340,7 @@ namespace WebApplication2.Services
                 .ToList();
 
             wsAdeudos.Cell("A1").Value = "REPORTE DE ADEUDOS";
-            wsAdeudos.Range("A1:G1").Merge();
+            wsAdeudos.Range("A1:H1").Merge();
             wsAdeudos.Cell("A1").Style.Font.Bold = true;
             wsAdeudos.Cell("A1").Style.Font.FontSize = 14;
             wsAdeudos.Cell("A1").Style.Fill.BackgroundColor = colorRojo;
@@ -1232,10 +1348,10 @@ namespace WebApplication2.Services
             wsAdeudos.Cell("A1").Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
 
             wsAdeudos.Cell("A2").Value = $"Total de adeudos: {recibosConAdeudo.Count} | Monto total: {recibosConAdeudo.Sum(r => r.Saldo):C}";
-            wsAdeudos.Range("A2:G2").Merge();
+            wsAdeudos.Range("A2:H2").Merge();
             wsAdeudos.Cell("A2").Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
 
-            var headersAdeudo = new[] { "Folio", "Estudiante", "Matrícula", "Días Vencido", "Estatus", "Total Recibo", "Saldo Pendiente" };
+            var headersAdeudo = new[] { "Folio", "Concepto", "Estudiante", "Matrícula", "Días Vencido", "Estatus", "Total Recibo", "Saldo Pendiente" };
             for (int i = 0; i < headersAdeudo.Length; i++)
             {
                 wsAdeudos.Cell(4, i + 1).Value = headersAdeudo[i];
@@ -1248,22 +1364,23 @@ namespace WebApplication2.Services
             foreach (var recibo in recibosConAdeudo)
             {
                 wsAdeudos.Cell(filaAdeudo, 1).Value = recibo.Folio ?? $"#{recibo.IdRecibo}";
-                wsAdeudos.Cell(filaAdeudo, 2).Value = recibo.NombreCompleto ?? "-";
-                wsAdeudos.Cell(filaAdeudo, 3).Value = recibo.Matricula ?? "-";
-                wsAdeudos.Cell(filaAdeudo, 4).Value = recibo.DiasVencido;
-                wsAdeudos.Cell(filaAdeudo, 5).Value = recibo.Estatus;
-                wsAdeudos.Cell(filaAdeudo, 6).Value = recibo.Total;
-                wsAdeudos.Cell(filaAdeudo, 7).Value = recibo.Saldo;
+                wsAdeudos.Cell(filaAdeudo, 2).Value = recibo.ConceptoResumen ?? "-";
+                wsAdeudos.Cell(filaAdeudo, 3).Value = recibo.NombreCompleto ?? "-";
+                wsAdeudos.Cell(filaAdeudo, 4).Value = recibo.Matricula ?? "-";
+                wsAdeudos.Cell(filaAdeudo, 5).Value = recibo.DiasVencido;
+                wsAdeudos.Cell(filaAdeudo, 6).Value = recibo.Estatus;
+                wsAdeudos.Cell(filaAdeudo, 7).Value = recibo.Total;
+                wsAdeudos.Cell(filaAdeudo, 8).Value = recibo.Saldo;
 
-                wsAdeudos.Cell(filaAdeudo, 6).Style.NumberFormat.Format = "$#,##0.00";
                 wsAdeudos.Cell(filaAdeudo, 7).Style.NumberFormat.Format = "$#,##0.00";
-                wsAdeudos.Cell(filaAdeudo, 7).Style.Font.FontColor = colorRojo;
-                wsAdeudos.Cell(filaAdeudo, 7).Style.Font.Bold = true;
+                wsAdeudos.Cell(filaAdeudo, 8).Style.NumberFormat.Format = "$#,##0.00";
+                wsAdeudos.Cell(filaAdeudo, 8).Style.Font.FontColor = colorRojo;
+                wsAdeudos.Cell(filaAdeudo, 8).Style.Font.Bold = true;
 
                 if (recibo.DiasVencido > 0)
                 {
-                    wsAdeudos.Cell(filaAdeudo, 4).Style.Font.FontColor = colorRojo;
-                    wsAdeudos.Cell(filaAdeudo, 4).Style.Font.Bold = true;
+                    wsAdeudos.Cell(filaAdeudo, 5).Style.Font.FontColor = colorRojo;
+                    wsAdeudos.Cell(filaAdeudo, 5).Style.Font.Bold = true;
                 }
 
                 filaAdeudo++;
@@ -1271,11 +1388,12 @@ namespace WebApplication2.Services
 
             wsAdeudos.Column(1).Width = 20;
             wsAdeudos.Column(2).Width = 35;
-            wsAdeudos.Column(3).Width = 15;
-            wsAdeudos.Column(4).Width = 12;
+            wsAdeudos.Column(3).Width = 35;
+            wsAdeudos.Column(4).Width = 15;
             wsAdeudos.Column(5).Width = 12;
-            wsAdeudos.Column(6).Width = 15;
-            wsAdeudos.Column(7).Width = 18;
+            wsAdeudos.Column(6).Width = 12;
+            wsAdeudos.Column(7).Width = 15;
+            wsAdeudos.Column(8).Width = 18;
 
             if (recibosConAdeudo.Count > 0)
             {
@@ -1321,6 +1439,15 @@ namespace WebApplication2.Services
                 Notas = $"Recibo cancelado. Estado anterior: {estatusAnterior}. Motivo: {motivo ?? "No especificado"}"
             };
             _db.BitacoraRecibo.Add(bitacora);
+
+            // Si el recibo está asociado a una solicitud de documento, regresarla a PENDIENTE_PAGO
+            var solicitudDoc = await _db.SolicitudesDocumento
+                .FirstOrDefaultAsync(s => s.IdRecibo == idRecibo, ct);
+            if (solicitudDoc != null)
+            {
+                solicitudDoc.Estatus = Core.Enums.EstatusSolicitudDocumento.PENDIENTE_PAGO;
+                solicitudDoc.FechaModificacion = DateTime.UtcNow;
+            }
 
             await _db.SaveChangesAsync(ct);
 
@@ -1380,14 +1507,34 @@ namespace WebApplication2.Services
             _db.PagoAplicacion.RemoveRange(aplicaciones);
 
             recibo.Saldo = recibo.Subtotal - recibo.Descuento + recibo.Recargos;
-
             recibo.Estatus = EstatusRecibo.PENDIENTE;
 
             foreach (var pago in pagosAfectados)
             {
                 var montoReversado = aplicaciones.Where(a => a.IdPago == pago.IdPago).Sum(a => a.MontoAplicado);
 
-                Console.WriteLine($"[ReciboService] Pago {pago.IdPago} afectado - Monto reversado: {montoReversado:C}");
+                var otrasAplicaciones = await _db.PagoAplicacion
+                    .Where(pa => pa.IdPago == pago.IdPago
+                                 && !aplicaciones.Select(a => a.IdPagoAplicacion).Contains(pa.IdPagoAplicacion))
+                    .AnyAsync(ct);
+
+                if (!otrasAplicaciones)
+                {
+                    pago.Estatus = EstatusPago.CANCELADO;
+                    pago.Notas = (pago.Notas ?? "") + $" | Reversado: {motivo ?? "Sin motivo"}. Monto: {montoReversado:C}";
+                }
+            }
+
+            var solicitudesVinculadas = await _db.SolicitudesDocumento
+                .Where(s => s.IdRecibo == idRecibo
+                            && (s.Estatus == EstatusSolicitudDocumento.PAGADO
+                                || s.Estatus == EstatusSolicitudDocumento.PENDIENTE_PAGO))
+                .ToListAsync(ct);
+
+            foreach (var sol in solicitudesVinculadas)
+            {
+                sol.Estatus = EstatusSolicitudDocumento.PENDIENTE_PAGO;
+                sol.FechaModificacion = DateTime.UtcNow;
             }
 
             var bitacora = new BitacoraRecibo
@@ -1400,14 +1547,13 @@ namespace WebApplication2.Services
                 Origen = "Sistema",
                 Notas = $"Recibo reversado. Estado anterior: {estatusAnterior}. Saldo anterior: {saldoAnterior:C}. " +
                         $"Pagos reversados: {aplicaciones.Count}. Monto total reversado: {totalPagosAplicados:C}. " +
+                        $"Pagos cancelados: {pagosAfectados.Count(p => p.Estatus == EstatusPago.CANCELADO)}. " +
+                        $"Solicitudes revertidas: {solicitudesVinculadas.Count}. " +
                         $"Nuevo saldo: {recibo.Saldo:C}. Motivo: {motivo ?? "No especificado"}"
             };
             _db.BitacoraRecibo.Add(bitacora);
 
             await _db.SaveChangesAsync(ct);
-
-            Console.WriteLine($"[ReciboService] Recibo {recibo.Folio} reversado por {usuario}. " +
-                            $"Aplicaciones eliminadas: {aplicaciones.Count}. Monto reversado: {totalPagosAplicados:C}");
 
             return _mapper.Map<ReciboDto>(recibo);
         }
@@ -1450,7 +1596,7 @@ namespace WebApplication2.Services
             var estudiantes = await _db.Estudiante
                 .Include(e => e.IdPersonaNavigation)
                 .Include(e => e.IdPlanActualNavigation)
-                .Include(e => e.EstudianteGrupo.OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
                     .ThenInclude(eg => eg.IdGrupoNavigation)
                 .Where(e => estudianteIds.Contains(e.IdEstudiante))
                 .ToDictionaryAsync(e => e.IdEstudiante, ct);

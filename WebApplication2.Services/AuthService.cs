@@ -53,13 +53,35 @@ namespace WebApplication2.Services
         {
             var user = await _userManager.FindByEmailAsync(email);
 
-            if (user == null) throw new ValidationException(ErrorConstants.INVALID_CREDENTIALS);
+            if (user == null) throw new ValidationException("El correo no está registrado en el sistema.");
+
+            if (await _userManager.IsLockedOutAsync(user))
+            {
+                var lockoutEnd = await _userManager.GetLockoutEndDateAsync(user);
+                var minutosRestantes = lockoutEnd.HasValue ? (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes) : 15;
+                throw new ValidationException($"La cuenta está bloqueada por demasiados intentos fallidos. Intente de nuevo en {minutosRestantes} minuto(s).");
+            }
 
             var result = await _signInManager.CheckPasswordSignInAsync(user, password, true);
 
+            if (result.IsLockedOut)
+            {
+                throw new ValidationException("La cuenta ha sido bloqueada temporalmente por demasiados intentos fallidos. Intente de nuevo en 15 minutos.");
+            }
+
+            if (result.IsNotAllowed)
+            {
+                throw new ValidationException("La cuenta no tiene permiso para iniciar sesión. Contacte al administrador.");
+            }
+
             if (!result.Succeeded)
             {
-                throw new ValidationException(ErrorConstants.INVALID_CREDENTIALS);
+                var intentosRestantes = 5 - await _userManager.GetAccessFailedCountAsync(user);
+                if (intentosRestantes > 0 && intentosRestantes <= 3)
+                {
+                    throw new ValidationException($"Contraseña incorrecta. Le quedan {intentosRestantes} intento(s) antes de que la cuenta se bloquee.");
+                }
+                throw new ValidationException("Correo o contraseña incorrectos.");
             }
 
             var roles = await _userManager.GetRolesAsync(user);
@@ -307,7 +329,7 @@ namespace WebApplication2.Services
                 claims.Add(new Claim(ClaimTypes.Role, r));
             }
 
-            var expiration = DateTime.UtcNow.AddHours(1);
+            var expiration = DateTime.UtcNow.AddMinutes(15);
 
             var token = BuildToken(claims, expiration);
 

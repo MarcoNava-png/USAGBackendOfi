@@ -33,7 +33,7 @@ namespace WebApplication2.Controllers
         [HttpGet]
         public async Task<ActionResult<PagedResult<GrupoDto>>> Get(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 1000,
+            [FromQuery] int pageSize = 100,
             [FromQuery] int? idPeriodoAcademico = null)
         {
             var pagination = await _grupoService.GetGrupos(page, pageSize, idPeriodoAcademico);
@@ -630,6 +630,26 @@ namespace WebApplication2.Controllers
                     return NotFound(new { mensaje = "Inscripción no encontrada" });
 
                 return Ok(new { mensaje = "Estudiante eliminado del grupo correctamente" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPost("cambio-grupo")]
+        public async Task<ActionResult<CambioGrupoResultDto>> CambiarEstudianteDeGrupo(
+            [FromBody] CambioGrupoRequestDto request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _grupoService.CambiarEstudianteDeGrupoAsync(request, ct);
+
+                if (!resultado.Exitoso)
+                    return BadRequest(resultado);
+
+                return Ok(resultado);
             }
             catch (Exception ex)
             {

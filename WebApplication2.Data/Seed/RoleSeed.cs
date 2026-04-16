@@ -6,9 +6,8 @@ namespace WebApplication2.Data.Seed
 {
     public static class RoleSeed
     {
-        public static void Seed(RoleManager<IdentityRole> roleManager)
+        public static async Task SeedAsync(RoleManager<IdentityRole> roleManager)
         {
-
             var fields = typeof(Rol).GetFields();
 
             foreach (FieldInfo field in fields)
@@ -18,11 +17,11 @@ namespace WebApplication2.Data.Seed
                 if (value.Contains(','))
                     continue;
 
-                if (!roleManager.RoleExistsAsync(value).Result)
+                if (!await roleManager.RoleExistsAsync(value))
                 {
                     var role = new IdentityRole();
                     role.Name = value;
-                    var roleResult = roleManager.CreateAsync(role).Result;
+                    await roleManager.CreateAsync(role);
                 }
             }
         }

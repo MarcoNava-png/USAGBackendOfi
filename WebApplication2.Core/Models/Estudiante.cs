@@ -1,4 +1,6 @@
-﻿namespace WebApplication2.Core.Models;
+﻿using WebApplication2.Core.Enums;
+
+namespace WebApplication2.Core.Models;
 
 public partial class Estudiante : BaseEntity
 {
@@ -15,6 +17,16 @@ public partial class Estudiante : BaseEntity
     public int? IdPlanActual { get; set; }
 
     public bool Activo { get; set; }
+
+    public EstudianteStatusAcademicoEnum EstatusAcademico { get; set; } = EstudianteStatusAcademicoEnum.Inscrito;
+
+    public TipoBajaEnum? TipoBaja { get; set; }
+
+    public EstadoBajaEnum? EstadoBaja { get; set; }
+
+    public string? MotivoBaja { get; set; }
+
+    public DateTime? FechaBaja { get; set; }
 
     public string? UsuarioId { get; set; }
 

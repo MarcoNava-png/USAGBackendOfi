@@ -1,8 +1,11 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using WebApplication2.Configuration.Constants;
 using WebApplication2.Core.DTOs;
+using WebApplication2.Core.Models;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Requests.Auth;
 using WebApplication2.Services;
@@ -12,6 +15,7 @@ namespace WebApplication2
 {
     [Route("api/auth")]
     [ApiController]
+    [EnableRateLimiting("auth")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -19,14 +23,16 @@ namespace WebApplication2
         private readonly IConfiguration _configuration;
         private readonly IMapper _mapper;
         private readonly IMicrosoftGraphService _graphService;
+        private readonly UserManager<ApplicationUser> _userManager;
 
-        public AuthController(IAuthService authService, IBlobStorageService blobStorageService, IConfiguration configuration, IMapper mapper, IMicrosoftGraphService graphService)
+        public AuthController(IAuthService authService, IBlobStorageService blobStorageService, IConfiguration configuration, IMapper mapper, IMicrosoftGraphService graphService, UserManager<ApplicationUser> userManager)
         {
             _authService = authService;
             _blobStorageService = blobStorageService;
             _configuration = configuration;
             _mapper = mapper;
             _graphService = graphService;
+            _userManager = userManager;
         }
 
         [HttpPost("login")]
@@ -40,6 +46,16 @@ namespace WebApplication2
             };
 
             return Ok(response);
+        }
+
+        [HttpPost("unlock/{email}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR}")]
+        public async Task<IActionResult> UnlockUser(string email)
+        {
+            var user = await _authService.GetUserByEmail(email);
+            await _userManager.SetLockoutEndDateAsync(user, null);
+            await _userManager.ResetAccessFailedCountAsync(user);
+            return Ok(new { success = true, message = $"Usuario {email} desbloqueado exitosamente." });
         }
 
         [HttpPost("forgot-password")]
@@ -418,5 +434,43 @@ namespace WebApplication2
                 return StatusCode(500, new { message = "Error al eliminar usuario", error = ex.Message });
             }
         }
+
+        [HttpGet("microsoft/licenses")]
+        [Authorize(Roles = Rol.ADMIN)]
+        public async Task<IActionResult> GetLicenses()
+        {
+            try
+            {
+                var licenses = await _graphService.GetSubscribedSkusAsync();
+                return Ok(new Response<List<Core.DTOs.MicrosoftGraph.LicenseInfoDto>> { Data = licenses });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("microsoft/licenses/{userId}")]
+        [Authorize(Roles = Rol.ADMIN)]
+        public async Task<IActionResult> AssignLicense(string userId, [FromBody] AssignLicenseRequest request)
+        {
+            try
+            {
+                var result = await _graphService.AssignLicenseAsync(userId, request.SkuId);
+                if (!result)
+                    return BadRequest(new { message = "No se pudo asignar la licencia." });
+
+                return Ok(new { message = "Licencia asignada exitosamente." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+    }
+
+    public class AssignLicenseRequest
+    {
+        public string SkuId { get; set; } = string.Empty;
     }
 }

@@ -472,6 +472,33 @@ namespace WebApplication2.Services
                 })
                 .ToList();
 
+            if (estudiantesUnicos.Count == 0)
+            {
+                var egList = await _dbContext.EstudianteGrupo
+                    .Include(eg => eg.IdEstudianteNavigation)
+                        .ThenInclude(e => e.IdPersonaNavigation)
+                    .Where(eg => eg.IdGrupo == idGrupo && eg.Status == StatusEnum.Active)
+                    .OrderBy(eg => eg.IdEstudianteNavigation.Matricula)
+                    .ToListAsync();
+
+                return new EstudiantesGrupoDto
+                {
+                    IdGrupo = grupo.IdGrupo,
+                    CodigoGrupo = grupo.CodigoGrupo ?? "N/A",
+                    NombreGrupo = grupo.NombreGrupo,
+                    TotalEstudiantes = egList.Count,
+                    Estudiantes = egList.Select(eg => new EstudianteInscritoDto
+                    {
+                        IdEstudiante = eg.IdEstudiante,
+                        Matricula = eg.IdEstudianteNavigation.Matricula ?? "",
+                        NombreCompleto = $"{eg.IdEstudianteNavigation.IdPersonaNavigation?.Nombre} {eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno} {eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoMaterno}".Trim(),
+                        Email = eg.IdEstudianteNavigation.Email ?? "",
+                        MateriasInscritas = 0,
+                        FechaInscripcion = eg.FechaInscripcion
+                    }).ToList()
+                };
+            }
+
             var resultado = new EstudiantesGrupoDto
             {
                 IdGrupo = grupo.IdGrupo,
@@ -585,7 +612,60 @@ namespace WebApplication2.Services
                 })
                 .ToListAsync();
 
-            return estudiantes;
+            if (estudiantes.Count > 0)
+                return estudiantes;
+
+            var grupoMateria = await _dbContext.GrupoMateria
+                .FirstOrDefaultAsync(gm => gm.IdGrupoMateria == idGrupoMateria);
+
+            if (grupoMateria == null)
+                return estudiantes;
+
+            var estudiantesGrupo = await _dbContext.EstudianteGrupo
+                .Include(eg => eg.IdEstudianteNavigation)
+                    .ThenInclude(e => e.IdPersonaNavigation)
+                .Include(eg => eg.IdEstudianteNavigation.IdPlanActualNavigation)
+                .Where(eg => eg.IdGrupo == grupoMateria.IdGrupo && eg.Status == StatusEnum.Active)
+                .OrderBy(eg => eg.IdEstudianteNavigation.Matricula)
+                .ToListAsync();
+
+            var inscripcionesCreadas = new List<Inscripcion>();
+            foreach (var eg in estudiantesGrupo)
+            {
+                var inscripcion = new Inscripcion
+                {
+                    IdEstudiante = eg.IdEstudiante,
+                    IdGrupoMateria = idGrupoMateria,
+                    FechaInscripcion = DateTime.UtcNow,
+                    Estado = EstadoInscripcionEnum.Inscrito.ToString(),
+                    Status = StatusEnum.Active,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = "Sistema"
+                };
+                inscripcionesCreadas.Add(inscripcion);
+                await _dbContext.Inscripcion.AddAsync(inscripcion);
+            }
+
+            if (inscripcionesCreadas.Count > 0)
+                await _dbContext.SaveChangesAsync();
+
+            return estudiantesGrupo.Select((eg, idx) => new EstudianteInscritoDto
+            {
+                IdEstudiante = eg.IdEstudiante,
+                Matricula = eg.IdEstudianteNavigation.Matricula ?? string.Empty,
+                NombreCompleto = eg.IdEstudianteNavigation.IdPersonaNavigation.Nombre + " " +
+                                 (eg.IdEstudianteNavigation.IdPersonaNavigation.ApellidoPaterno ?? "") + " " +
+                                 (eg.IdEstudianteNavigation.IdPersonaNavigation.ApellidoMaterno ?? ""),
+                Email = eg.IdEstudianteNavigation.IdPersonaNavigation.Correo ?? string.Empty,
+                Telefono = eg.IdEstudianteNavigation.IdPersonaNavigation.Telefono,
+                PlanEstudios = eg.IdEstudianteNavigation.IdPlanActualNavigation != null
+                    ? eg.IdEstudianteNavigation.IdPlanActualNavigation.NombrePlanEstudios
+                    : null,
+                IdInscripcion = inscripcionesCreadas[idx].IdInscripcion,
+                MateriasInscritas = 0,
+                FechaInscripcion = eg.FechaInscripcion,
+                Estado = eg.Estado ?? "Inscrito"
+            }).ToList();
         }
 
         public async Task<GestionGruposPlanDto> ObtenerGruposPorPlanAsync(
@@ -870,6 +950,8 @@ namespace WebApplication2.Services
                 .Include(gm => gm.IdProfesorNavigation)
                     .ThenInclude(p => p.IdPersonaNavigation)
                 .Include(gm => gm.Inscripcion)
+                .Include(gm => gm.Horario)
+                    .ThenInclude(h => h.IdDiaSemanaNavigation)
                 .Where(gm => gm.IdGrupo == idGrupo && gm.Status == StatusEnum.Active)
                 .ToListAsync(ct);
 
@@ -889,7 +971,14 @@ namespace WebApplication2.Services
                 Cupo = gm.Cupo,
                 EstudiantesInscritos = gm.Inscripcion.Count(i => i.Status == StatusEnum.Active),
                 CupoDisponible = (int)gm.Cupo - gm.Inscripcion.Count(i => i.Status == StatusEnum.Active),
-                TieneCupo = gm.Inscripcion.Count(i => i.Status == StatusEnum.Active) < gm.Cupo
+                TieneCupo = gm.Inscripcion.Count(i => i.Status == StatusEnum.Active) < gm.Cupo,
+                HorarioJson = gm.Horario?.Select(h => new HorarioItemDto
+                {
+                    Dia = h.IdDiaSemanaNavigation?.Nombre ?? "",
+                    HoraInicio = h.HoraInicio.ToString("HH:mm"),
+                    HoraFin = h.HoraFin.ToString("HH:mm"),
+                    Aula = h.Aula
+                }).ToList()
             }).ToList();
 
             return resultado;
@@ -1669,6 +1758,94 @@ namespace WebApplication2.Services
             }
 
             return response;
+        }
+
+        public async Task<CambioGrupoResultDto> CambiarEstudianteDeGrupoAsync(CambioGrupoRequestDto request, CancellationToken ct = default)
+        {
+            var estudianteGrupo = await _dbContext.EstudianteGrupo
+                .Include(eg => eg.IdEstudianteNavigation)
+                    .ThenInclude(e => e.IdPersonaNavigation)
+                .Include(eg => eg.IdGrupoNavigation)
+                .FirstOrDefaultAsync(eg => eg.IdEstudianteGrupo == request.IdEstudianteGrupo && eg.Status == StatusEnum.Active, ct);
+
+            if (estudianteGrupo == null)
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "Inscripción de estudiante no encontrada" };
+
+            var grupoOrigen = estudianteGrupo.IdGrupoNavigation;
+            var estudiante = estudianteGrupo.IdEstudianteNavigation;
+            var persona = estudiante.IdPersonaNavigation;
+            var nombreEstudiante = $"{persona?.Nombre} {persona?.ApellidoPaterno} {persona?.ApellidoMaterno}".Trim();
+            var matricula = estudiante.Matricula;
+
+            var grupoDestino = await _dbContext.Grupo
+                .Include(g => g.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active))
+                .FirstOrDefaultAsync(g => g.IdGrupo == request.IdGrupoDestino && g.Status == StatusEnum.Active, ct);
+
+            if (grupoDestino == null)
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "Grupo destino no encontrado" };
+
+            if (grupoOrigen.IdPlanEstudios != grupoDestino.IdPlanEstudios)
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El grupo destino pertenece a un plan de estudios diferente" };
+
+            if (grupoOrigen.IdPeriodoAcademico != grupoDestino.IdPeriodoAcademico)
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El grupo destino pertenece a un período académico diferente" };
+
+            if (grupoOrigen.NumeroCuatrimestre != grupoDestino.NumeroCuatrimestre)
+                return new CambioGrupoResultDto
+                {
+                    Exitoso = false,
+                    Mensaje = "No se puede transferir a un grupo de diferente cuatrimestre. Debe dar de baja al estudiante y reinscribirlo manualmente."
+                };
+
+            var estudiantesActivos = grupoDestino.EstudianteGrupo.Count;
+            if (estudiantesActivos >= grupoDestino.CapacidadMaxima)
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El grupo destino no tiene cupo disponible" };
+
+            var yaInscrito = await _dbContext.EstudianteGrupo
+                .AnyAsync(eg => eg.IdEstudiante == estudiante.IdEstudiante
+                    && eg.IdGrupo == request.IdGrupoDestino
+                    && eg.Status == StatusEnum.Active, ct);
+
+            if (yaInscrito)
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El estudiante ya está inscrito en el grupo destino" };
+
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
+            try
+            {
+                estudianteGrupo.Status = StatusEnum.Deleted;
+                estudianteGrupo.UpdatedAt = DateTime.UtcNow;
+                estudianteGrupo.Observaciones = $"Cambio de grupo: {grupoOrigen.NombreGrupo} → {grupoDestino.NombreGrupo}";
+
+                var nuevoEstudianteGrupo = new EstudianteGrupo
+                {
+                    IdEstudiante = estudiante.IdEstudiante,
+                    IdGrupo = request.IdGrupoDestino,
+                    FechaInscripcion = DateTime.UtcNow,
+                    Estado = "Inscrito",
+                    Observaciones = $"Cambio de grupo: {grupoOrigen.NombreGrupo} → {grupoDestino.NombreGrupo}",
+                    Status = StatusEnum.Active,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _dbContext.EstudianteGrupo.Add(nuevoEstudianteGrupo);
+                await _dbContext.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+
+                return new CambioGrupoResultDto
+                {
+                    Exitoso = true,
+                    Mensaje = "Cambio de grupo realizado exitosamente",
+                    GrupoOrigen = grupoOrigen.NombreGrupo,
+                    GrupoDestino = grupoDestino.NombreGrupo,
+                    NombreEstudiante = nombreEstudiante,
+                    Matricula = matricula
+                };
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(ct);
+                return new CambioGrupoResultDto { Exitoso = false, Mensaje = $"Error al realizar el cambio: {ex.Message}" };
+            }
         }
     }
 }

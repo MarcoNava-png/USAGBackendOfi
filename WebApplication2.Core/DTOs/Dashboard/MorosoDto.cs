@@ -5,7 +5,10 @@ namespace WebApplication2.Core.DTOs.Dashboard
         public int IdEstudiante { get; set; }
         public string Matricula { get; set; } = string.Empty;
         public string NombreCompleto { get; set; } = string.Empty;
+        public string? Carrera { get; set; }
+        public string? Grupo { get; set; }
         public decimal MontoAdeudado { get; set; }
         public int DiasVencido { get; set; }
+        public int RecibosVencidos { get; set; }
     }
 }

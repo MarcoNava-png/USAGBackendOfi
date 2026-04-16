@@ -67,9 +67,10 @@ namespace WebApplication2.Services
             return materiaPlan;
         }
 
-        public async Task<MateriaPlan> ActualizarMateriaPlan(MateriaPlan newMateriaPlan)
+        public async Task<MateriaPlan> ActualizarMateriaPlan(MateriaPlan newMateriaPlan, string? nombreMateria = null)
         {
             var materiaPlan = await _dbContext.MateriaPlan
+                .Include(mp => mp.IdMateriaNavigation)
                 .FirstOrDefaultAsync(e => e.IdMateriaPlan == newMateriaPlan.IdMateriaPlan);
 
             if (materiaPlan == null)
@@ -83,7 +84,10 @@ namespace WebApplication2.Services
             materiaPlan.EsOptativa = newMateriaPlan.EsOptativa;
             materiaPlan.Status = newMateriaPlan.Status;
 
-            _dbContext.MateriaPlan.Update(materiaPlan);
+            if (!string.IsNullOrWhiteSpace(nombreMateria) && materiaPlan.IdMateriaNavigation != null)
+            {
+                materiaPlan.IdMateriaNavigation.Nombre = nombreMateria.Trim();
+            }
 
             await _dbContext.SaveChangesAsync();
 
@@ -237,7 +241,7 @@ namespace WebApplication2.Services
                             {
                                 materia = new Materia
                                 {
-                                    Clave = claveLimpia,
+                                    Clave = claveLimpia.ToUpper(),
                                     Nombre = nombreLimpio,
                                     Creditos = item.Creditos,
                                     HorasTeoria = item.HorasTeoria,

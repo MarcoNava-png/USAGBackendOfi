@@ -13,6 +13,7 @@ using WebApplication2.Core.Requests.Estudiante;
 using WebApplication2.Core.Requests.EstudiantePanel;
 using WebApplication2.Core.Responses.EstudiantePanel;
 using WebApplication2.Data.DbContexts;
+using Microsoft.AspNetCore.Hosting;
 using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2.Services
@@ -25,6 +26,10 @@ namespace WebApplication2.Services
         private readonly IPdfService _pdfService;
         private readonly IBlobStorageService _blobStorageService;
         private readonly IBitacoraAccionService _bitacora;
+        private readonly IAuthService _authService;
+        private readonly IMicrosoftGraphService _graphService;
+        private readonly IMatriculaService _matriculaService;
+        private readonly IWebHostEnvironment _env;
 
         public EstudiantePanelService(
             ApplicationDbContext db,
@@ -32,7 +37,11 @@ namespace WebApplication2.Services
             IBecaService becaService,
             IPdfService pdfService,
             IBlobStorageService blobStorageService,
-            IBitacoraAccionService bitacora)
+            IBitacoraAccionService bitacora,
+            IAuthService authService,
+            IMicrosoftGraphService graphService,
+            IMatriculaService matriculaService,
+            IWebHostEnvironment env)
         {
             _db = db;
             _documentoService = documentoService;
@@ -40,6 +49,10 @@ namespace WebApplication2.Services
             _pdfService = pdfService;
             _blobStorageService = blobStorageService;
             _bitacora = bitacora;
+            _authService = authService;
+            _graphService = graphService;
+            _matriculaService = matriculaService;
+            _env = env;
         }
 
         #region Consultas de Panel
@@ -48,9 +61,15 @@ namespace WebApplication2.Services
         {
             var estudiante = await _db.Estudiante
                 .Include(e => e.IdPersonaNavigation)
+                    .ThenInclude(p => p!.IdDireccionNavigation)
+                        .ThenInclude(d => d!.CodigoPostal)
+                            .ThenInclude(cp => cp!.Municipio)
+                                .ThenInclude(m => m!.Estado)
+                .Include(e => e.IdPersonaNavigation)
+                    .ThenInclude(p => p!.IdGeneroNavigation)
                 .Include(e => e.IdPlanActualNavigation)
                     .ThenInclude(p => p!.IdCampusNavigation)
-                .Include(e => e.EstudianteGrupo.OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
                     .ThenInclude(eg => eg.IdGrupoNavigation)
                         .ThenInclude(g => g.IdPeriodoAcademicoNavigation)
                 .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante, ct);
@@ -72,9 +91,32 @@ namespace WebApplication2.Services
                 Telefono = persona?.Telefono,
                 Curp = persona?.Curp,
                 FechaNacimiento = persona?.FechaNacimiento?.ToDateTime(TimeOnly.MinValue),
-                Fotografia = null, // El modelo Persona no tiene campo Fotografia
+                Fotografia = null,
+                Genero = persona?.IdGeneroNavigation?.DescGenero,
+                Direccion = BuildDireccionTexto(persona?.IdDireccionNavigation),
+                Calle = persona?.IdDireccionNavigation?.Calle,
+                NumeroExterior = persona?.IdDireccionNavigation?.NumeroExterior,
+                NumeroInterior = persona?.IdDireccionNavigation?.NumeroInterior,
+                Colonia = persona?.IdDireccionNavigation?.CodigoPostal?.Asentamiento,
+                CodigoPostalStr = persona?.IdDireccionNavigation?.CodigoPostal?.Codigo,
+                MunicipioStr = persona?.IdDireccionNavigation?.CodigoPostal?.Municipio?.Nombre,
+                EstadoStr = persona?.IdDireccionNavigation?.CodigoPostal?.Municipio?.Estado?.Nombre,
                 Activo = estudiante.Activo,
-                FechaConsulta = DateTime.UtcNow
+                EstatusAcademico = (int)estudiante.EstatusAcademico,
+                EstatusAcademicoTexto = estudiante.EstatusAcademico.ToString(),
+                TipoBaja = (int?)estudiante.TipoBaja,
+                EstadoBaja = (int?)estudiante.EstadoBaja,
+                MotivoBaja = estudiante.MotivoBaja,
+                FechaBaja = estudiante.FechaBaja,
+                FechaConsulta = DateTime.UtcNow,
+                ContactoEmergencia = persona != null && !string.IsNullOrWhiteSpace(persona.NombreContactoEmergencia)
+                    ? new ContactoEmergenciaDto
+                    {
+                        Nombre = persona.NombreContactoEmergencia,
+                        Telefono = persona.TelefonoContactoEmergencia,
+                        Parentesco = persona.ParentescoContactoEmergencia
+                    }
+                    : null
             };
 
             panel.InformacionAcademica = await ObtenerInformacionAcademicaAsync(idEstudiante, ct) ?? new InformacionAcademicaPanelDto();
@@ -102,7 +144,7 @@ namespace WebApplication2.Services
             var query = _db.Estudiante
                 .Include(e => e.IdPersonaNavigation)
                 .Include(e => e.IdPlanActualNavigation)
-                .Include(e => e.EstudianteGrupo.OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
                     .ThenInclude(eg => eg.IdGrupoNavigation)
                 .AsQueryable();
 
@@ -268,10 +310,10 @@ namespace WebApplication2.Services
             var estudiante = await _db.Estudiante
                 .Include(e => e.IdPlanActualNavigation)
                     .ThenInclude(p => p!.IdCampusNavigation)
-                .Include(e => e.EstudianteGrupo.OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
                     .ThenInclude(eg => eg.IdGrupoNavigation)
                         .ThenInclude(g => g.IdPeriodoAcademicoNavigation)
-                .Include(e => e.EstudianteGrupo.OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
                     .ThenInclude(eg => eg.IdGrupoNavigation)
                         .ThenInclude(g => g.IdTurnoNavigation)
                 .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante, ct);
@@ -302,10 +344,14 @@ namespace WebApplication2.Services
                 info.GrupoActual = new GrupoActualDto
                 {
                     IdGrupo = grupo.IdGrupo,
+                    IdEstudianteGrupo = grupoEstudiante?.IdEstudianteGrupo,
                     CodigoGrupo = grupo.CodigoGrupo ?? "",
                     NombreGrupo = grupo.NombreGrupo,
                     Turno = turno?.Nombre,
-                    CupoMaximo = grupo.CapacidadMaxima
+                    CupoMaximo = grupo.CapacidadMaxima,
+                    NumeroCuatrimestre = grupo.NumeroCuatrimestre,
+                    IdPlanEstudios = grupo.IdPlanEstudios,
+                    IdPeriodoAcademico = grupo.IdPeriodoAcademico
                 };
             }
 
@@ -517,6 +563,7 @@ namespace WebApplication2.Services
         {
             var estudiante = await _db.Estudiante
                 .Include(e => e.IdPersonaNavigation)
+                    .ThenInclude(p => p!.IdDireccionNavigation)
                 .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante, ct);
 
             if (estudiante == null)
@@ -539,10 +586,49 @@ namespace WebApplication2.Services
                     persona.Correo = request.Email;
                     persona.Telefono = request.Telefono;
                     persona.Curp = request.Curp;
+                    persona.NombreContactoEmergencia = request.NombreContactoEmergencia;
+                    persona.TelefonoContactoEmergencia = request.TelefonoContactoEmergencia;
+                    persona.ParentescoContactoEmergencia = request.ParentescoContactoEmergencia;
 
                     if (!string.IsNullOrEmpty(request.FechaNacimiento) && DateOnly.TryParse(request.FechaNacimiento, out var fechaNac))
                     {
                         persona.FechaNacimiento = fechaNac;
+                    }
+
+                    if (!string.IsNullOrEmpty(request.Genero))
+                    {
+                        var genero = await _db.Genero.FirstOrDefaultAsync(g => g.DescGenero == request.Genero, ct);
+                        if (genero != null)
+                            persona.IdGenero = genero.IdGenero;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.Calle))
+                    {
+                        var cpId = request.CodigoPostalId
+                            ?? persona.IdDireccionNavigation?.CodigoPostalId
+                            ?? (await _db.CodigosPostales.FirstOrDefaultAsync(ct))?.Id
+                            ?? 1;
+
+                        if (persona.IdDireccionNavigation != null)
+                        {
+                            persona.IdDireccionNavigation.Calle = request.Calle;
+                            persona.IdDireccionNavigation.NumeroExterior = request.NumeroExterior;
+                            persona.IdDireccionNavigation.NumeroInterior = request.NumeroInterior;
+                            persona.IdDireccionNavigation.CodigoPostalId = cpId;
+                        }
+                        else
+                        {
+                            var nuevaDireccion = new Direccion
+                            {
+                                Calle = request.Calle,
+                                NumeroExterior = request.NumeroExterior,
+                                NumeroInterior = request.NumeroInterior,
+                                CodigoPostalId = cpId
+                            };
+                            _db.Direccion.Add(nuevaDireccion);
+                            await _db.SaveChangesAsync(ct);
+                            persona.IdDireccion = nuevaDireccion.IdDireccion;
+                        }
                     }
                 }
 
@@ -562,6 +648,81 @@ namespace WebApplication2.Services
                 {
                     Exitoso = false,
                     Mensaje = $"Error al actualizar datos: {ex.Message}"
+                };
+            }
+        }
+
+        public async Task<AccionPanelResponse> CambiarMatriculaAsync(int idEstudiante, string nuevaMatricula, CancellationToken ct = default)
+        {
+            if (!_matriculaService.ValidarFormatoMatricula(nuevaMatricula))
+            {
+                return new AccionPanelResponse
+                {
+                    Exitoso = false,
+                    Mensaje = "Formato de matrícula inválido. Debe ser 1-3 letras mayúsculas seguidas de 6 dígitos."
+                };
+            }
+
+            if (await _matriculaService.ExisteMatriculaAsync(nuevaMatricula, idEstudiante))
+            {
+                return new AccionPanelResponse
+                {
+                    Exitoso = false,
+                    Mensaje = "La matrícula ya está en uso por otro estudiante."
+                };
+            }
+
+            var estudiante = await _db.Estudiante
+                .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante, ct);
+
+            if (estudiante == null)
+            {
+                return new AccionPanelResponse
+                {
+                    Exitoso = false,
+                    Mensaje = "Estudiante no encontrado."
+                };
+            }
+
+            var matriculaAnterior = estudiante.Matricula;
+            var dominioEmail = "@usaguanajuato.edu.mx";
+            var nuevoEmail = $"{nuevaMatricula}{dominioEmail}";
+
+            using var transaction = await _db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                estudiante.Matricula = nuevaMatricula;
+                estudiante.Email = nuevoEmail;
+                await _db.SaveChangesAsync(ct);
+
+                if (!string.IsNullOrEmpty(estudiante.UsuarioId))
+                {
+                    await _authService.UpdateUserEmailAsync(estudiante.UsuarioId, nuevoEmail);
+
+                    var emailAnterior = $"{matriculaAnterior}{dominioEmail}";
+                    var graphUser = await _graphService.GetUserByIdAsync(emailAnterior, ct);
+                    if (graphUser != null)
+                    {
+                        await _graphService.UpdateUserPrincipalNameAsync(graphUser.Id, nuevoEmail, ct);
+                    }
+                }
+
+                await transaction.CommitAsync(ct);
+
+                return new AccionPanelResponse
+                {
+                    Exitoso = true,
+                    Mensaje = $"Matrícula cambiada de {matriculaAnterior} a {nuevaMatricula}. El correo institucional ahora es {nuevoEmail}.",
+                    Datos = new { matricula = nuevaMatricula, email = nuevoEmail }
+                };
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync(ct);
+                return new AccionPanelResponse
+                {
+                    Exitoso = false,
+                    Mensaje = $"Error al cambiar la matrícula: {ex.Message}"
                 };
             }
         }
@@ -715,11 +876,22 @@ namespace WebApplication2.Services
                     : string.Empty
             };
 
-            // Obtener TODOS los requisitos activos
-            var requisitos = await _db.DocumentoRequisito
-                .Where(r => r.Activo)
-                .OrderBy(r => r.Orden)
-                .ToListAsync(ct);
+            var planDocIds = estudiante.IdPlanActual.HasValue
+                ? await _db.PlanDocumentoRequisito
+                    .Where(pd => pd.IdPlanEstudios == estudiante.IdPlanActual.Value)
+                    .Select(pd => pd.IdDocumentoRequisito)
+                    .ToListAsync(ct)
+                : new List<int>();
+
+            var requisitos = planDocIds.Count > 0
+                ? await _db.DocumentoRequisito
+                    .Where(r => r.Activo && planDocIds.Contains(r.IdDocumentoRequisito))
+                    .OrderBy(r => r.Orden)
+                    .ToListAsync(ct)
+                : await _db.DocumentoRequisito
+                    .Where(r => r.Activo)
+                    .OrderBy(r => r.Orden)
+                    .ToListAsync(ct);
 
             var aspirante = await _db.Aspirante
                 .FirstOrDefaultAsync(a => a.IdPersona == estudiante.IdPersona, ct);
@@ -736,7 +908,6 @@ namespace WebApplication2.Services
                     .ToListAsync(ct);
             }
 
-            // Resolver nombres de usuarios que validaron
             var userIdsValidacion = documentosExistentes
                 .Where(d => !string.IsNullOrEmpty(d.UsuarioValidacion))
                 .Select(d => d.UsuarioValidacion!)
@@ -751,7 +922,6 @@ namespace WebApplication2.Services
                     .ToDictionaryAsync(u => u.Id, u => $"{u.Nombres} {u.Apellidos}".Trim(), ct);
             }
 
-            // Mostrar todos los requisitos, con su estatus si ya fueron subidos
             resultado.Documentos = requisitos.Select(r =>
             {
                 var docExistente = documentosExistentes.FirstOrDefault(d => d.IdDocumentoRequisito == r.IdDocumentoRequisito);
@@ -910,6 +1080,44 @@ namespace WebApplication2.Services
             return new AccionPanelResponse { Exitoso = true, Mensaje = $"Documento {accionDesc} exitosamente" };
         }
 
+        public async Task<AccionPanelResponse> ResetearDocumentoPersonalAsync(int idEstudiante, long idAspiranteDocumento, string? motivo, string? usuarioId, CancellationToken ct = default)
+        {
+            var estudiante = await _db.Estudiante
+                .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante, ct);
+
+            if (estudiante == null)
+                return new AccionPanelResponse { Exitoso = false, Mensaje = "Estudiante no encontrado" };
+
+            var doc = await _db.AspiranteDocumento
+                .FirstOrDefaultAsync(d => d.IdAspiranteDocumento == idAspiranteDocumento, ct);
+
+            if (doc == null)
+                return new AccionPanelResponse { Exitoso = false, Mensaje = "Documento no encontrado" };
+
+            var estatusAnterior = doc.Estatus.ToString();
+
+            if (!string.IsNullOrEmpty(doc.UrlArchivo))
+            {
+                try { await _blobStorageService.DeleteFile(doc.UrlArchivo, "documentos"); } catch { }
+            }
+
+            doc.Estatus = EstatusDocumentoEnum.PENDIENTE;
+            doc.UrlArchivo = null;
+            doc.FechaSubidoUtc = null;
+            doc.FechaValidacion = null;
+            doc.UsuarioValidacion = null;
+            doc.Notas = motivo;
+
+            await _db.SaveChangesAsync(ct);
+
+            await _bitacora.RegistrarAsync(usuarioId ?? "Sistema", usuarioId ?? "Sistema",
+                "RESETEAR_DOCUMENTO", "Documentos",
+                "AspiranteDocumento", idAspiranteDocumento.ToString(),
+                $"Documento reseteado (estatus anterior: {estatusAnterior}) para estudiante {idEstudiante}. Motivo: {motivo ?? "No especificado"}");
+
+            return new AccionPanelResponse { Exitoso = true, Mensaje = "Documento eliminado y reseteado a pendiente" };
+        }
+
         public async Task<DocumentosDisponiblesDto> ObtenerDocumentosDisponiblesAsync(int idEstudiante, CancellationToken ct = default)
         {
             var resultado = new DocumentosDisponiblesDto();
@@ -1009,25 +1217,53 @@ namespace WebApplication2.Services
             var estudiante = await _db.Estudiante
                 .Include(e => e.IdPersonaNavigation)
                 .Include(e => e.IdPlanActualNavigation)
+                    .ThenInclude(p => p!.IdCampusNavigation)
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                    .ThenInclude(eg => eg.IdGrupoNavigation)
+                        .ThenInclude(g => g.IdPeriodoAcademicoNavigation)
+                .Include(e => e.EstudianteGrupo.Where(eg => eg.Status == StatusEnum.Active).OrderByDescending(eg => eg.FechaInscripcion).Take(1))
+                    .ThenInclude(eg => eg.IdGrupoNavigation)
+                        .ThenInclude(g => g.IdTurnoNavigation)
                 .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante, ct);
 
             if (estudiante == null)
                 throw new InvalidOperationException($"Estudiante con ID {idEstudiante} no encontrado");
 
+            var persona = estudiante.IdPersonaNavigation;
+            var plan = estudiante.IdPlanActualNavigation;
+            var grupoActual = estudiante.EstudianteGrupo.FirstOrDefault()?.IdGrupoNavigation;
+            var periodo = grupoActual?.IdPeriodoAcademicoNavigation;
+            var turno = grupoActual?.IdTurnoNavigation;
+            var campus = plan?.IdCampusNavigation;
+            var cuatrimestre = grupoActual?.NumeroCuatrimestre;
+
+            var periodoTexto = periodo != null
+                ? $"{periodo.Nombre} (del {periodo.FechaInicio:dd 'de' MMMM} al {periodo.FechaFin:dd 'de' MMMM 'de' yyyy})"
+                : "Actual";
+
+            var totalCuatrimestres = plan != null
+                ? await _db.MateriaPlan.Where(mp => mp.IdPlanEstudios == plan.IdPlanEstudios && mp.Status == StatusEnum.Active).Select(mp => mp.Cuatrimestre).Distinct().CountAsync(ct)
+                : 0;
+
+            var gradoTexto = cuatrimestre.HasValue && totalCuatrimestres > 0
+                ? $"cursando el {OrdinalTexto(cuatrimestre.Value)} cuatrimestre de {totalCuatrimestres}"
+                : "N/A";
+
             var constancia = new ConstanciaEstudiosDto
             {
                 IdEstudiante = estudiante.IdEstudiante,
                 Matricula = estudiante.Matricula,
-                NombreCompleto = estudiante.IdPersonaNavigation != null
-                    ? $"{estudiante.IdPersonaNavigation.Nombre} {estudiante.IdPersonaNavigation.ApellidoPaterno} {estudiante.IdPersonaNavigation.ApellidoMaterno}".Trim()
+                NombreCompleto = persona != null
+                    ? $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim()
                     : "Sin nombre",
-                Carrera = estudiante.IdPlanActualNavigation?.NombrePlanEstudios ?? "N/A",
-                PlanEstudios = estudiante.IdPlanActualNavigation?.NombrePlanEstudios ?? "N/A",
-                RVOE = estudiante.IdPlanActualNavigation?.RVOE,
-                PeriodoActual = "Actual",
-                Grado = "N/A",
-                Turno = "N/A",
-                Campus = "Guanajuato",
+                Curp = persona?.Curp,
+                Carrera = plan?.NombrePlanEstudios ?? "N/A",
+                PlanEstudios = plan?.NombrePlanEstudios ?? "N/A",
+                RVOE = plan?.RVOE,
+                PeriodoActual = periodoTexto,
+                Grado = gradoTexto,
+                Turno = turno?.Nombre ?? "N/A",
+                Campus = campus?.Nombre ?? "León, Guanajuato",
                 FechaIngreso = estudiante.FechaIngreso.ToDateTime(TimeOnly.MinValue),
                 FechaEmision = DateTime.UtcNow,
                 FechaVencimiento = DateTime.UtcNow.AddDays(30),
@@ -1038,6 +1274,13 @@ namespace WebApplication2.Services
 
             return await _pdfService.GenerarConstanciaPdf(constancia);
         }
+
+        private static string OrdinalTexto(int n) => n switch
+        {
+            1 => "primer", 2 => "segundo", 3 => "tercer", 4 => "cuarto",
+            5 => "quinto", 6 => "sexto", 7 => "séptimo", 8 => "octavo",
+            9 => "noveno", 10 => "décimo", _ => $"{n}°"
+        };
 
         #endregion
 
@@ -1052,7 +1295,7 @@ namespace WebApplication2.Services
             };
         }
 
-        public async Task<AccionPanelResponse> ActualizarEstatusEstudianteAsync(int idEstudiante, bool activo, string? motivo, CancellationToken ct = default)
+        public async Task<AccionPanelResponse> ActualizarEstatusEstudianteAsync(int idEstudiante, bool activo, string? motivo, int? tipoBaja = null, int? estadoBaja = null, CancellationToken ct = default)
         {
             var estudiante = await _db.Estudiante.FindAsync(new object[] { idEstudiante }, ct);
 
@@ -1066,12 +1309,40 @@ namespace WebApplication2.Services
             }
 
             estudiante.Activo = activo;
+
+            if (!activo)
+            {
+                estudiante.TipoBaja = tipoBaja.HasValue ? (TipoBajaEnum)tipoBaja.Value : null;
+                estudiante.EstadoBaja = estadoBaja.HasValue ? (EstadoBajaEnum)estadoBaja.Value : null;
+                estudiante.MotivoBaja = motivo;
+                estudiante.FechaBaja = DateTime.UtcNow;
+
+                var gruposActivos = await _db.EstudianteGrupo
+                    .Where(eg => eg.IdEstudiante == idEstudiante && eg.Status == StatusEnum.Active)
+                    .ToListAsync(ct);
+
+                foreach (var eg in gruposActivos)
+                {
+                    eg.Status = StatusEnum.Deleted;
+                    eg.UpdatedAt = DateTime.UtcNow;
+                    eg.Observaciones = "Baja automática: " + (motivo ?? "Estudiante desactivado");
+                }
+            }
+            else
+            {
+                estudiante.TipoBaja = null;
+                estudiante.EstadoBaja = null;
+                estudiante.MotivoBaja = null;
+                estudiante.FechaBaja = null;
+                estudiante.EstatusAcademico = Core.Enums.EstudianteStatusAcademicoEnum.Cursando;
+            }
+
             await _db.SaveChangesAsync(ct);
 
             return new AccionPanelResponse
             {
                 Exitoso = true,
-                Mensaje = activo ? "Estudiante activado exitosamente" : "Estudiante desactivado exitosamente"
+                Mensaje = activo ? "Estudiante reactivado exitosamente. Ahora puede inscribirlo a un grupo desde el panel." : "Estudiante dado de baja exitosamente"
             };
         }
 
@@ -1124,9 +1395,18 @@ namespace WebApplication2.Services
         public async Task<byte[]> ExportarExpedienteEstudianteAsync(int idEstudiante, CancellationToken ct = default)
         {
             var panel = await ObtenerPanelEstudianteAsync(idEstudiante, ct);
-
             if (panel == null)
                 throw new InvalidOperationException("Estudiante no encontrado");
+
+            var documentos = await ObtenerDocumentosPersonalesAsync(idEstudiante, ct);
+            var headerLogoPath = ResolveAssetPath("header_logo.png");
+
+            const string AzulOscuro = "#14356F";
+            const string AzulClaro = "#D9E2F3";
+            const string VerdeClaro = "#E2EFDA";
+            const string RojoClaro = "#FCE4EC";
+            const string AmarilloClaro = "#FFF8E1";
+            const string GrisClaro = "#F5F5F5";
 
             QuestPDF.Settings.License = LicenseType.Community;
 
@@ -1135,71 +1415,214 @@ namespace WebApplication2.Services
                 container.Page(page =>
                 {
                     page.Size(PageSizes.Letter);
-                    page.Margin(30);
-                    page.DefaultTextStyle(x => x.FontSize(10));
+                    page.MarginTop(20);
+                    page.MarginBottom(30);
+                    page.MarginHorizontal(35);
+                    page.DefaultTextStyle(x => x.FontSize(9));
 
                     page.Header().Column(col =>
                     {
-                        col.Item().AlignCenter().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO").FontSize(14).Bold();
-                        col.Item().AlignCenter().Text("EXPEDIENTE DEL ESTUDIANTE").FontSize(12).SemiBold();
-                        col.Item().PaddingTop(10).LineHorizontal(1);
+                        if (headerLogoPath != null)
+                        {
+                            col.Item().AlignCenter().PaddingBottom(5).Height(55).Image(headerLogoPath).FitHeight();
+                        }
+
+                        col.Item().PaddingBottom(3).AlignCenter()
+                            .Text("EXPEDIENTE DEL ESTUDIANTE").FontSize(16).Bold().FontColor(AzulOscuro);
+
+                        col.Item().LineHorizontal(2).LineColor(AzulOscuro);
                     });
 
-                    page.Content().PaddingVertical(10).Column(col =>
+                    page.Content().PaddingVertical(8).Column(col =>
                     {
-                        col.Item().Text("DATOS PERSONALES").FontSize(11).Bold();
-                        col.Item().PaddingLeft(10).Column(c =>
+                        col.Item().Background(AzulOscuro).Padding(6)
+                            .Text("DATOS PERSONALES").FontSize(11).Bold().FontColor("#FFFFFF");
+
+                        col.Item().Border(0.5f).BorderColor("#CCCCCC").Padding(0).Table(table =>
                         {
-                            c.Item().Text($"Matrícula: {panel.Matricula}");
-                            c.Item().Text($"Nombre: {panel.NombreCompleto}");
-                            c.Item().Text($"Email: {panel.Email ?? "N/A"}");
-                            c.Item().Text($"Teléfono: {panel.Telefono ?? "N/A"}");
-                            c.Item().Text($"CURP: {panel.Curp ?? "N/A"}");
+                            table.ColumnsDefinition(c =>
+                            {
+                                c.ConstantColumn(120);
+                                c.RelativeColumn();
+                                c.ConstantColumn(120);
+                                c.RelativeColumn();
+                            });
+
+                            void InfoRow(string label1, string val1, string label2, string val2, string bg)
+                            {
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5)
+                                    .Text(label1).Bold().FontSize(9);
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5)
+                                    .Text(val1).FontSize(9);
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5)
+                                    .Text(label2).Bold().FontSize(9);
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5)
+                                    .Text(val2).FontSize(9);
+                            }
+
+                            InfoRow("Matrícula:", panel.Matricula, "CURP:", panel.Curp ?? "N/A", GrisClaro);
+                            InfoRow("Nombre:", panel.NombreCompleto, "Género:", panel.Genero ?? "N/A", "#FFFFFF");
+                            InfoRow("Email:", panel.Email ?? "N/A", "Teléfono:", panel.Telefono ?? "N/A", GrisClaro);
+                            InfoRow("Dirección:", panel.Direccion ?? "N/A", "Estatus:", panel.Activo ? "Activo" : "Baja", "#FFFFFF");
+
+                            if (panel.FechaNacimiento.HasValue)
+                            {
+                                InfoRow("Fecha Nac.:", panel.FechaNacimiento.Value.ToString("dd/MM/yyyy"), "", "", GrisClaro);
+                            }
+
+                            if (panel.ContactoEmergencia != null)
+                            {
+                                InfoRow("Contacto Emerg.:", panel.ContactoEmergencia.Nombre ?? "N/A",
+                                    "Tel. Emergencia:", panel.ContactoEmergencia.Telefono ?? "N/A", "#FFFFFF");
+                            }
                         });
 
                         col.Item().Height(10);
 
-                        col.Item().Text("INFORMACIÓN ACADÉMICA").FontSize(11).Bold();
-                        col.Item().PaddingLeft(10).Column(c =>
+                        col.Item().Background(AzulOscuro).Padding(6)
+                            .Text("INFORMACIÓN ACADÉMICA").FontSize(11).Bold().FontColor("#FFFFFF");
+
+                        col.Item().Border(0.5f).BorderColor("#CCCCCC").Padding(0).Table(table =>
                         {
-                            c.Item().Text($"Plan de Estudios: {panel.InformacionAcademica.PlanEstudios ?? "N/A"}");
-                            c.Item().Text($"Fecha de Ingreso: {panel.InformacionAcademica.FechaIngreso:dd/MM/yyyy}");
-                            c.Item().Text($"Promedio General: {panel.ResumenKardex.PromedioGeneral:N2}");
-                            c.Item().Text($"Avance: {panel.ResumenKardex.PorcentajeAvance:N1}%");
-                            c.Item().Text($"Estatus: {panel.ResumenKardex.EstatusAcademico}");
+                            table.ColumnsDefinition(c =>
+                            {
+                                c.ConstantColumn(120);
+                                c.RelativeColumn();
+                                c.ConstantColumn(120);
+                                c.RelativeColumn();
+                            });
+
+                            void AcadRow(string l1, string v1, string l2, string v2, string bg)
+                            {
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5).Text(l1).Bold().FontSize(9);
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5).Text(v1).FontSize(9);
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5).Text(l2).Bold().FontSize(9);
+                                table.Cell().Background(bg).Border(0.5f).BorderColor("#CCCCCC").Padding(5).Text(v2).FontSize(9);
+                            }
+
+                            AcadRow("Plan de Estudios:", panel.InformacionAcademica.PlanEstudios ?? "N/A",
+                                "RVOE:", panel.InformacionAcademica.RVOE ?? "N/A", GrisClaro);
+                            AcadRow("Modalidad:", panel.InformacionAcademica.Modalidad ?? "N/A",
+                                "Campus:", panel.InformacionAcademica.Campus ?? "N/A", "#FFFFFF");
+                            AcadRow("Grupo:", panel.InformacionAcademica.GrupoActual?.CodigoGrupo ?? "Sin grupo",
+                                "Turno:", panel.InformacionAcademica.GrupoActual?.Turno ?? panel.InformacionAcademica.Turno ?? "N/A", GrisClaro);
+                            AcadRow("Periodo:", panel.InformacionAcademica.PeriodoActual?.Nombre ?? "N/A",
+                                "Fecha Ingreso:", panel.InformacionAcademica.FechaIngreso.ToString("dd/MM/yyyy"), "#FFFFFF");
+                            AcadRow("Promedio:", panel.ResumenKardex.PromedioGeneral.ToString("N2"),
+                                "Avance:", $"{panel.ResumenKardex.PorcentajeAvance:N1}%", GrisClaro);
+                            AcadRow("Estatus Académico:", panel.ResumenKardex.EstatusAcademico ?? "N/A",
+                                "Créditos:", $"{panel.ResumenKardex.CreditosCursados}/{panel.ResumenKardex.CreditosTotales}", "#FFFFFF");
                         });
 
                         col.Item().Height(10);
 
-                        col.Item().Text("RESUMEN FINANCIERO").FontSize(11).Bold();
-                        col.Item().PaddingLeft(10).Column(c =>
-                        {
-                            c.Item().Text($"Adeudo Total: ${panel.ResumenRecibos.TotalAdeudo:N2}");
-                            c.Item().Text($"Total Pagado: ${panel.ResumenRecibos.TotalPagado:N2}");
-                            c.Item().Text($"Recibos Pendientes: {panel.ResumenRecibos.RecibosPendientes}");
-                            c.Item().Text($"Descuentos Aplicados: ${panel.ResumenRecibos.TotalDescuentosAplicados:N2}");
-                        });
+                        col.Item().Background(AzulOscuro).Padding(6)
+                            .Text("EXPEDIENTE DOCUMENTAL").FontSize(11).Bold().FontColor("#FFFFFF");
 
-                        if (panel.Becas.Any())
+                        if (documentos != null && documentos.Documentos.Any())
+                        {
+                            col.Item().PaddingVertical(3).Row(row =>
+                            {
+                                row.RelativeColumn().Background(AzulClaro).Border(0.5f).BorderColor("#CCCCCC").Padding(5).AlignCenter()
+                                    .Text($"Total: {documentos.TotalDocumentos}").Bold().FontSize(9);
+                                row.RelativeColumn().Background(VerdeClaro).Border(0.5f).BorderColor("#CCCCCC").Padding(5).AlignCenter()
+                                    .Text($"Validados: {documentos.DocumentosValidados}").Bold().FontSize(9).FontColor("#2E7D32");
+                                row.RelativeColumn().Background(RojoClaro).Border(0.5f).BorderColor("#CCCCCC").Padding(5).AlignCenter()
+                                    .Text($"Pendientes: {documentos.DocumentosPendientes}").Bold().FontSize(9).FontColor("#C62828");
+                            });
+
+                            col.Item().Table(table =>
+                            {
+                                table.ColumnsDefinition(c =>
+                                {
+                                    c.ConstantColumn(30);
+                                    c.RelativeColumn(3);
+                                    c.RelativeColumn(1.5f);
+                                    c.RelativeColumn(1.5f);
+                                    c.RelativeColumn(1.5f);
+                                });
+
+                                table.Header(header =>
+                                {
+                                    void HeaderCell(string text)
+                                    {
+                                        header.Cell().Background(AzulOscuro).Border(0.5f).BorderColor(AzulOscuro).Padding(5)
+                                            .Text(text).Bold().FontSize(8).FontColor("#FFFFFF");
+                                    }
+                                    HeaderCell("#");
+                                    HeaderCell("DOCUMENTO");
+                                    HeaderCell("ESTATUS");
+                                    HeaderCell("FECHA ENTREGA");
+                                    HeaderCell("VALIDADO POR");
+                                });
+
+                                int idx = 0;
+                                foreach (var doc in documentos.Documentos)
+                                {
+                                    idx++;
+                                    var bgRow = idx % 2 == 0 ? GrisClaro : "#FFFFFF";
+                                    var (estatusBg, estatusColor) = doc.Estatus switch
+                                    {
+                                        "VALIDADO" => (VerdeClaro, "#2E7D32"),
+                                        "SUBIDO" => (AmarilloClaro, "#F57F17"),
+                                        "RECHAZADO" => (RojoClaro, "#C62828"),
+                                        _ => (RojoClaro, "#C62828")
+                                    };
+
+                                    table.Cell().Background(bgRow).Border(0.5f).BorderColor("#CCCCCC").Padding(4)
+                                        .AlignCenter().Text(idx.ToString()).FontSize(8);
+                                    table.Cell().Background(bgRow).Border(0.5f).BorderColor("#CCCCCC").Padding(4)
+                                        .Text(doc.NombreDocumento).FontSize(8);
+                                    table.Cell().Background(estatusBg).Border(0.5f).BorderColor("#CCCCCC").Padding(4)
+                                        .AlignCenter().Text(doc.Estatus == "PENDIENTE" ? "NO ENTREGADO" : doc.Estatus)
+                                        .Bold().FontSize(8).FontColor(estatusColor);
+                                    table.Cell().Background(bgRow).Border(0.5f).BorderColor("#CCCCCC").Padding(4)
+                                        .AlignCenter().Text(doc.FechaSubido?.ToString("dd/MM/yyyy") ?? "—").FontSize(8);
+                                    table.Cell().Background(bgRow).Border(0.5f).BorderColor("#CCCCCC").Padding(4)
+                                        .Text(doc.ValidadoPor ?? "—").FontSize(8);
+                                }
+                            });
+                        }
+                        else
+                        {
+                            col.Item().Padding(10).AlignCenter()
+                                .Text("No hay documentos configurados para este plan de estudios.").Italic().FontSize(9);
+                        }
+
+                        if (panel.Becas.Any(b => b.Activo))
                         {
                             col.Item().Height(10);
-                            col.Item().Text("BECAS ASIGNADAS").FontSize(11).Bold();
-                            col.Item().PaddingLeft(10).Column(c =>
+                            col.Item().Background(AzulOscuro).Padding(6)
+                                .Text("BECAS ASIGNADAS").FontSize(11).Bold().FontColor("#FFFFFF");
+                            col.Item().Border(0.5f).BorderColor("#CCCCCC").Column(c =>
                             {
                                 foreach (var beca in panel.Becas.Where(b => b.Activo))
                                 {
-                                    c.Item().Text($"- {beca.NombreBeca ?? "Beca"}: {beca.DescripcionDescuento}");
+                                    c.Item().Padding(5).Row(r =>
+                                    {
+                                        r.ConstantColumn(8).PaddingTop(4).Height(8).Width(8).Background("#2E7D32");
+                                        r.RelativeColumn().PaddingLeft(8).Text($"{beca.NombreBeca ?? "Beca"}: {beca.DescripcionDescuento}").FontSize(9);
+                                    });
                                 }
                             });
                         }
                     });
 
-                    page.Footer().AlignCenter().Text(text =>
+                    page.Footer().Column(col =>
                     {
-                        text.Span($"Generado: {DateTime.Now:dd/MM/yyyy HH:mm} | Página ");
-                        text.CurrentPageNumber();
-                        text.Span(" de ");
-                        text.TotalPages();
+                        col.Item().LineHorizontal(1).LineColor(AzulOscuro);
+                        col.Item().PaddingTop(3).Row(row =>
+                        {
+                            row.RelativeColumn().Text($"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}").FontSize(7).FontColor("#666666");
+                            row.RelativeColumn().AlignCenter().Text(text =>
+                            {
+                                text.Span("Página ").FontSize(7).FontColor("#666666");
+                                text.CurrentPageNumber().FontSize(7).FontColor("#666666");
+                                text.Span(" de ").FontSize(7).FontColor("#666666");
+                                text.TotalPages().FontSize(7).FontColor("#666666");
+                            });
+                            row.RelativeColumn().AlignRight().Text("USAG - Sistema de Control Escolar").FontSize(7).FontColor("#666666");
+                        });
                     });
                 });
             });
@@ -1208,5 +1631,34 @@ namespace WebApplication2.Services
         }
 
         #endregion
+
+        private string? ResolveAssetPath(string fileName)
+        {
+            var path = Path.Combine(_env.ContentRootPath, fileName);
+            if (File.Exists(path)) return path;
+            path = Path.Combine(Directory.GetCurrentDirectory(), fileName);
+            return File.Exists(path) ? path : null;
+        }
+
+        private static string? BuildDireccionTexto(Direccion? dir)
+        {
+            if (dir == null) return null;
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(dir.Calle)) parts.Add(dir.Calle);
+            if (!string.IsNullOrWhiteSpace(dir.NumeroExterior)) parts.Add($"#{dir.NumeroExterior}");
+            if (!string.IsNullOrWhiteSpace(dir.NumeroInterior)) parts.Add($"Int. {dir.NumeroInterior}");
+            if (dir.CodigoPostal != null)
+            {
+                if (!string.IsNullOrWhiteSpace(dir.CodigoPostal.Asentamiento)) parts.Add(dir.CodigoPostal.Asentamiento);
+                if (!string.IsNullOrWhiteSpace(dir.CodigoPostal.Codigo)) parts.Add($"C.P. {dir.CodigoPostal.Codigo}");
+                if (dir.CodigoPostal.Municipio != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(dir.CodigoPostal.Municipio.Nombre)) parts.Add(dir.CodigoPostal.Municipio.Nombre);
+                    if (dir.CodigoPostal.Municipio.Estado != null && !string.IsNullOrWhiteSpace(dir.CodigoPostal.Municipio.Estado.Nombre))
+                        parts.Add(dir.CodigoPostal.Municipio.Estado.Nombre);
+                }
+            }
+            return parts.Count > 0 ? string.Join(", ", parts) : null;
+        }
     }
 }

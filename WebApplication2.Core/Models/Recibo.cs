@@ -23,6 +23,7 @@ namespace WebApplication2.Core.Models
         public decimal Total { get; private set; }
         public decimal Saldo { get; set; }
         public string? Notas { get; set; }
+        public int? IdEmpresa { get; set; }
 
         public ICollection<ReciboDetalle> Detalles { get; set; } = new List<ReciboDetalle>();
         public ICollection<LigaPago> Ligas { get; set; } = new List<LigaPago>();

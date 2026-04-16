@@ -109,6 +109,22 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpGet("finanzas/indicadores")]
+        [Authorize(Roles = "admin,finanzas,director")]
+        public async Task<IActionResult> GetFinanzasIndicadores()
+        {
+            try
+            {
+                var indicadores = await _dashboardService.GetFinanzasIndicadoresAsync();
+                var response = new Response<FinanzasIndicadoresDto> { Data = indicadores };
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener indicadores financieros", error = ex.Message });
+            }
+        }
+
         [HttpGet("control-escolar")]
         [Authorize(Roles = "admin,controlescolar,director")]
         public async Task<IActionResult> GetControlEscolarDashboard()

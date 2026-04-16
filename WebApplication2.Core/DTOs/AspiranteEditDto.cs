@@ -26,6 +26,7 @@ namespace WebApplication2.Core.DTOs
         public int? CuatrimestreInteres { get; set; }
         public string? InstitucionProcedencia { get; set; }
         public int? IdModalidad { get; set; }
+        public int? GrupoDiasImparticion { get; set; }
         public int? IdPeriodoAcademico { get; set; }
         public bool? RecorridoPlantel { get; set; }
         public bool? Trabaja { get; set; }
@@ -33,6 +34,7 @@ namespace WebApplication2.Core.DTOs
         public string? DomicilioEmpresa { get; set; }
         public string? PuestoEmpresa { get; set; }
         public string? QuienCubreGastos { get; set; }
+        public int? IdEmpresa { get; set; }
         public string? AtendidoPorUsuarioId { get; set; }
         public string? NombreContactoEmergencia { get; set; }
         public string? TelefonoContactoEmergencia { get; set; }

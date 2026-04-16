@@ -64,20 +64,18 @@ namespace WebApplication2.Services
             if (criterioLower.StartsWith("doc-"))
             {
                 var solicitudDoc = await _context.SolicitudesDocumento
-                    .Where(s => s.FolioSolicitud.ToLower().Contains(criterioLower) && s.IdRecibo.HasValue)
+                    .Where(s => s.FolioSolicitud.ToLower().Contains(criterioLower))
                     .FirstOrDefaultAsync();
 
                 if (solicitudDoc != null && solicitudDoc.IdRecibo.HasValue)
                 {
-                    var reciboDoc = await _context.Recibo
-                        .Where(r => r.IdRecibo == solicitudDoc.IdRecibo.Value)
-                        .Where(r => r.Estatus == EstatusRecibo.PENDIENTE || r.Estatus == EstatusRecibo.PARCIAL || r.Estatus == EstatusRecibo.VENCIDO)
-                        .FirstOrDefaultAsync();
-
-                    if (reciboDoc != null && reciboDoc.IdEstudiante.HasValue)
-                    {
-                        return await ObtenerRecibosDeEstudiante(reciboDoc.IdEstudiante.Value);
-                    }
+                    // Mostrar solo el recibo asociado a la solicitud de documento
+                    return await ObtenerReciboPorId(solicitudDoc.IdRecibo.Value, solicitudDoc.IdEstudiante);
+                }
+                else if (solicitudDoc != null)
+                {
+                    // Solicitud sin recibo: mostrar recibos pendientes del estudiante
+                    return await ObtenerRecibosDeEstudiante(solicitudDoc.IdEstudiante);
                 }
             }
 
@@ -121,6 +119,93 @@ namespace WebApplication2.Services
                     Telefono = e.IdPersonaNavigation?.Telefono
                 }).ToList(),
                 Recibos = new List<ReciboParaCobroDto>()
+            };
+        }
+
+        private async Task<RecibosParaCobroDto> ObtenerReciboPorId(long idRecibo, int idEstudiante)
+        {
+            var estudiante = await _context.Estudiante
+                .Include(e => e.IdPersonaNavigation)
+                .FirstOrDefaultAsync(e => e.IdEstudiante == idEstudiante);
+
+            if (estudiante == null)
+            {
+                return new RecibosParaCobroDto { Recibos = new List<ReciboParaCobroDto>() };
+            }
+
+            var recibo = await _context.Recibo
+                .Include(r => r.Detalles)
+                .FirstOrDefaultAsync(r => r.IdRecibo == idRecibo);
+
+            if (recibo == null)
+            {
+                return new RecibosParaCobroDto { Recibos = new List<ReciboParaCobroDto>() };
+            }
+
+            string? nombrePeriodo = null;
+            if (recibo.IdPeriodoAcademico.HasValue)
+            {
+                var periodo = await _context.PeriodoAcademico.FirstOrDefaultAsync(p => p.IdPeriodoAcademico == recibo.IdPeriodoAcademico.Value);
+                nombrePeriodo = periodo?.Nombre;
+            }
+
+            var reciboDto = new ReciboParaCobroDto
+            {
+                IdRecibo = recibo.IdRecibo,
+                Folio = recibo.Folio,
+                IdAspirante = recibo.IdAspirante,
+                IdEstudiante = recibo.IdEstudiante,
+                IdPeriodoAcademico = recibo.IdPeriodoAcademico,
+                IdGrupo = null,
+                IdPlantillaCobro = null,
+                FechaEmision = recibo.FechaEmision.ToString("yyyy-MM-dd"),
+                FechaVencimiento = recibo.FechaVencimiento.ToString("yyyy-MM-dd"),
+                Estatus = (int)recibo.Estatus,
+                Subtotal = recibo.Subtotal,
+                DescuentoBeca = recibo.Descuento,
+                Descuento = recibo.Descuento,
+                DescuentoAdicional = 0,
+                Recargos = recibo.Recargos,
+                Total = recibo.Total,
+                Saldo = recibo.Saldo,
+                Notas = recibo.Notas,
+                CreadoPor = recibo.CreatedBy,
+                FechaCreacion = recibo.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"),
+                NombrePeriodo = nombrePeriodo,
+                CodigoGrupo = null,
+                Detalles = recibo.Detalles.Select(d => new ReciboDetalleParaCobroDto
+                {
+                    IdReciboDetalle = d.IdReciboDetalle,
+                    IdConceptoPago = d.IdConceptoPago,
+                    Descripcion = d.Descripcion,
+                    Cantidad = d.Cantidad,
+                    PrecioUnitario = d.PrecioUnitario,
+                    Importe = d.Importe,
+                    DescuentoBeca = recibo.Descuento > 0 && recibo.Subtotal > 0 ? (decimal?)Math.Round(d.Importe * (recibo.Descuento / recibo.Subtotal), 2) : null,
+                    ImporteNeto = recibo.Descuento > 0 && recibo.Subtotal > 0 ? (decimal?)(d.Importe - Math.Round(d.Importe * (recibo.Descuento / recibo.Subtotal), 2)) : null,
+                    IdPlantillaDetalle = null,
+                    RefTabla = d.RefTabla,
+                    RefId = d.RefId
+                }).ToList(),
+                ConceptoResumen = recibo.Detalles.Count == 0 ? null
+                    : recibo.Detalles.Count == 1 ? recibo.Detalles.First().Descripcion
+                    : $"{recibo.Detalles.First().Descripcion} (+{recibo.Detalles.Count - 1} más)"
+            };
+
+            return new RecibosParaCobroDto
+            {
+                Estudiante = new EstudianteInfoDto
+                {
+                    IdEstudiante = estudiante.IdEstudiante,
+                    Matricula = estudiante.Matricula,
+                    NombreCompleto = estudiante.IdPersonaNavigation != null
+                        ? $"{estudiante.IdPersonaNavigation.ApellidoPaterno} {estudiante.IdPersonaNavigation.ApellidoMaterno} {estudiante.IdPersonaNavigation.Nombre}".Trim()
+                        : "Sin nombre",
+                    Email = estudiante.Email ?? estudiante.IdPersonaNavigation?.Correo,
+                    Telefono = estudiante.IdPersonaNavigation?.Telefono
+                },
+                Recibos = new List<ReciboParaCobroDto> { reciboDto },
+                TotalAdeudo = reciboDto.Saldo
             };
         }
 
@@ -182,7 +267,10 @@ namespace WebApplication2.Services
                     IdPlantillaDetalle = null,
                     RefTabla = d.RefTabla,
                     RefId = d.RefId
-                }).ToList()
+                }).ToList(),
+                ConceptoResumen = r.Detalles.Count == 0 ? null
+                    : r.Detalles.Count == 1 ? r.Detalles.First().Descripcion
+                    : $"{r.Detalles.First().Descripcion} (+{r.Detalles.Count - 1} más)"
             }).ToList();
 
             return new RecibosParaCobroDto
@@ -224,19 +312,16 @@ namespace WebApplication2.Services
             if (criterioLower.StartsWith("doc-"))
             {
                 var solicitudDoc = await _context.SolicitudesDocumento
-                    .Where(s => s.FolioSolicitud.ToLower().Contains(criterioLower) && s.IdRecibo.HasValue)
+                    .Where(s => s.FolioSolicitud.ToLower().Contains(criterioLower))
                     .FirstOrDefaultAsync();
 
                 if (solicitudDoc != null && solicitudDoc.IdRecibo.HasValue)
                 {
-                    var reciboDoc = await _context.Recibo
-                        .Where(r => r.IdRecibo == solicitudDoc.IdRecibo.Value)
-                        .FirstOrDefaultAsync();
-
-                    if (reciboDoc != null && reciboDoc.IdEstudiante.HasValue)
-                    {
-                        return await ObtenerTodosRecibosDeEstudiante(reciboDoc.IdEstudiante.Value);
-                    }
+                    return await ObtenerReciboPorId(solicitudDoc.IdRecibo.Value, solicitudDoc.IdEstudiante);
+                }
+                else if (solicitudDoc != null)
+                {
+                    return await ObtenerTodosRecibosDeEstudiante(solicitudDoc.IdEstudiante);
                 }
             }
 
@@ -342,7 +427,10 @@ namespace WebApplication2.Services
                     IdPlantillaDetalle = null,
                     RefTabla = d.RefTabla,
                     RefId = d.RefId
-                }).ToList()
+                }).ToList(),
+                ConceptoResumen = r.Detalles.Count == 0 ? null
+                    : r.Detalles.Count == 1 ? r.Detalles.First().Descripcion
+                    : $"{r.Detalles.First().Descripcion} (+{r.Detalles.Count - 1} más)"
             }).ToList();
 
             var pendientes = recibosDto.Where(r => r.Estatus != (int)EstatusRecibo.PAGADO && r.Estatus != (int)EstatusRecibo.CANCELADO);
@@ -657,12 +745,31 @@ namespace WebApplication2.Services
                 }
             }
 
+            var idsParaMetodos = pagos.Select(p => p.IdPago).ToList();
+            var metodosPago = await _context.PagoMetodo
+                .Where(pm => idsParaMetodos.Contains(pm.IdPago))
+                .ToListAsync();
+
+            decimal efectivo, transferencia, tarjeta;
+            if (metodosPago.Any())
+            {
+                efectivo = metodosPago.Where(pm => pm.IdMedioPago == 1).Sum(pm => pm.Monto);
+                transferencia = metodosPago.Where(pm => pm.IdMedioPago == 2).Sum(pm => pm.Monto);
+                tarjeta = metodosPago.Where(pm => pm.IdMedioPago == 3).Sum(pm => pm.Monto);
+            }
+            else
+            {
+                efectivo = pagos.Where(p => p.IdMedioPago == 1).Sum(p => p.Monto);
+                transferencia = pagos.Where(p => p.IdMedioPago == 2).Sum(p => p.Monto);
+                tarjeta = pagos.Where(p => p.IdMedioPago == 3).Sum(p => p.Monto);
+            }
+
             var totales = new TotalesCorteCajaDto
             {
                 Cantidad = pagos.Count,
-                Efectivo = pagos.Where(p => p.IdMedioPago == 1).Sum(p => p.Monto),
-                Transferencia = pagos.Where(p => p.IdMedioPago == 2).Sum(p => p.Monto),
-                Tarjeta = pagos.Where(p => p.IdMedioPago == 3).Sum(p => p.Monto),
+                Efectivo = efectivo,
+                Transferencia = transferencia,
+                Tarjeta = tarjeta,
                 Total = pagos.Sum(p => p.Monto)
             };
 

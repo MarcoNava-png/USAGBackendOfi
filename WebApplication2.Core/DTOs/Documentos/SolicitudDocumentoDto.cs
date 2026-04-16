@@ -12,6 +12,7 @@ namespace WebApplication2.Core.DTOs.Documentos
         public string TipoDocumentoClave { get; set; } = string.Empty;
         public long? IdRecibo { get; set; }
         public string? FolioRecibo { get; set; }
+        public string? EstatusRecibo { get; set; }
         public string Variante { get; set; } = string.Empty;
         public DateTime FechaSolicitud { get; set; }
         public DateTime? FechaGeneracion { get; set; }

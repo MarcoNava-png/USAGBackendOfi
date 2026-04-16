@@ -13,11 +13,32 @@ namespace WebApplication2.Core.DTOs.TarifaAdmision
         public DateOnly Fecha { get; set; }
         public List<CotizacionConceptoDto> Conceptos { get; set; } = new();
         public InstitucionPdfDto? Institucion { get; set; }
+        public decimal TotalOriginal { get; set; }
+        public decimal TotalDescuento { get; set; }
+        public decimal TotalFinal { get; set; }
+        public string? NombreEmpresa { get; set; }
     }
 
     public class CotizacionConceptoDto
     {
         public string Nombre { get; set; } = "";
         public string Valor { get; set; } = "N/A";
+        public decimal Monto { get; set; }
+        public string? NombrePromocion { get; set; }
+        public decimal MontoDescuento { get; set; }
+        public decimal MontoFinal { get; set; }
+        public bool Incluido { get; set; } = true;
+    }
+
+    public class CotizacionAdmisionRequestDto
+    {
+        public List<CotizacionConceptoPromocionDto> Conceptos { get; set; } = new();
+        public int? IdEmpresa { get; set; }
+    }
+
+    public class CotizacionConceptoPromocionDto
+    {
+        public int IdConceptoPago { get; set; }
+        public int? IdPromocion { get; set; }
     }
 }

@@ -16,6 +16,7 @@ namespace WebApplication2.Core.DTOs.Ticket
         public string CategoriaNombre { get; set; } = string.Empty;
         public string UsuarioCreadorId { get; set; } = string.Empty;
         public string NombreCreador { get; set; } = string.Empty;
+        public string? AreaDestino { get; set; }
         public string? UsuarioAsignadoId { get; set; }
         public string? NombreAsignado { get; set; }
         public string? ArchivoAdjuntoUrl { get; set; }

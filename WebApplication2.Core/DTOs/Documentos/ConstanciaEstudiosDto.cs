@@ -5,6 +5,7 @@ namespace WebApplication2.Core.DTOs.Documentos
         public int IdEstudiante { get; set; }
         public string Matricula { get; set; } = string.Empty;
         public string NombreCompleto { get; set; } = string.Empty;
+        public string? Curp { get; set; }
         public string Carrera { get; set; } = string.Empty;
         public string PlanEstudios { get; set; } = string.Empty;
         public string? RVOE { get; set; }

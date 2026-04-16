@@ -26,7 +26,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
+        public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
         {
             var pagination = await _materiaPlanService.GetMateriaPlanes(page, pageSize);
 
@@ -71,11 +71,19 @@ namespace WebApplication2.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] MateriaPlanUpdateRequest request)
         {
-            var newMateriaPlan = _mapper.Map<MateriaPlan>(request);
-
             try
             {
-                var materiaPlan = await _materiaPlanService.ActualizarMateriaPlan(newMateriaPlan);
+                var newMateriaPlan = new MateriaPlan
+                {
+                    IdMateriaPlan = id,
+                    IdPlanEstudios = request.IdPlanEstudios,
+                    IdMateria = request.IdMateria,
+                    Cuatrimestre = (byte)request.Cuatrimestre,
+                    EsOptativa = request.EsOptativa,
+                    Status = request.Status
+                };
+
+                var materiaPlan = await _materiaPlanService.ActualizarMateriaPlan(newMateriaPlan, request.NombreMateria);
 
                 var materiaPlanDto = _mapper.Map<MateriaPlanDto>(materiaPlan);
 

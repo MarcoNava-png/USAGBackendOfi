@@ -7,6 +7,7 @@ namespace WebApplication2.Core.DTOs.TarifaAdmision
         public int IdPlanEstudios { get; set; }
         public string Nombre { get; set; } = null!;
         public bool AplicaConvenioMensualidad { get; set; } = false;
+        public bool EsConvenioEmpresarial { get; set; } = false;
         public bool Activo { get; set; } = true;
         public List<CrearTarifaAdmisionDetalleDto> Detalles { get; set; } = new();
     }

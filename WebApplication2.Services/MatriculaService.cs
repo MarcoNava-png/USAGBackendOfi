@@ -91,10 +91,12 @@ namespace WebApplication2.Services
             return regex.IsMatch(matricula);
         }
 
-        public async Task<bool> ExisteMatriculaAsync(string matricula)
+        public async Task<bool> ExisteMatriculaAsync(string matricula, int? excluirEstudianteId = null)
         {
-            return await _dbContext.Estudiante
-                .AnyAsync(e => e.Matricula == matricula);
+            var query = _dbContext.Estudiante.Where(e => e.Matricula == matricula);
+            if (excluirEstudianteId.HasValue)
+                query = query.Where(e => e.IdEstudiante != excluirEstudianteId.Value);
+            return await query.AnyAsync();
         }
     }
 }

@@ -45,33 +45,35 @@ namespace WebApplication2.Services
 
         public async Task<IReadOnlyList<AspiranteDocumentoDto>> ListarEstadoAsync(ListarEstadoDocumentosRequest req)
         {
+            var aspirante = await _db.Aspirante.AsNoTracking().FirstOrDefaultAsync(a => a.IdAspirante == req.IdAspirante);
+
+            // Obtener documentos configurados para el plan del aspirante
+            var planDocIds = aspirante != null
+                ? await _db.PlanDocumentoRequisito
+                    .Where(pd => pd.IdPlanEstudios == aspirante.IdPlan)
+                    .Select(pd => pd.IdDocumentoRequisito)
+                    .ToListAsync()
+                : new List<int>();
+
+            var tienePlanDocs = planDocIds.Count > 0;
+
             var existe = await _db.AspiranteDocumento.AnyAsync(x => x.IdAspirante == req.IdAspirante);
             if (!existe)
             {
-                // Get the aspirant's plan to check for plan-specific documents
-                var aspirante = await _db.Aspirante.AsNoTracking().FirstOrDefaultAsync(a => a.IdAspirante == req.IdAspirante);
-                var planDocs = aspirante != null
-                    ? await _db.PlanDocumentoRequisito
-                        .Where(pd => pd.IdPlanEstudios == aspirante.IdPlan)
-                        .ToListAsync()
-                    : new List<PlanDocumentoRequisito>();
-
-                if (planDocs.Count > 0)
+                if (tienePlanDocs)
                 {
-                    // Use plan-specific documents
-                    foreach (var pd in planDocs)
+                    foreach (var idDoc in planDocIds)
                     {
                         _db.AspiranteDocumento.Add(new AspiranteDocumento
                         {
                             IdAspirante = req.IdAspirante,
-                            IdDocumentoRequisito = pd.IdDocumentoRequisito,
+                            IdDocumentoRequisito = idDoc,
                             Estatus = EstatusDocumentoEnum.PENDIENTE
                         });
                     }
                 }
                 else
                 {
-                    // Fallback: use all active documents
                     var reqs = await _db.DocumentoRequisito.Where(r => r.Activo).ToListAsync();
                     foreach (var r in reqs)
                     {
@@ -83,6 +85,44 @@ namespace WebApplication2.Services
                         });
                     }
                 }
+                await _db.SaveChangesAsync();
+            }
+            else if (tienePlanDocs)
+            {
+                // Sincronizar: si el plan tiene documentos configurados,
+                // agregar los que falten y eliminar los sobrantes (solo si están PENDIENTE y sin archivo)
+                var existentes = await _db.AspiranteDocumento
+                    .Where(d => d.IdAspirante == req.IdAspirante)
+                    .ToListAsync();
+
+                var existentesIds = existentes.Select(d => d.IdDocumentoRequisito).ToHashSet();
+                var planDocIdsSet = planDocIds.ToHashSet();
+
+                // Agregar documentos del plan que faltan
+                foreach (var idDoc in planDocIds)
+                {
+                    if (!existentesIds.Contains(idDoc))
+                    {
+                        _db.AspiranteDocumento.Add(new AspiranteDocumento
+                        {
+                            IdAspirante = req.IdAspirante,
+                            IdDocumentoRequisito = idDoc,
+                            Estatus = EstatusDocumentoEnum.PENDIENTE
+                        });
+                    }
+                }
+
+                // Eliminar documentos que NO están en el plan y están PENDIENTE sin archivo
+                foreach (var doc in existentes)
+                {
+                    if (!planDocIdsSet.Contains(doc.IdDocumentoRequisito)
+                        && doc.Estatus == EstatusDocumentoEnum.PENDIENTE
+                        && string.IsNullOrEmpty(doc.UrlArchivo))
+                    {
+                        _db.AspiranteDocumento.Remove(doc);
+                    }
+                }
+
                 await _db.SaveChangesAsync();
             }
 
@@ -251,6 +291,22 @@ namespace WebApplication2.Services
 
             var resultado = new List<DocumentacionAspiranteResumenDto>();
 
+            // Pre-cargar documentos por plan para filtrar correctamente
+            var planIds = aspirantes.Where(a => a.IdPlan > 0).Select(a => a.IdPlan).Distinct().ToList();
+            var planDocsMap = new Dictionary<int, HashSet<int>>();
+            if (planIds.Count > 0)
+            {
+                var allPlanDocs = await _db.PlanDocumentoRequisito
+                    .Where(pd => planIds.Contains(pd.IdPlanEstudios))
+                    .ToListAsync(ct);
+                foreach (var pd in allPlanDocs)
+                {
+                    if (!planDocsMap.ContainsKey(pd.IdPlanEstudios))
+                        planDocsMap[pd.IdPlanEstudios] = new HashSet<int>();
+                    planDocsMap[pd.IdPlanEstudios].Add(pd.IdDocumentoRequisito);
+                }
+            }
+
             foreach (var asp in aspirantes)
             {
                 var persona = asp.IdPersonaNavigation;
@@ -268,7 +324,21 @@ namespace WebApplication2.Services
                         .FirstOrDefaultAsync(ct);
                 }
 
-                var docs = asp.Documentos.ToList();
+                // Filtrar documentos por plan si tiene configuración
+                var allDocs = asp.Documentos.ToList();
+                List<AspiranteDocumento> docs;
+                if (planDocsMap.TryGetValue(asp.IdPlan, out var planDocIds) && planDocIds.Count > 0)
+                {
+                    // Solo mostrar documentos que están en la configuración del plan
+                    // o que ya tienen archivo subido (para no perder documentos ya cargados)
+                    docs = allDocs.Where(d => planDocIds.Contains(d.IdDocumentoRequisito)
+                        || d.Estatus != EstatusDocumentoEnum.PENDIENTE
+                        || !string.IsNullOrEmpty(d.UrlArchivo)).ToList();
+                }
+                else
+                {
+                    docs = allDocs;
+                }
                 var totalDocs = docs.Count;
                 var docsCompletos = docs.Count(d => d.Estatus == EstatusDocumentoEnum.VALIDADO || d.Estatus == EstatusDocumentoEnum.SUBIDO);
                 var docsPendientes = docs.Count(d => d.Estatus == EstatusDocumentoEnum.PENDIENTE);

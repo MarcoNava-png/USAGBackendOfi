@@ -6,5 +6,7 @@ namespace WebApplication2.Core.DTOs.MicrosoftGraph
         public string ClientId { get; set; } = null!;
         public string ClientSecret { get; set; } = null!;
         public string? DefaultUserEmail { get; set; }
+        public string? LicenseSkuId { get; set; }
+        public string UsageLocation { get; set; } = "MX";
     }
 }

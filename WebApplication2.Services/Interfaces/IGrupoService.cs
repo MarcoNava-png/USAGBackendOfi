@@ -76,5 +76,7 @@ namespace WebApplication2.Services.Interfaces
         Task<ImportarEstudiantesGrupoResponse> ImportarEstudiantesCompletoAsync(
             ImportarEstudiantesGrupoRequest request,
             CancellationToken ct = default);
+
+        Task<CambioGrupoResultDto> CambiarEstudianteDeGrupoAsync(CambioGrupoRequestDto request, CancellationToken ct = default);
     }
 }

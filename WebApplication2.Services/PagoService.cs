@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using WebApplication2.Core.DTOs;
 using WebApplication2.Core.DTOs.Comprobante;
 using WebApplication2.Core.DTOs.Pagos;
@@ -18,11 +19,13 @@ namespace WebApplication2.Services
         private readonly IMapper _mapper;
         private readonly IDocumentoEstudianteService? _documentoService;
         private readonly IBitacoraAccionService? _bitacora;
+        private readonly ILogger<PagoService> _logger;
 
-        public PagoService(ApplicationDbContext db, IMapper mapper, IDocumentoEstudianteService? documentoService = null, IBitacoraAccionService? bitacora = null)
+        public PagoService(ApplicationDbContext db, IMapper mapper, ILogger<PagoService> logger, IDocumentoEstudianteService? documentoService = null, IBitacoraAccionService? bitacora = null)
         {
             _db = db;
             _mapper = mapper;
+            _logger = logger;
             _documentoService = documentoService;
             _bitacora = bitacora;
         }
@@ -92,7 +95,7 @@ namespace WebApplication2.Services
 
             if (detalles.Count == 0)
             {
-                Console.WriteLine("⚠️ ADVERTENCIA: No se encontraron recibos afectados. No se actualizará ningún estatus.");
+                _logger.LogDebug("⚠️ ADVERTENCIA: No se encontraron recibos afectados. No se actualizará ningún estatus.");
             }
             else
             {
@@ -354,7 +357,7 @@ namespace WebApplication2.Services
 
                 if (!recibo.Detalles.Any())
                 {
-                    Console.WriteLine("⚠️ El recibo no tiene detalles, creando detalle automático...");
+                    _logger.LogDebug("⚠️ El recibo no tiene detalles, creando detalle automático...");
                     var detalleGenerico = new ReciboDetalle
                     {
                         IdRecibo = dto.IdRecibo,
@@ -525,7 +528,7 @@ namespace WebApplication2.Services
 
                 if (estatusPagado == null)
                 {
-                    Console.WriteLine("No se encontró estatus 'Pagado', buscando 'Admitido'...");
+                    _logger.LogDebug("No se encontró estatus 'Pagado', buscando 'Admitido'...");
                     estatusPagado = await _db.AspiranteEstatus
                         .Where(e => e.Status == Core.Enums.StatusEnum.Active)
                         .Where(e => e.DescEstatus == "Admitido")
@@ -557,7 +560,7 @@ namespace WebApplication2.Services
                 }
                 else
                 {
-                    Console.WriteLine("❌ ADVERTENCIA: No se encontró ningún estatus válido para marcar como 'Pagado'");
+                    _logger.LogDebug("❌ ADVERTENCIA: No se encontró ningún estatus válido para marcar como 'Pagado'");
                     var estatusDisponibles = await _db.AspiranteEstatus
                         .Where(e => e.Status == Core.Enums.StatusEnum.Active)
                         .Select(e => e.DescEstatus)
@@ -567,7 +570,7 @@ namespace WebApplication2.Services
             }
             else
             {
-                Console.WriteLine("No todos los recibos están pagados, el estatus del aspirante no cambiará");
+                _logger.LogDebug("No todos los recibos están pagados, el estatus del aspirante no cambiará");
             }
         }
 
@@ -595,7 +598,22 @@ namespace WebApplication2.Services
                 _db.Pago.Add(pago);
                 await _db.SaveChangesAsync(ct);
 
-                Console.WriteLine($"✓ Pago creado con IdPago: {pago.IdPago}, Folio: {pago.FolioPago}");
+                if (request.MetodosPago != null && request.MetodosPago.Count > 0)
+                {
+                    foreach (var metodo in request.MetodosPago)
+                    {
+                        _db.PagoMetodo.Add(new PagoMetodo
+                        {
+                            IdPago = pago.IdPago,
+                            IdMedioPago = metodo.IdMedioPago,
+                            Monto = metodo.Monto,
+                            Referencia = metodo.Referencia
+                        });
+                    }
+                    await _db.SaveChangesAsync(ct);
+                }
+
+                _logger.LogDebug($"Pago creado con IdPago: {pago.IdPago}, Folio: {pago.FolioPago}");
 
                 var recibosAfectados = new List<long>();
 
@@ -619,7 +637,7 @@ namespace WebApplication2.Services
 
                     if (!recibo.Detalles.Any())
                     {
-                        Console.WriteLine("⚠️ El recibo no tiene detalles, creando detalle automático...");
+                        _logger.LogDebug("⚠️ El recibo no tiene detalles, creando detalle automático...");
                         var detalleGenerico = new ReciboDetalle
                         {
                             IdRecibo = recibo.IdRecibo,
@@ -770,6 +788,8 @@ namespace WebApplication2.Services
         {
             var pago = await _db.Pago
                 .Include(p => p.MedioPago)
+                .Include(p => p.MetodosPago)
+                    .ThenInclude(pm => pm.MedioPago)
                 .FirstOrDefaultAsync(p => p.IdPago == idPago, ct);
 
             if (pago == null)
@@ -1023,7 +1043,15 @@ namespace WebApplication2.Services
                     Monto = pago.Monto,
                     Moneda = pago.Moneda,
                     Referencia = pago.Referencia,
-                    Notas = pago.Notas
+                    Notas = pago.Notas,
+                    MetodosPago = pago.MetodosPago.Any()
+                        ? pago.MetodosPago.Select(pm => new MetodoPagoComprobanteInfo
+                        {
+                            MedioPago = pm.MedioPago?.Descripcion ?? pm.MedioPago?.Clave ?? "N/A",
+                            Monto = pm.Monto,
+                            Referencia = pm.Referencia
+                        }).ToList()
+                        : null
                 },
                 Estudiante = estudianteInfo,
                 RecibosPagados = recibosPagados,

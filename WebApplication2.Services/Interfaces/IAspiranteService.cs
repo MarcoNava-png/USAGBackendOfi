@@ -11,6 +11,7 @@ namespace WebApplication2.Services.Interfaces
     public interface IAspiranteService
     {
         Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter);
+        Task<Dictionary<string, int>> GetContadoresAsync();
         Task<Aspirante> GetAspiranteByPersonaId(int id);
         Task<Aspirante> CrearAspirante(Aspirante aspirante);
         Task<Aspirante> ActualizarAspirante(Aspirante aspirante);

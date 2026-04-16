@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebApplication2.Configuration.Constants;
@@ -20,7 +21,7 @@ namespace WebApplication2.Controllers
         }
 
         private string GetUserId() => User.FindFirst("userId")?.Value ?? throw new UnauthorizedAccessException();
-        private string GetUserName() => User.Identity?.Name ?? "Usuario";
+        private string GetUserName() => User.FindFirst(ClaimTypes.Name)?.Value ?? "Usuario";
         private bool EsAdmin() => User.IsInRole("admin") || User.IsInRole("superadmin");
 
         [HttpPost]

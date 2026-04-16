@@ -32,16 +32,20 @@ namespace WebApplication2.Services
             _plantillaCobroService = plantillaCobroService;
         }
 
-        public async Task<IReadOnlyList<TarifaAdmisionDto>> ListarTarifasAsync(bool? soloActivas = null, CancellationToken ct = default)
+        public async Task<IReadOnlyList<TarifaAdmisionDto>> ListarTarifasAsync(bool? soloActivas = null, bool? esConvenioEmpresarial = null, CancellationToken ct = default)
         {
             var query = _db.TarifasAdmision
                 .Include(t => t.IdPlanEstudiosNavigation)
+                    .ThenInclude(p => p.IdCampusNavigation)
                 .Include(t => t.Detalles)
                     .ThenInclude(d => d.IdConceptoPagoNavigation)
                 .Where(t => t.Status != StatusEnum.Deleted);
 
             if (soloActivas.HasValue)
                 query = query.Where(t => t.Activo == soloActivas.Value);
+
+            if (esConvenioEmpresarial.HasValue)
+                query = query.Where(t => t.EsConvenioEmpresarial == esConvenioEmpresarial.Value);
 
             var lista = await query.OrderBy(t => t.IdPlanEstudiosNavigation.NombrePlanEstudios).ToListAsync(ct);
             return lista.Select(MapToDto).ToList();
@@ -76,6 +80,7 @@ namespace WebApplication2.Services
                 IdPlanEstudios = dto.IdPlanEstudios,
                 Nombre = dto.Nombre,
                 AplicaConvenioMensualidad = dto.AplicaConvenioMensualidad,
+                EsConvenioEmpresarial = dto.EsConvenioEmpresarial,
                 Activo = dto.Activo,
                 CreatedAt = DateTime.UtcNow,
                 CreatedBy = usuarioCreador,
@@ -108,6 +113,7 @@ namespace WebApplication2.Services
 
             tarifa.Nombre = dto.Nombre;
             tarifa.AplicaConvenioMensualidad = dto.AplicaConvenioMensualidad;
+            tarifa.EsConvenioEmpresarial = dto.EsConvenioEmpresarial;
             tarifa.Activo = dto.Activo;
             tarifa.UpdatedAt = DateTime.UtcNow;
             tarifa.UpdatedBy = usuarioModificador;
@@ -158,7 +164,9 @@ namespace WebApplication2.Services
         }
 
         public async Task<GenerarRecibosAdmisionResultDto> GenerarRecibosAsync(
-            int idAspirante, int idTarifaAdmision, bool pagoCompleto, CancellationToken ct = default)
+            int idAspirante, int idTarifaAdmision, bool pagoCompleto,
+            List<int>? conceptosIncluidos = null, decimal descuentoPorcentaje = 0,
+            CancellationToken ct = default)
         {
             var tarifa = await _db.TarifasAdmision
                 .Include(t => t.Detalles.Where(d => d.EsAplicable && d.Status != StatusEnum.Deleted))
@@ -170,7 +178,18 @@ namespace WebApplication2.Services
                 .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante, ct)
                 ?? throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
 
+            // Validar porcentaje de descuento
+            if (descuentoPorcentaje < 0) descuentoPorcentaje = 0;
+            if (descuentoPorcentaje > 100) descuentoPorcentaje = 100;
+
             var resultado = new GenerarRecibosAdmisionResultDto();
+
+            var conceptosYaConRecibo = await _db.Recibo
+                .Where(r => r.IdAspirante == idAspirante && r.Estatus != Core.Enums.EstatusRecibo.CANCELADO)
+                .SelectMany(r => r.Detalles.Select(d => d.IdConceptoPago))
+                .Distinct()
+                .ToListAsync(ct);
+            var conceptosExistentes = new HashSet<int>(conceptosYaConRecibo);
 
             foreach (var detalle in tarifa.Detalles.OrderBy(d => d.Orden))
             {
@@ -179,15 +198,37 @@ namespace WebApplication2.Services
                 if (esMensualidad && pagoCompleto)
                     continue;
 
-                var descuento = 0m;
-                if (tarifa.AplicaConvenioMensualidad && esMensualidad)
+                if (conceptosIncluidos != null && !conceptosIncluidos.Contains(detalle.IdConceptoPago))
+                    continue;
+
+                if (conceptosExistentes.Contains(detalle.IdConceptoPago))
                 {
-                    descuento = await _convenioService.CalcularDescuentoTotalAspiranteAsync(
-                        idAspirante, detalle.Monto, "COLEGIATURA", ct);
+                    resultado.Advertencias ??= new List<string>();
+                    resultado.Advertencias.Add($"{detalle.IdConceptoPagoNavigation?.Nombre ?? "Concepto"} ya tiene recibo generado, se omitió.");
+                    continue;
                 }
 
+                var monto = detalle.Monto;
+
+                // Aplicar descuento por porcentaje
+                var descuentoManual = descuentoPorcentaje > 0
+                    ? Math.Round(monto * (descuentoPorcentaje / 100m), 2)
+                    : 0m;
+
+                // Calcular descuento de convenio
+                var descuentoConvenio = 0m;
+                if (tarifa.AplicaConvenioMensualidad && esMensualidad)
+                {
+                    descuentoConvenio = await _convenioService.CalcularDescuentoTotalAspiranteAsync(
+                        idAspirante, monto, "COLEGIATURA", ct);
+                }
+
+                var descuentoTotal = descuentoManual + descuentoConvenio;
+                // No superar el monto original
+                if (descuentoTotal > monto) descuentoTotal = monto;
+
                 var recibo = await _reciboService.GenerarReciboAspiranteConConceptoYMontoAsync(
-                    idAspirante, detalle.IdConceptoPago, detalle.Monto, descuento, 7, ct);
+                    idAspirante, detalle.IdConceptoPago, monto, descuentoTotal, 7, ct);
 
                 resultado.RecibosAdmision.Add(recibo);
             }
@@ -225,6 +266,127 @@ namespace WebApplication2.Services
 
                         var recibo = await _reciboService.GenerarReciboAspiranteAsync(
                             idAspirante, montoFinal, descripcion, plantilla.DiaVencimiento, ct);
+
+                        resultado.RecibosMensualidades.Add(recibo);
+                    }
+                }
+            }
+
+            return resultado;
+        }
+
+        public async Task<GenerarRecibosAdmisionResultDto> GenerarRecibosV2Async(
+            int idAspirante, int idTarifaAdmision, GenerarRecibosAdmisionRequestV2Dto request,
+            CancellationToken ct = default)
+        {
+            var tarifa = await _db.TarifasAdmision
+                .Include(t => t.Detalles.Where(d => d.EsAplicable && d.Status != StatusEnum.Deleted))
+                    .ThenInclude(d => d.IdConceptoPagoNavigation)
+                .FirstOrDefaultAsync(t => t.IdTarifaAdmision == idTarifaAdmision && t.Status != StatusEnum.Deleted, ct)
+                ?? throw new InvalidOperationException($"No se encontró la tarifa con ID {idTarifaAdmision}");
+
+            var aspirante = await _db.Aspirante
+                .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante, ct)
+                ?? throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
+
+            var resultado = new GenerarRecibosAdmisionResultDto();
+
+            var conceptosYaConRecibo = await _db.Recibo
+                .Where(r => r.IdAspirante == idAspirante && r.Estatus != Core.Enums.EstatusRecibo.CANCELADO)
+                .SelectMany(r => r.Detalles.Select(d => d.IdConceptoPago))
+                .Distinct()
+                .ToListAsync(ct);
+            var conceptosExistentes = new HashSet<int>(conceptosYaConRecibo);
+
+            var conceptoPromocionMap = request.Conceptos.ToDictionary(c => c.IdConceptoPago, c => c.IdPromocion);
+
+            foreach (var detalle in tarifa.Detalles.OrderBy(d => d.Orden))
+            {
+                var esMensualidad = detalle.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.COLEGIATURA;
+
+                if (esMensualidad && request.PagoCompleto)
+                    continue;
+
+                if (!conceptoPromocionMap.ContainsKey(detalle.IdConceptoPago))
+                    continue;
+
+                if (conceptosExistentes.Contains(detalle.IdConceptoPago))
+                {
+                    resultado.Advertencias ??= new List<string>();
+                    resultado.Advertencias.Add($"{detalle.IdConceptoPagoNavigation?.Nombre ?? "Concepto"} ya tiene recibo generado, se omitió.");
+                    continue;
+                }
+
+                var monto = detalle.Monto;
+                var idPromocion = conceptoPromocionMap[detalle.IdConceptoPago];
+                var descuentoTotal = 0m;
+                string? nombrePromocion = null;
+
+                if (idPromocion.HasValue)
+                {
+                    var convenio = await _db.Convenio
+                        .FirstOrDefaultAsync(c => c.IdConvenio == idPromocion.Value && c.Status != StatusEnum.Deleted, ct);
+
+                    if (convenio != null)
+                    {
+                        nombrePromocion = convenio.Nombre;
+                        descuentoTotal = convenio.TipoBeneficio.ToUpperInvariant() switch
+                        {
+                            "PORCENTAJE" => convenio.DescuentoPct.HasValue
+                                ? Math.Round(monto * (convenio.DescuentoPct.Value / 100m), 2) : 0m,
+                            "MONTO" => convenio.Monto ?? 0m,
+                            "EXENCION" => monto,
+                            _ => 0m
+                        };
+
+                        if (descuentoTotal > monto) descuentoTotal = monto;
+                    }
+                }
+
+                var recibo = await _reciboService.GenerarReciboAspiranteConConceptoYMontoAsync(
+                    idAspirante, detalle.IdConceptoPago, monto, descuentoTotal, 7, nombrePromocion, ct);
+
+                if (request.IdEmpresa.HasValue)
+                {
+                    var reciboEntity = await _db.Recibo
+                        .FirstOrDefaultAsync(r => r.IdRecibo == recibo.IdRecibo, ct);
+                    if (reciboEntity != null)
+                    {
+                        reciboEntity.IdEmpresa = request.IdEmpresa;
+                    }
+                }
+
+                resultado.RecibosAdmision.Add(recibo);
+            }
+
+            if (request.IdEmpresa.HasValue && !aspirante.IdEmpresa.HasValue)
+            {
+                aspirante.IdEmpresa = request.IdEmpresa;
+            }
+
+            if (tarifa.EsConvenioEmpresarial)
+            {
+                aspirante.IdEmpresa ??= request.IdEmpresa;
+            }
+
+            await _db.SaveChangesAsync(ct);
+
+            if (request.PagoCompleto)
+            {
+                var cuatrimestre = aspirante.CuatrimestreInteres ?? 1;
+                var plantilla = await _plantillaCobroService.BuscarPlantillaActivaAsync(
+                    aspirante.IdPlan, cuatrimestre,
+                    aspirante.IdPeriodoAcademico, aspirante.TurnoId, aspirante.IdModalidad, ct);
+
+                if (plantilla?.Detalles != null)
+                {
+                    foreach (var detalle in plantilla.Detalles.OrderBy(d => d.Orden))
+                    {
+                        var monto = detalle.PrecioUnitario * detalle.Cantidad;
+                        var descripcion = detalle.Descripcion ?? detalle.NombreConcepto ?? "Mensualidad";
+
+                        var recibo = await _reciboService.GenerarReciboAspiranteAsync(
+                            idAspirante, monto, descripcion, plantilla.DiaVencimiento, ct);
 
                         resultado.RecibosMensualidades.Add(recibo);
                     }
@@ -316,7 +478,7 @@ namespace WebApplication2.Services
                     Valor  = ObtenerValor(d => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.CREDENCIAL, "No")
                 },
                 new() {
-                    Nombre = "CONVENIO",
+                    Nombre = "PROMOCIÓN",
                     Valor  = tarifa.AplicaConvenioMensualidad ? "SÍ" : "NO"
                 },
             };
@@ -333,14 +495,136 @@ namespace WebApplication2.Services
             };
         }
 
+        public async Task<CotizacionAdmisionPdfDto> GenerarCotizacionPdfDtoV2Async(
+            int idTarifaAdmision, int idAspirante, CotizacionAdmisionRequestDto request, CancellationToken ct = default)
+        {
+            var tarifa = await _db.TarifasAdmision
+                .Include(t => t.IdPlanEstudiosNavigation)
+                .Include(t => t.Detalles.Where(d => d.Status != StatusEnum.Deleted))
+                    .ThenInclude(d => d.IdConceptoPagoNavigation)
+                .FirstOrDefaultAsync(t => t.IdTarifaAdmision == idTarifaAdmision && t.Status != StatusEnum.Deleted, ct)
+                ?? throw new InvalidOperationException($"No se encontró la tarifa con ID {idTarifaAdmision}");
+
+            var aspirante = await _db.Aspirante
+                .Include(a => a.IdPersonaNavigation)
+                .Include(a => a.IdPlanNavigation)
+                .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante, ct)
+                ?? throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
+
+            var persona = aspirante.IdPersonaNavigation;
+            var nombreAspirante = persona != null
+                ? $"{persona.ApellidoPaterno} {persona.ApellidoMaterno} {persona.Nombre}".Trim()
+                : "N/A";
+
+            // Cargar promociones referenciadas
+            var idsPromocion = request.Conceptos
+                .Where(c => c.IdPromocion.HasValue)
+                .Select(c => c.IdPromocion!.Value)
+                .Distinct()
+                .ToList();
+
+            var conveniosDict = new Dictionary<int, Core.Models.Convenio>();
+            if (idsPromocion.Count > 0)
+            {
+                var convenios = await _db.Set<Core.Models.Convenio>()
+                    .Where(c => idsPromocion.Contains(c.IdConvenio))
+                    .ToListAsync(ct);
+                conveniosDict = convenios.ToDictionary(c => c.IdConvenio);
+            }
+
+            // Nombre de empresa
+            string? nombreEmpresa = null;
+            if (request.IdEmpresa.HasValue)
+            {
+                var empresa = await _db.Empresas.FindAsync(new object[] { request.IdEmpresa.Value }, ct);
+                nombreEmpresa = empresa?.Nombre;
+            }
+
+            // Crear lookup de promociones por concepto
+            var promoPorConcepto = request.Conceptos.ToDictionary(c => c.IdConceptoPago, c => c.IdPromocion);
+            var conceptosIncluidos = new HashSet<int>(request.Conceptos.Select(c => c.IdConceptoPago));
+
+            var conceptos = new List<CotizacionConceptoDto>();
+            decimal totalOriginal = 0;
+            decimal totalDescuento = 0;
+
+            foreach (var detalle in tarifa.Detalles.OrderBy(d => d.Orden))
+            {
+                var nombreConcepto = detalle.IdConceptoPagoNavigation?.Nombre ?? "Concepto";
+                var incluido = conceptosIncluidos.Contains(detalle.IdConceptoPago) && detalle.EsAplicable;
+                var monto = detalle.Monto;
+                decimal descuento = 0;
+                string? nombrePromo = null;
+
+                if (incluido && promoPorConcepto.TryGetValue(detalle.IdConceptoPago, out var idPromo) && idPromo.HasValue)
+                {
+                    if (conveniosDict.TryGetValue(idPromo.Value, out var convenio))
+                    {
+                        nombrePromo = $"{convenio.ClaveConvenio} — {convenio.Nombre}";
+                        switch (convenio.TipoBeneficio.ToUpper())
+                        {
+                            case "PORCENTAJE":
+                                descuento = Math.Round(monto * (convenio.DescuentoPct ?? 0) / 100m, 2);
+                                nombrePromo += $" ({convenio.DescuentoPct}%)";
+                                break;
+                            case "MONTO":
+                                descuento = Math.Min(convenio.Monto ?? 0, monto);
+                                nombrePromo += $" (-${convenio.Monto:N2})";
+                                break;
+                            case "EXENCION":
+                                descuento = monto;
+                                nombrePromo += " (Exención)";
+                                break;
+                        }
+                    }
+                }
+
+                var montoFinal = monto - descuento;
+
+                conceptos.Add(new CotizacionConceptoDto
+                {
+                    Nombre = nombreConcepto,
+                    Valor = incluido ? $"${montoFinal:N2}" : "N/A",
+                    Monto = monto,
+                    NombrePromocion = nombrePromo,
+                    MontoDescuento = descuento,
+                    MontoFinal = montoFinal,
+                    Incluido = incluido,
+                });
+
+                if (incluido)
+                {
+                    totalOriginal += monto;
+                    totalDescuento += descuento;
+                }
+            }
+
+            return new CotizacionAdmisionPdfDto
+            {
+                NombreAspirante = nombreAspirante,
+                Licenciatura    = tarifa.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? "N/A",
+                ClavePlan       = tarifa.IdPlanEstudiosNavigation?.ClavePlanEstudios ?? "",
+                NombreTarifa    = tarifa.Nombre,
+                Fecha           = DateOnly.FromDateTime(DateTime.UtcNow),
+                Conceptos       = conceptos,
+                Institucion     = new Core.DTOs.Recibo.InstitucionPdfDto(),
+                TotalOriginal   = totalOriginal,
+                TotalDescuento  = totalDescuento,
+                TotalFinal      = totalOriginal - totalDescuento,
+                NombreEmpresa   = nombreEmpresa,
+            };
+        }
+
         private static TarifaAdmisionDto MapToDto(TarifaAdmision t) => new()
         {
             IdTarifaAdmision = t.IdTarifaAdmision,
             IdPlanEstudios = t.IdPlanEstudios,
             NombrePlanEstudios = t.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? "",
             ClavePlanEstudios = t.IdPlanEstudiosNavigation?.ClavePlanEstudios ?? "",
+            NombreCampus = t.IdPlanEstudiosNavigation?.IdCampusNavigation?.Nombre,
             Nombre = t.Nombre,
             AplicaConvenioMensualidad = t.AplicaConvenioMensualidad,
+            EsConvenioEmpresarial = t.EsConvenioEmpresarial,
             Activo = t.Activo,
             Detalles = t.Detalles
                 .OrderBy(d => d.Orden)

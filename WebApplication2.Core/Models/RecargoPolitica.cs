@@ -11,12 +11,18 @@ namespace WebApplication2.Core.Models
         public int IdRecargoPolitica { get; set; }
         public int? IdCampus { get; set; }
         public int? IdPlanEstudios { get; set; }
-        public decimal TasaDiaria { get; set; }      
+        public decimal TasaDiaria { get; set; }
         public byte DiaInicioGracia { get; set; } = 1;
         public byte DiaFinGracia { get; set; } = 5;
         public decimal? RecargoMinimo { get; set; }
         public decimal? RecargoMaximo { get; set; }
         public int? TopeDiasMora { get; set; }
         public bool Activo { get; set; } = true;
+
+        public byte DiaInicioRecargoPorcentaje { get; set; } = 6;
+        public byte DiaFinRecargoPorcentaje { get; set; } = 15;
+        public decimal PorcentajeRecargo { get; set; } = 0.05m;
+        public byte DiaInicioCargoDiario { get; set; } = 16;
+        public decimal CargoDiarioFijo { get; set; } = 20m;
     }
 }

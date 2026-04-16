@@ -196,6 +196,32 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpPatch("{idEstudiante:int}/cambiar-matricula")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR}")]
+        [ProducesResponseType(typeof(AccionPanelResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<AccionPanelResponse>> CambiarMatricula(
+            [FromRoute] int idEstudiante,
+            [FromBody] Core.Requests.Estudiante.CambiarMatriculaRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _panelService.CambiarMatriculaAsync(idEstudiante, request.NuevaMatricula, ct);
+
+                if (!resultado.Exitoso)
+                {
+                    return BadRequest(resultado);
+                }
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
         [HttpGet("{idEstudiante:int}/becas")]
         [ProducesResponseType(typeof(List<BecaAsignadaDto>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<BecaAsignadaDto>>> ObtenerBecas(
@@ -330,6 +356,32 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpDelete("{idEstudiante:int}/documentos/{idAspiranteDocumento:long}/resetear")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.DIRECTOR}")]
+        [ProducesResponseType(typeof(AccionPanelResponse), StatusCodes.Status200OK)]
+        public async Task<ActionResult<AccionPanelResponse>> ResetearDocumentoPersonal(
+            [FromRoute] int idEstudiante,
+            [FromRoute] long idAspiranteDocumento,
+            [FromQuery] string? motivo = null,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var usuarioId = User.FindFirst("userId")?.Value;
+                var resultado = await _panelService.ResetearDocumentoPersonalAsync(
+                    idEstudiante, idAspiranteDocumento, motivo, usuarioId, ct);
+
+                if (!resultado.Exitoso)
+                    return BadRequest(resultado);
+
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
         [HttpGet("{idEstudiante:int}/documentos")]
         [ProducesResponseType(typeof(DocumentosDisponiblesDto), StatusCodes.Status200OK)]
         public async Task<ActionResult<DocumentosDisponiblesDto>> ObtenerDocumentosDisponibles(
@@ -447,11 +499,13 @@ namespace WebApplication2.Controllers
             [FromRoute] int idEstudiante,
             [FromQuery] bool activo,
             [FromQuery] string? motivo = null,
+            [FromQuery] int? tipoBaja = null,
+            [FromQuery] int? estadoBaja = null,
             CancellationToken ct = default)
         {
             try
             {
-                var resultado = await _panelService.ActualizarEstatusEstudianteAsync(idEstudiante, activo, motivo, ct);
+                var resultado = await _panelService.ActualizarEstatusEstudianteAsync(idEstudiante, activo, motivo, tipoBaja, estadoBaja, ct);
 
                 if (!resultado.Exitoso)
                 {

@@ -97,7 +97,10 @@ namespace WebApplication2.Services
                     a.IdPersonaNavigation.Nombre.ToLower().Contains(filterLower) ||
                     a.IdPersonaNavigation.ApellidoPaterno.ToLower().Contains(filterLower) ||
                     (a.IdPersonaNavigation.ApellidoMaterno != null && a.IdPersonaNavigation.ApellidoMaterno.ToLower().Contains(filterLower)) ||
-                    (a.IdPersonaNavigation.Curp != null && a.IdPersonaNavigation.Curp.ToLower().Contains(filterLower)));
+                    (a.IdPersonaNavigation.Correo != null && a.IdPersonaNavigation.Correo.ToLower().Contains(filterLower)) ||
+                    (a.IdPersonaNavigation.Curp != null && a.IdPersonaNavigation.Curp.ToLower().Contains(filterLower)) ||
+                    (a.IdPersonaNavigation.Telefono != null && a.IdPersonaNavigation.Telefono.Contains(filterLower)) ||
+                    (a.IdPersonaNavigation.Nombre + " " + a.IdPersonaNavigation.ApellidoPaterno + " " + (a.IdPersonaNavigation.ApellidoMaterno ?? "")).ToLower().Contains(filterLower));
             }
 
             baseQuery = baseQuery.Where(a => a.Status != Core.Enums.StatusEnum.Deleted);
@@ -105,6 +108,12 @@ namespace WebApplication2.Services
             baseQuery = baseQuery.Where(a =>
                 a.IdAspiranteEstatusNavigation == null ||
                 a.IdAspiranteEstatusNavigation.DescEstatus != "Cancelado");
+
+            baseQuery = baseQuery.Where(a =>
+                a.IdPersona == null ||
+                !_dbContext.Estudiante.Any(e =>
+                    e.Activo && e.IdPersona == a.IdPersona.Value && e.IdPlanActual == a.IdPlan) ||
+                (a.IdAspiranteEstatusNavigation != null && a.IdAspiranteEstatusNavigation.DescEstatus == "Inscrito"));
 
             var totalItems = await baseQuery.CountAsync();
 
@@ -120,6 +129,37 @@ namespace WebApplication2.Services
                 Items = aspirantes,
                 PageNumber = page,
                 PageSize = pageSize
+            };
+        }
+
+        public async Task<Dictionary<string, int>> GetContadoresAsync()
+        {
+            var query = _dbContext.Aspirante
+                .Include(a => a.IdAspiranteEstatusNavigation)
+                .Where(a => a.Status != Core.Enums.StatusEnum.Deleted)
+                .Where(a => a.IdAspiranteEstatusNavigation == null || a.IdAspiranteEstatusNavigation.DescEstatus != "Cancelado")
+                .Where(a =>
+                    a.IdPersona == null ||
+                    !_dbContext.Estudiante.Any(e =>
+                        e.Activo && e.IdPersona == a.IdPersona.Value && e.IdPlanActual == a.IdPlan) ||
+                    (a.IdAspiranteEstatusNavigation != null && a.IdAspiranteEstatusNavigation.DescEstatus == "Inscrito"));
+
+            var grupos = await query
+                .GroupBy(a => a.IdAspiranteEstatusNavigation != null ? a.IdAspiranteEstatusNavigation.DescEstatus : "Sin estatus")
+                .Select(g => new { Estatus = g.Key, Total = g.Count() })
+                .ToListAsync();
+
+            var total = grupos.Sum(g => g.Total);
+            var inscritos = grupos.Where(g => g.Estatus == "Inscrito").Sum(g => g.Total);
+            var aceptados = grupos.Where(g => g.Estatus == "Aceptado").Sum(g => g.Total);
+            var pendientes = total - inscritos - aceptados;
+
+            return new Dictionary<string, int>
+            {
+                { "total", total },
+                { "inscritos", inscritos },
+                { "aceptados", aceptados },
+                { "pendientes", pendientes }
             };
         }
 
@@ -158,30 +198,66 @@ namespace WebApplication2.Services
 
         public async Task<Aspirante> CrearAspirante(Aspirante aspirante)
         {
-            var curpValida = (await _dbContext.Persona
-                .SingleOrDefaultAsync(p => p.Curp == aspirante.IdPersonaNavigation!.Curp)) == null;
+            var curp = aspirante.IdPersonaNavigation?.Curp;
+            var correo = aspirante.IdPersonaNavigation?.Correo;
+            Persona? personaExistente = null;
 
-            var correoValido = (await _dbContext.Persona
-                .SingleOrDefaultAsync(p => p.Correo == aspirante.IdPersonaNavigation!.Correo)) == null;
+            if (!string.IsNullOrWhiteSpace(curp))
+            {
+                personaExistente = await _dbContext.Persona
+                    .FirstOrDefaultAsync(p => p.Curp == curp);
 
+                if (personaExistente != null)
+                {
+                    var estudianteActivo = await _dbContext.Estudiante
+                        .Include(e => e.IdPlanActualNavigation)
+                        .FirstOrDefaultAsync(e => e.IdPersona == personaExistente.IdPersona
+                            && e.Status == Core.Enums.StatusEnum.Active);
 
-            if (!curpValida)
-                throw new Exception("Ya existe un aspirante con la curp ingresada.");
+                    var aspiranteExistenteMismoPlan = await _dbContext.Aspirante
+                        .FirstOrDefaultAsync(a => a.IdPersona == personaExistente.IdPersona
+                            && a.IdPlan == aspirante.IdPlan
+                            && a.Status == Core.Enums.StatusEnum.Active);
 
-            if (!correoValido)
-                throw new Exception("Ya existe un aspirante con el correo ingresado.");
+                    if (aspiranteExistenteMismoPlan != null)
+                        throw new Exception($"Ya existe un aspirante activo con esta CURP en el mismo plan de estudios (ID Aspirante: {aspiranteExistenteMismoPlan.IdAspirante}).");
 
+                    var infoExtra = "";
+                    if (estudianteActivo != null)
+                        infoExtra = $" Nota: Esta persona tiene un registro de estudiante activo en '{estudianteActivo.IdPlanActualNavigation?.NombrePlanEstudios ?? "N/A"}' con matrícula {estudianteActivo.Matricula}.";
+
+                    aspirante.IdPersona = personaExistente.IdPersona;
+                    aspirante.IdPersonaNavigation = null;
+                }
+            }
+
+            if (personaExistente == null && !string.IsNullOrWhiteSpace(correo))
+            {
+                var personaPorCorreo = await _dbContext.Persona
+                    .FirstOrDefaultAsync(p => p.Correo == correo);
+
+                if (personaPorCorreo != null)
+                {
+                    var aspiranteExistenteMismoPlan = await _dbContext.Aspirante
+                        .FirstOrDefaultAsync(a => a.IdPersona == personaPorCorreo.IdPersona
+                            && a.IdPlan == aspirante.IdPlan
+                            && a.Status == Core.Enums.StatusEnum.Active);
+
+                    if (aspiranteExistenteMismoPlan != null)
+                        throw new Exception($"Ya existe un aspirante activo con este correo en el mismo plan de estudios.");
+
+                    aspirante.IdPersona = personaPorCorreo.IdPersona;
+                    aspirante.IdPersonaNavigation = null;
+                }
+            }
 
             await using var tx = await _dbContext.Database.BeginTransactionAsync();
             try
             {
-
                 await _dbContext.Aspirante.AddAsync(aspirante);
                 await _dbContext.SaveChangesAsync();
 
                 await InicializarDocumentosAspiranteAsync(aspirante.IdAspirante);
-
-                await GenerarReciboInscripcionAspiranteAsync(aspirante.IdAspirante);
 
                 await tx.CommitAsync();
                 return aspirante;
@@ -249,6 +325,7 @@ namespace WebApplication2.Services
             aspirante.CuatrimestreInteres = newAspirante.CuatrimestreInteres;
             aspirante.InstitucionProcedencia = newAspirante.InstitucionProcedencia;
             aspirante.IdModalidad = newAspirante.IdModalidad;
+            aspirante.GrupoDiasImparticion = newAspirante.GrupoDiasImparticion;
             aspirante.IdPeriodoAcademico = newAspirante.IdPeriodoAcademico;
             aspirante.RecorridoPlantel = newAspirante.RecorridoPlantel;
             aspirante.Trabaja = newAspirante.Trabaja;
@@ -256,6 +333,7 @@ namespace WebApplication2.Services
             aspirante.DomicilioEmpresa = newAspirante.DomicilioEmpresa;
             aspirante.PuestoEmpresa = newAspirante.PuestoEmpresa;
             aspirante.QuienCubreGastos = newAspirante.QuienCubreGastos;
+            aspirante.IdEmpresa = newAspirante.IdEmpresa;
 
             _dbContext.Aspirante.Update(aspirante);
 
@@ -570,8 +648,13 @@ namespace WebApplication2.Services
             string? diasTexto = null;
             if (aspirante.IdModalidad.HasValue)
             {
-                var dias = await _dbContext.PlanModalidadDia
-                    .Where(d => d.IdPlanEstudios == aspirante.IdPlan && d.IdModalidad == aspirante.IdModalidad.Value)
+                var diasQuery = _dbContext.PlanModalidadDia
+                    .Where(d => d.IdPlanEstudios == aspirante.IdPlan && d.IdModalidad == aspirante.IdModalidad.Value);
+
+                if (aspirante.GrupoDiasImparticion.HasValue)
+                    diasQuery = diasQuery.Where(d => d.Grupo == aspirante.GrupoDiasImparticion.Value);
+
+                var dias = await diasQuery
                     .Include(d => d.IdDiaSemanaNavigation)
                     .OrderBy(d => d.IdDiaSemana)
                     .Select(d => d.IdDiaSemanaNavigation.Nombre)
@@ -614,47 +697,114 @@ namespace WebApplication2.Services
                     edad--;
             }
 
-            // Obtener precios vigentes de conceptos para el plan del aspirante
-            var hoyFecha = DateOnly.FromDateTime(DateTime.UtcNow);
-            var preciosVigentes = await _dbContext.ConceptoPrecio
-                .Include(cp => cp.ConceptoPago)
-                .Where(cp => cp.Activo
-                    && cp.ConceptoPago.Activo
-                    && cp.VigenciaDesde <= hoyFecha
-                    && (cp.VigenciaHasta == null || cp.VigenciaHasta >= hoyFecha)
-                    && (cp.IdPlanEstudios == null || cp.IdPlanEstudios == aspirante.IdPlan))
-                .OrderByDescending(cp => cp.IdPlanEstudios.HasValue)
-                .ThenByDescending(cp => cp.VigenciaDesde)
+            var esConvenio = aspirante.IdEmpresa.HasValue ||
+                await _dbContext.AspiranteConvenio
+                    .AnyAsync(ac => ac.IdAspirante == aspirante.IdAspirante && ac.Status == Core.Enums.StatusEnum.Active);
+
+            var tarifaDetalles = await _dbContext.TarifasAdmisionDetalles
+                .Include(td => td.IdTarifaAdmisionNavigation)
+                .Include(td => td.IdConceptoPagoNavigation)
+                .Where(td => td.IdTarifaAdmisionNavigation.IdPlanEstudios == aspirante.IdPlan
+                    && td.IdTarifaAdmisionNavigation.Activo
+                    && td.IdTarifaAdmisionNavigation.Status != Core.Enums.StatusEnum.Deleted
+                    && td.IdTarifaAdmisionNavigation.EsConvenioEmpresarial == esConvenio
+                    && td.EsAplicable)
+                .OrderBy(td => td.Orden)
                 .ToListAsync();
 
-            decimal? ObtenerPrecio(ConceptoTipoEnum tipo)
+            var reciboPorConcepto = recibos
+                .SelectMany(r => r.Detalles.Select(d => new { d.IdConceptoPago, r.Total, r.Descuento, r.Subtotal, r.Notas, r.Estatus }))
+                .GroupBy(x => x.IdConceptoPago)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            List<CostoDesglosePdfDto> costosDesglose;
+
+            if (tarifaDetalles.Count > 0)
             {
-                var precio = preciosVigentes
-                    .FirstOrDefault(p => p.ConceptoPago.Tipo == tipo);
-                return precio?.Importe;
+                var idsConceptoReciboPagado = recibos
+                    .Where(r => r.Estatus == Core.Enums.EstatusRecibo.PAGADO)
+                    .SelectMany(r => r.Detalles.Select(d => d.IdConceptoPago))
+                    .ToHashSet();
+
+                costosDesglose = tarifaDetalles
+                    .Select(td =>
+                    {
+                        reciboPorConcepto.TryGetValue(td.IdConceptoPago, out var recibo);
+
+                        string? nota = null;
+                        decimal descuentoMonto = 0;
+                        decimal subtotalRecibo = 0;
+                        bool tieneReciboConcepto = false;
+
+                        if (recibo != null)
+                        {
+                            descuentoMonto = recibo.Descuento;
+                            subtotalRecibo = recibo.Subtotal;
+                            tieneReciboConcepto = true;
+                        }
+                        else if (idsConceptoReciboPagado.Contains(td.IdConceptoPago))
+                        {
+                            tieneReciboConcepto = true;
+                        }
+
+                        if (tieneReciboConcepto && descuentoMonto > 0)
+                        {
+                            var porcentaje = subtotalRecibo > 0 ? Math.Round((descuentoMonto / subtotalRecibo) * 100, 0) : 0;
+                            nota = $"Descuento {porcentaje}% - ${descuentoMonto:N2}";
+                        }
+                        else if (tieneReciboConcepto && recibo?.Estatus == Core.Enums.EstatusRecibo.PAGADO)
+                        {
+                            nota = "Pagado";
+                        }
+                        else if (!tieneReciboConcepto && td.Monto > 0)
+                        {
+                            nota = "Pendiente";
+                        }
+
+                        return new CostoDesglosePdfDto
+                        {
+                            Concepto = td.IdConceptoPagoNavigation.Nombre.ToUpper(),
+                            Monto = td.Monto,
+                            Nota = nota
+                        };
+                    })
+                    .ToList();
+            }
+            else
+            {
+                var hoyFecha = DateOnly.FromDateTime(DateTime.UtcNow);
+                var preciosVigentes = await _dbContext.ConceptoPrecio
+                    .Include(cp => cp.ConceptoPago)
+                    .Where(cp => cp.Activo
+                        && cp.ConceptoPago.Activo
+                        && cp.VigenciaDesde <= hoyFecha
+                        && (cp.VigenciaHasta == null || cp.VigenciaHasta >= hoyFecha)
+                        && (cp.IdPlanEstudios == null || cp.IdPlanEstudios == aspirante.IdPlan))
+                    .OrderByDescending(cp => cp.IdPlanEstudios.HasValue)
+                    .ThenByDescending(cp => cp.VigenciaDesde)
+                    .ToListAsync();
+
+                decimal? ObtenerPrecioPorClave(string clave)
+                {
+                    var precio = preciosVigentes
+                        .FirstOrDefault(p => p.ConceptoPago.Clave.Equals(clave, StringComparison.OrdinalIgnoreCase));
+                    return precio?.Importe;
+                }
+
+                costosDesglose = new List<CostoDesglosePdfDto>
+                {
+                    new() { Concepto = "FICHA DE ADMISIÓN", Monto = ObtenerPrecioPorClave("FICHA") ?? ObtenerPrecioPorClave("FICHA_ADMISION") },
+                    new() { Concepto = "INSCRIPCIÓN", Monto = ObtenerPrecioPorClave("INSC") ?? ObtenerPrecioPorClave("INSCRIPCION") },
+                    new() { Concepto = "REINSCRIPCIÓN", Monto = ObtenerPrecioPorClave("REINSCRIPCION") },
+                    new() { Concepto = "EXAMEN DE ADMISIÓN", Monto = ObtenerPrecioPorClave("EXAMEN") ?? ObtenerPrecioPorClave("EXAMEN_ADMISION") },
+                    new() { Concepto = "PROPEDÉUTICO", Monto = ObtenerPrecioPorClave("PROPEDEUTICO") },
+                    new() { Concepto = "MENSUALIDADES", Monto = ObtenerPrecioPorClave("COLEGIATURA") ?? ObtenerPrecioPorClave("MENSUALIDAD") },
+                    new() { Concepto = "SEGURO ESTUDIANTIL", Monto = ObtenerPrecioPorClave("SEGURO") },
+                    new() { Concepto = "CREDENCIAL ESTUDIANTIL", Monto = ObtenerPrecioPorClave("CREDENCIAL") },
+                };
             }
 
-            decimal? ObtenerPrecioPorClave(string clave)
-            {
-                var precio = preciosVigentes
-                    .FirstOrDefault(p => p.ConceptoPago.Clave.ToUpper() == clave.ToUpper());
-                return precio?.Importe;
-            }
-
-            var costosDesglose = new List<CostoDesglosePdfDto>
-            {
-                new() { Concepto = "FICHA DE ADMISIÓN", Monto = ObtenerPrecioPorClave("FICHA") ?? ObtenerPrecioPorClave("FICHA_ADMISION") },
-                new() { Concepto = "INSCRIPCIÓN", Monto = ObtenerPrecio(ConceptoTipoEnum.INSCRIPCION) ?? ObtenerPrecioPorClave("INSCRIPCION") },
-                new() { Concepto = "REINSCRIPCIÓN", Monto = ObtenerPrecioPorClave("REINSCRIPCION") },
-                new() { Concepto = "EXAMEN DE ADMISIÓN", Monto = ObtenerPrecio(ConceptoTipoEnum.EXAMEN) ?? ObtenerPrecioPorClave("EXAMEN") ?? ObtenerPrecioPorClave("EXAMEN_ADMISION") },
-                new() { Concepto = "PROPEDÉUTICO", Monto = ObtenerPrecioPorClave("PROPEDEUTICO") },
-                new() { Concepto = "MENSUALIDADES", Monto = ObtenerPrecio(ConceptoTipoEnum.COLEGIATURA) ?? ObtenerPrecioPorClave("COLEGIATURA") ?? ObtenerPrecioPorClave("MENSUALIDAD") },
-                new() { Concepto = "SEGURO ESTUDIANTIL", Monto = ObtenerPrecio(ConceptoTipoEnum.SEGURO) ?? ObtenerPrecioPorClave("SEGURO") },
-                new() { Concepto = "CREDENCIAL ESTUDIANTIL", Monto = ObtenerPrecio(ConceptoTipoEnum.CREDENCIAL) ?? ObtenerPrecioPorClave("CREDENCIAL") },
-            };
-
-            var tieneConvenio = await _dbContext.AspiranteConvenio
-                .AnyAsync(ac => ac.IdAspirante == aspiranteId && ac.Estatus == "ACTIVO");
+            var tieneConvenio = esConvenio || aspirante.IdEmpresa.HasValue;
 
             var ficha = new FichaAdmisionDto
             {
@@ -910,7 +1060,7 @@ namespace WebApplication2.Services
 
                 var dominioEmail = "@usaguanajuato.edu.mx";
                 var emailUsuario = $"{matricula}{dominioEmail}";
-                var passwordTemporal = matricula;
+                var passwordTemporal = $"Usag{DateTime.Now:yyyyMMdd}!";
 
                 // Crear correo en Azure AD si se solicita
                 string? azureUserId = null;
@@ -994,14 +1144,13 @@ namespace WebApplication2.Services
 
                 var estatusInscrito = await _dbContext.AspiranteEstatus
                     .Where(e => e.Status == Core.Enums.StatusEnum.Active)
-                    .FirstOrDefaultAsync(e => e.DescEstatus == "Admitido");
+                    .FirstOrDefaultAsync(e => e.DescEstatus == "Inscrito");
 
                 if (estatusInscrito == null)
                 {
-                    Console.WriteLine("No se encontro estatus 'Admitido', buscando alternativas...");
                     estatusInscrito = await _dbContext.AspiranteEstatus
                         .Where(e => e.Status == Core.Enums.StatusEnum.Active)
-                        .FirstOrDefaultAsync(e => e.DescEstatus.Contains("Admit"));
+                        .FirstOrDefaultAsync(e => e.DescEstatus.Contains("Inscrit"));
                 }
 
                 if (estatusInscrito != null)

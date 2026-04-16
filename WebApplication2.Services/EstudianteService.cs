@@ -17,16 +17,15 @@ namespace WebApplication2.Services
 
         public async Task<PagedResult<Estudiante>> GetEstudiantes(int page, int pageSize)
         {
-            var totalItems = await _dbContext.Estudiante
-                .Include(d => d.IdPersonaNavigation)
-                .Include(d => d.IdPlanActualNavigation)
-                .Where(d => d.Status == Core.Enums.StatusEnum.Active)
-                .CountAsync();
+            var query = _dbContext.Estudiante
+                .Where(d => d.Status == Core.Enums.StatusEnum.Active);
 
-            var items = await _dbContext.Estudiante
+            var totalItems = await query.CountAsync();
+
+            var items = await query
+                .AsNoTracking()
                 .Include(d => d.IdPersonaNavigation)
                 .Include(d => d.IdPlanActualNavigation)
-                .Where(d => d.Status == Core.Enums.StatusEnum.Active)
                 .OrderBy(d => d.IdPersonaNavigation.ApellidoPaterno)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -43,11 +42,8 @@ namespace WebApplication2.Services
 
         public async Task<Estudiante> GetEstudianteDetalle(int id)
         {
-            var totalItems = await _dbContext.Estudiante
-                .Where(d => d.Status == Core.Enums.StatusEnum.Active)
-                .CountAsync();
-
             var estudiante = await _dbContext.Estudiante
+                .AsNoTracking()
                 .Include(d => d.IdPersonaNavigation)
                 .Include(d => d.Inscripcion)
                 .ThenInclude(i => i.IdGrupoMateriaNavigation)
@@ -66,6 +62,7 @@ namespace WebApplication2.Services
         public async Task<Estudiante?> GetEstudianteByMatricula(string matricula)
         {
             return await _dbContext.Estudiante
+                .AsNoTracking()
                 .Include(d => d.IdPersonaNavigation)
                 .Include(d => d.IdPlanActualNavigation)
                 .FirstOrDefaultAsync(e => e.Matricula == matricula && e.Status == Core.Enums.StatusEnum.Active);

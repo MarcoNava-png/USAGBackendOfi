@@ -26,5 +26,6 @@ namespace WebApplication2.Core.DTOs.Recibo
         public string? NombrePeriodo { get; set; }
         public string? CodigoGrupo { get; set; }
         public List<ReciboDetalleParaCobroDto> Detalles { get; set; } = new();
+        public string? ConceptoResumen { get; set; }
     }
 }

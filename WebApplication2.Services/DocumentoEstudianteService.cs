@@ -517,57 +517,56 @@ namespace WebApplication2.Services
             var persona = estudiante.IdPersonaNavigation;
             var plan = estudiante.IdPlanActualNavigation;
 
-            var creditosTotales = await _db.MateriaPlan
-                .Where(mp => mp.IdPlanEstudios == estudiante.IdPlanActual)
+            var materiasPlan = await _db.MateriaPlan
                 .Include(mp => mp.IdMateriaNavigation)
-                .SumAsync(mp => mp.IdMateriaNavigation.Creditos);
+                .Where(mp => mp.IdPlanEstudios == estudiante.IdPlanActual && mp.Status == Core.Enums.StatusEnum.Active)
+                .OrderBy(mp => mp.Cuatrimestre)
+                .ThenBy(mp => mp.IdMateriaNavigation.Nombre)
+                .ToListAsync();
 
-            var inscripcionesList = estudiante.Inscripcion.ToList();
+            var creditosTotales = materiasPlan.Sum(mp => mp.IdMateriaNavigation?.Creditos ?? 0);
 
-            if (soloPeriodoActual)
-            {
-                var periodoActual = await _db.PeriodoAcademico
-                    .Where(p => p.EsPeriodoActual)
-                    .OrderByDescending(p => p.FechaInicio)
-                    .FirstOrDefaultAsync();
+            var inscripcionesDict = estudiante.Inscripcion
+                .Where(i => i.IdGrupoMateriaNavigation?.IdMateriaPlanNavigation != null)
+                .GroupBy(i => i.IdGrupoMateriaNavigation!.IdMateriaPlanNavigation!.IdMateria)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.CalificacionFinal ?? -1).First());
 
-                if (periodoActual != null)
+            var periodos = materiasPlan
+                .GroupBy(mp => mp.Cuatrimestre)
+                .OrderBy(g => g.Key)
+                .Select(g =>
                 {
-                    inscripcionesList = inscripcionesList
-                        .Where(i => i.IdGrupoMateriaNavigation?.IdGrupoNavigation?.IdPeriodoAcademico == periodoActual.IdPeriodoAcademico)
-                        .ToList();
-                }
-            }
-
-            var periodos = inscripcionesList
-                .Where(i => i.IdGrupoMateriaNavigation?.IdGrupoNavigation?.IdPeriodoAcademicoNavigation != null)
-                .GroupBy(i => i.IdGrupoMateriaNavigation!.IdGrupoNavigation!.IdPeriodoAcademicoNavigation)
-                .OrderBy(g => g.Key!.FechaInicio)
-                .Select(g => new KardexPeriodoDto
-                {
-                    Periodo = g.Key!.Nombre,
-                    Ciclo = g.Key.Clave ?? "",
-                    Materias = g.Select(i => new KardexMateriaDto
+                    var materias = g.Select(mp =>
                     {
-                        ClaveMateria = i.IdGrupoMateriaNavigation?.IdMateriaPlanNavigation?.IdMateriaNavigation?.Clave ?? "",
-                        NombreMateria = i.IdGrupoMateriaNavigation?.IdMateriaPlanNavigation?.IdMateriaNavigation?.Nombre ?? "",
-                        Creditos = (int)(i.IdGrupoMateriaNavigation?.IdMateriaPlanNavigation?.IdMateriaNavigation?.Creditos ?? 0),
-                        CalificacionFinal = i.CalificacionFinal,
-                        Estatus = DeterminarEstatusMateria(i),
-                        TipoAcreditacion = "Ordinario"
-                    }).ToList(),
-                    PromedioPeriodo = g.Where(i => i.CalificacionFinal.HasValue).Select(i => i.CalificacionFinal!.Value).DefaultIfEmpty(0).Average(),
-                    CreditosPeriodo = g.Sum(i => (int)(i.IdGrupoMateriaNavigation?.IdMateriaPlanNavigation?.IdMateriaNavigation?.Creditos ?? 0))
+                        inscripcionesDict.TryGetValue(mp.IdMateria, out var insc);
+                        var ciclo = insc?.IdGrupoMateriaNavigation?.IdGrupoNavigation?.IdPeriodoAcademicoNavigation?.Nombre ?? "";
+
+                        return new KardexMateriaDto
+                        {
+                            ClaveMateria = mp.IdMateriaNavigation?.Clave ?? "",
+                            NombreMateria = mp.IdMateriaNavigation?.Nombre ?? "",
+                            Creditos = (int)(mp.IdMateriaNavigation?.Creditos ?? 0),
+                            CalificacionFinal = insc?.CalificacionFinal,
+                            Estatus = insc != null ? DeterminarEstatusMateria(insc) : "Pendiente",
+                            TipoAcreditacion = "Ordinario",
+                            Ciclo = ciclo
+                        };
+                    }).ToList();
+
+                    return new KardexPeriodoDto
+                    {
+                        Periodo = g.Key.ToString(),
+                        Ciclo = "",
+                        Materias = materias,
+                        PromedioPeriodo = materias.Where(m => m.CalificacionFinal.HasValue).Select(m => m.CalificacionFinal!.Value).DefaultIfEmpty(0).Average(),
+                        CreditosPeriodo = materias.Where(m => m.CalificacionFinal.HasValue && m.Estatus == "Aprobada").Sum(m => m.Creditos)
+                    };
                 })
                 .ToList();
 
             var creditosCursados = periodos.Sum(p => p.CreditosPeriodo);
-            var promedioGeneral = periodos
-                .SelectMany(p => p.Materias)
-                .Where(m => m.CalificacionFinal.HasValue)
-                .Select(m => m.CalificacionFinal!.Value)
-                .DefaultIfEmpty(0)
-                .Average();
+            var todasMaterias = periodos.SelectMany(p => p.Materias).Where(m => m.CalificacionFinal.HasValue).ToList();
+            var promedioGeneral = todasMaterias.Count > 0 ? todasMaterias.Average(m => m.CalificacionFinal!.Value) : 0;
 
             return new KardexEstudianteDto
             {
@@ -781,6 +780,7 @@ namespace WebApplication2.Services
                 TipoDocumentoClave = s.TipoDocumento?.Clave ?? "",
                 IdRecibo = s.IdRecibo,
                 FolioRecibo = s.Recibo?.Folio,
+                EstatusRecibo = s.Recibo?.Estatus.ToString(),
                 Variante = s.Variante.ToString(),
                 FechaSolicitud = s.FechaSolicitud,
                 FechaGeneracion = s.FechaGeneracion,

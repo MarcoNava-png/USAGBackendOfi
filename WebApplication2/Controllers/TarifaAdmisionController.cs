@@ -22,9 +22,9 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Listar([FromQuery] bool? soloActivas = null, CancellationToken ct = default)
+        public async Task<IActionResult> Listar([FromQuery] bool? soloActivas = null, [FromQuery] bool? esConvenioEmpresarial = null, CancellationToken ct = default)
         {
-            var result = await _service.ListarTarifasAsync(soloActivas, ct);
+            var result = await _service.ListarTarifasAsync(soloActivas, esConvenioEmpresarial, ct);
             return Ok(result);
         }
 
@@ -119,12 +119,34 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpPost("{id:int}/aspirante/{idAspirante:int}/cotizacion-pdf-v2")]
+        public async Task<IActionResult> CotizacionPdfV2(int id, int idAspirante, [FromBody] Core.DTOs.TarifaAdmision.CotizacionAdmisionRequestDto request, CancellationToken ct = default)
+        {
+            try
+            {
+                var dto = await _service.GenerarCotizacionPdfDtoV2Async(id, idAspirante, request, ct);
+                var pdfBytes = _pdfService.GenerarCotizacionAdmisionPdf(dto);
+                var nombreArchivo = $"CotizacionAdmision_{dto.ClavePlan}_{DateTime.Now:yyyyMMdd}.pdf";
+                return File(pdfBytes, "application/pdf", nombreArchivo);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al generar cotización PDF", error = ex.Message });
+            }
+        }
+
         [HttpPost("{id:int}/generar-recibos/{idAspirante:int}")]
         public async Task<IActionResult> GenerarRecibos(int id, int idAspirante, [FromBody] GenerarRecibosAdmisionRequestDto dto, CancellationToken ct = default)
         {
             try
             {
-                var result = await _service.GenerarRecibosAsync(idAspirante, id, dto.PagoCompleto, ct);
+                var result = await _service.GenerarRecibosAsync(
+                    idAspirante, id, dto.PagoCompleto,
+                    dto.ConceptosIncluidos, dto.DescuentoPorcentaje, ct);
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -134,6 +156,24 @@ namespace WebApplication2.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, ex.Message);
+            }
+        }
+
+        [HttpPost("{id:int}/generar-recibos-v2/{idAspirante:int}")]
+        public async Task<IActionResult> GenerarRecibosV2(int id, int idAspirante, [FromBody] Core.DTOs.TarifaAdmision.GenerarRecibosAdmisionRequestV2Dto dto, CancellationToken ct = default)
+        {
+            try
+            {
+                var result = await _service.GenerarRecibosV2Async(idAspirante, id, dto, ct);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
             }
         }
     }
@@ -146,5 +186,7 @@ namespace WebApplication2.Controllers
     public class GenerarRecibosAdmisionRequestDto
     {
         public bool PagoCompleto { get; set; } = false;
+        public List<int>? ConceptosIncluidos { get; set; }
+        public decimal DescuentoPorcentaje { get; set; } = 0;
     }
 }

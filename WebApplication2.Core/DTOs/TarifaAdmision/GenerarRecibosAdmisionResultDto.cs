@@ -7,5 +7,6 @@ namespace WebApplication2.Core.DTOs.TarifaAdmision
         public List<ReciboDto> RecibosAdmision { get; set; } = new();
         public List<ReciboDto> RecibosMensualidades { get; set; } = new();
         public int TotalRecibos => RecibosAdmision.Count + RecibosMensualidades.Count;
+        public List<string>? Advertencias { get; set; }
     }
 }

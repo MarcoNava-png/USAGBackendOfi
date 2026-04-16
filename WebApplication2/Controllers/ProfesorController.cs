@@ -33,7 +33,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<PagedResult<ProfesorDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
+        public async Task<ActionResult<PagedResult<ProfesorDto>>> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
         {
             var pagination = await _profesorService.GetAllProfesores(page, pageSize);
 
@@ -51,7 +51,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet("{campusId:int}")]
-        public async Task<ActionResult<PagedResult<ProfesorDto>>> Get(int campusId, [FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
+        public async Task<ActionResult<PagedResult<ProfesorDto>>> Get(int campusId, [FromQuery] int page = 1, [FromQuery] int pageSize = 100)
         {
             var pagination = await _profesorService.GetProfesores(campusId, page, pageSize);
 

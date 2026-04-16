@@ -287,6 +287,19 @@ public class DocentePortalController : ControllerBase
         acta.StatusParcial = StatusParcialEnum.Abierto;
         acta.FechaApertura = req.FechaApertura ?? DateTime.UtcNow;
 
+        if (acta.InscripcionId <= 0)
+        {
+            var primeraInscripcion = await _dbContext.Inscripcion
+                .Where(i => i.IdGrupoMateria == req.GrupoMateriaId && i.Status == StatusEnum.Active)
+                .Select(i => i.IdInscripcion)
+                .FirstOrDefaultAsync();
+
+            if (primeraInscripcion <= 0)
+                return BadRequest(new { message = "No hay estudiantes inscritos en esta materia." });
+
+            acta.InscripcionId = primeraInscripcion;
+        }
+
         var creado = await _calificacionesService.AbrirParcial(acta);
         var dto = _mapper.Map<CalificacionParcialResponse>(creado);
         return Ok(dto);

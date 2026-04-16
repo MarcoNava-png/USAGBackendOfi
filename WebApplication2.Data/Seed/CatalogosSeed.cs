@@ -9,7 +9,7 @@ namespace WebApplication2.Data.Seed
 {
     internal static class CatalogosSeed
     {
-        public static void Seed(ApplicationDbContext dbContext, bool isDevelopment, UserManager<ApplicationUser> userManager)
+        public static async Task SeedAsync(ApplicationDbContext dbContext, bool isDevelopment, UserManager<ApplicationUser> userManager)
         {
             if (!dbContext.DiaSemana.Any())
             {
@@ -25,7 +25,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.DiaSemana.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.Genero.Any())
@@ -38,7 +38,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.Genero.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.EstadoCivil.Any())
@@ -50,7 +50,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.EstadoCivil.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.AspiranteEstatus.Any())
@@ -66,7 +66,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.AspiranteEstatus.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.MedioContacto.Any())
@@ -78,7 +78,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.MedioContacto.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.Turno.Any())
@@ -90,7 +90,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.Turno.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.Modalidad.Any())
@@ -103,7 +103,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.Modalidad.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.ModalidadPlan.Any())
@@ -115,7 +115,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.ModalidadPlan.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (!dbContext.DocumentoRequisito.Any())
@@ -173,7 +173,7 @@ namespace WebApplication2.Data.Seed
                 };
 
                 dbContext.DocumentoRequisito.AddRange(items);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync();
             }
 
             if (isDevelopment)
@@ -195,7 +195,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Periodicidad.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.PeriodoAcademico.Any())
@@ -215,7 +215,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.PeriodoAcademico.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.NivelEducativo.Any())
@@ -226,7 +226,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.NivelEducativo.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Campus.Any())
@@ -246,7 +246,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Campus.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.PlanEstudios.Any())
@@ -270,7 +270,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.PlanEstudios.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Materia.Any())
@@ -307,7 +307,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Materia.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.MateriaPlan.Any())
@@ -340,7 +340,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.MateriaPlan.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Grupo.Any())
@@ -365,14 +365,14 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Grupo.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Profesor.Any())
                 {
-                    userManager.InsertUser("ana.lopez@uni.mx", "EMP-001", Rol.DOCENTE);
+                    await userManager.InsertUserAsync("ana.lopez@uni.mx", "EMP-001", Rol.DOCENTE);
 
-                    var user = userManager.FindByEmailAsync("ana.lopez@uni.mx").Result;
+                    var user = await userManager.FindByEmailAsync("ana.lopez@uni.mx");
 
                     var items = new List<Profesor>()
                     {
@@ -404,7 +404,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Profesor.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.GrupoMateria.Any())
@@ -446,7 +446,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.GrupoMateria.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Horario.Any())
@@ -506,14 +506,14 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Horario.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Estudiante.Any())
                 {
-                    userManager.InsertUser("A0000001@usag.com", "A0000001", Rol.ALUMNO);
+                    await userManager.InsertUserAsync("A0000001@usag.com", "A0000001", Rol.ALUMNO);
 
-                    var user = userManager.FindByEmailAsync("A0000001@usag.com").Result;
+                    var user = await userManager.FindByEmailAsync("A0000001@usag.com");
 
                     var planEstudiosISIC2025 = dbContext.PlanEstudios.FirstOrDefault(pe => pe.ClavePlanEstudios == "ISIC-2025")!.IdPlanEstudios;
 
@@ -548,7 +548,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Estudiante.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.EstudiantePlan.Any())
@@ -567,7 +567,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.EstudiantePlan.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Inscripcion.Any())
@@ -613,7 +613,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Inscripcion.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Convenio.Any())
@@ -641,7 +641,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Convenio.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.ConvenioAlcance.Any())
@@ -665,7 +665,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.ConvenioAlcance.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.Aspirante.Any())
@@ -689,7 +689,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.Aspirante.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.AspiranteConvenio.Any())
@@ -710,7 +710,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.AspiranteConvenio.AddRange(items);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.ConceptoPago.Any(c => c.Clave == "INSCRIPCION"))
@@ -728,7 +728,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.ConceptoPago.Add(conceptoInscripcion);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
 
                     var precioInscripcion = new ConceptoPrecio
                     {
@@ -741,7 +741,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.ConceptoPrecio.Add(precioInscripcion);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
 
                 if (!dbContext.ConceptoPago.Any(c => c.Clave == "FICHA"))
@@ -759,7 +759,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.ConceptoPago.Add(conceptoFicha);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
 
                     var precioFicha = new ConceptoPrecio
                     {
@@ -772,7 +772,7 @@ namespace WebApplication2.Data.Seed
                     };
 
                     dbContext.ConceptoPrecio.Add(precioFicha);
-                    dbContext.SaveChanges();
+                    await dbContext.SaveChangesAsync();
                 }
                 }
                 catch (NullReferenceException ex)
@@ -783,9 +783,9 @@ namespace WebApplication2.Data.Seed
             }
         }
 
-        private static void InsertUser(this UserManager<ApplicationUser> userManager, string email, string password, string rol)
+        private static async Task InsertUserAsync(this UserManager<ApplicationUser> userManager, string email, string password, string rol)
         {
-            if (userManager.FindByEmailAsync(email).Result == null)
+            if (await userManager.FindByEmailAsync(email) == null)
             {
                 var user = new ApplicationUser
                 {
@@ -793,12 +793,12 @@ namespace WebApplication2.Data.Seed
                     Email = email
                 };
 
-                var result = userManager.CreateAsync(user, password).Result;
+                var result = await userManager.CreateAsync(user, password);
 
                 if (result.Succeeded)
                 {
-                    userManager.AddClaimAsync(user, new Claim(ClaimTypes.Role, rol)).Wait();
-                    userManager.AddToRoleAsync(user, rol).Wait();
+                    await userManager.AddClaimAsync(user, new Claim(ClaimTypes.Role, rol));
+                    await userManager.AddToRoleAsync(user, rol);
                 }
             }
         }

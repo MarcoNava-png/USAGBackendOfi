@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using WebApplication2.Configuration.Constants;
 using WebApplication2.Core.Common;
 using WebApplication2.Core.DTOs;
@@ -27,6 +28,7 @@ namespace WebApplication2.Controllers
         private readonly IAspiranteDocumentoService _docsSvc;
         private readonly IReciboService _recibosSvc;
         private readonly IPdfService _pdfService;
+        private readonly Data.DbContexts.ApplicationDbContext _dbContext;
 
         public AspiranteController(
             IAspiranteService aspiranteService,
@@ -34,18 +36,20 @@ namespace WebApplication2.Controllers
             IAuthService authService,
             IAspiranteDocumentoService docsSvc,
             IReciboService recibosSvc,
-            IPdfService pdfService)
+            IPdfService pdfService,
+            Data.DbContexts.ApplicationDbContext dbContext)
         {
             _aspiranteService = aspiranteService;
             _mapper = mapper;
             _authService = authService;
+            _dbContext = dbContext;
             _docsSvc = docsSvc;
             _recibosSvc = recibosSvc;
             _pdfService = pdfService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<PagedResult<AspiranteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 1000, [FromQuery] string filter = "", CancellationToken ct = default)
+        public async Task<ActionResult<PagedResult<AspiranteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 100, [FromQuery] string filter = "", CancellationToken ct = default)
         {
             var pagination = await _aspiranteService.GetAspirantes(page, pageSize, filter);
 
@@ -186,6 +190,13 @@ namespace WebApplication2.Controllers
             return Ok(response);
         }
 
+        [HttpGet("contadores")]
+        public async Task<ActionResult<Dictionary<string, int>>> GetContadores()
+        {
+            var contadores = await _aspiranteService.GetContadoresAsync();
+            return Ok(contadores);
+        }
+
         [HttpGet("debug/{id}")]
         public async Task<ActionResult<object>> GetDebug(int id, CancellationToken ct = default)
         {
@@ -313,6 +324,7 @@ namespace WebApplication2.Controllers
                 CuatrimestreInteres = aspirante.CuatrimestreInteres,
                 InstitucionProcedencia = aspirante.InstitucionProcedencia,
                 IdModalidad = aspirante.IdModalidad,
+                GrupoDiasImparticion = aspirante.GrupoDiasImparticion,
                 IdPeriodoAcademico = aspirante.IdPeriodoAcademico,
                 RecorridoPlantel = aspirante.RecorridoPlantel,
                 Trabaja = aspirante.Trabaja,
@@ -320,6 +332,7 @@ namespace WebApplication2.Controllers
                 DomicilioEmpresa = aspirante.DomicilioEmpresa,
                 PuestoEmpresa = aspirante.PuestoEmpresa,
                 QuienCubreGastos = aspirante.QuienCubreGastos,
+                IdEmpresa = aspirante.IdEmpresa,
                 AtendidoPorUsuarioId = aspirante.IdAtendidoPorUsuario,
                 NombreContactoEmergencia = persona?.NombreContactoEmergencia,
                 TelefonoContactoEmergencia = persona?.TelefonoContactoEmergencia,
@@ -382,13 +395,15 @@ namespace WebApplication2.Controllers
                 IdAtendidoPorUsuario = request.AtendidoPorUsuarioId,
                 InstitucionProcedencia = request.InstitucionProcedencia,
                 IdModalidad = request.IdModalidad,
+                GrupoDiasImparticion = request.GrupoDiasImparticion,
                 IdPeriodoAcademico = request.IdPeriodoAcademico,
                 RecorridoPlantel = request.RecorridoPlantel,
                 Trabaja = request.Trabaja,
                 NombreEmpresa = request.NombreEmpresa,
                 DomicilioEmpresa = request.DomicilioEmpresa,
                 PuestoEmpresa = request.PuestoEmpresa,
-                QuienCubreGastos = request.QuienCubreGastos
+                QuienCubreGastos = request.QuienCubreGastos,
+                IdEmpresa = request.IdEmpresa
             };
 
             try
@@ -452,13 +467,15 @@ namespace WebApplication2.Controllers
                 IdAtendidoPorUsuario = request.AtendidoPorUsuarioId,
                 InstitucionProcedencia = request.InstitucionProcedencia,
                 IdModalidad = request.IdModalidad,
+                GrupoDiasImparticion = request.GrupoDiasImparticion,
                 IdPeriodoAcademico = request.IdPeriodoAcademico,
                 RecorridoPlantel = request.RecorridoPlantel,
                 Trabaja = request.Trabaja,
                 NombreEmpresa = request.NombreEmpresa,
                 DomicilioEmpresa = request.DomicilioEmpresa,
                 PuestoEmpresa = request.PuestoEmpresa,
-                QuienCubreGastos = request.QuienCubreGastos
+                QuienCubreGastos = request.QuienCubreGastos,
+                IdEmpresa = request.IdEmpresa
             };
 
             try
@@ -832,6 +849,33 @@ namespace WebApplication2.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { Error = ex.Message });
+            }
+        }
+
+        [HttpPut("documentos/{id:long}/toggle-recibido")]
+        public async Task<ActionResult> ToggleRecibido(long id)
+        {
+            try
+            {
+                var doc = await _dbContext.AspiranteDocumento
+                    .FirstOrDefaultAsync(d => d.IdAspiranteDocumento == id);
+
+                if (doc == null) return NotFound(new { error = "Documento no encontrado" });
+
+                var nuevoEstatus = doc.Estatus == EstatusDocumentoEnum.VALIDADO
+                    ? EstatusDocumentoEnum.PENDIENTE
+                    : EstatusDocumentoEnum.VALIDADO;
+
+                await _docsSvc.CambiarEstatusDocumentoAsync(id, new Core.DTOs.CambiarEstatusDocumentoDto
+                {
+                    Estatus = nuevoEstatus
+                });
+
+                return Ok(new { estatus = nuevoEstatus.ToString(), recibido = nuevoEstatus == EstatusDocumentoEnum.VALIDADO });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
             }
         }
 

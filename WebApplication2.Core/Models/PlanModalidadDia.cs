@@ -8,6 +8,8 @@ public partial class PlanModalidadDia
 
     public int IdModalidad { get; set; }
 
+    public int Grupo { get; set; } = 1;
+
     public byte IdDiaSemana { get; set; }
 
     public virtual PlanEstudios IdPlanEstudiosNavigation { get; set; } = null!;

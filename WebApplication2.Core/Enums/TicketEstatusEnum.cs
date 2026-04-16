@@ -5,6 +5,7 @@ namespace WebApplication2.Core.Enums
         Abierto = 0,
         EnProgreso = 1,
         Resuelto = 2,
-        Cerrado = 3
+        Cerrado = 3,
+        EnValidacion = 4
     }
 }

@@ -12,11 +12,15 @@
 
         public string Telefono { get; set; }
 
+        public string? Celular { get; set; }
+
         public string AspiranteEstatus { get; set; }
 
         public DateTime FechaRegistro { get; set; }
 
         public string PlanEstudios { get; set; }
+
+        public int? PlanEstudiosId { get; set; }
 
         public int IdDireccion { get; set; }
 
@@ -39,5 +43,7 @@
         public string? EstatusDocumentos { get; set; }
 
         public int? CuatrimestreInteres { get; set; }
+
+        public int? IdEmpresa { get; set; }
     }
 }

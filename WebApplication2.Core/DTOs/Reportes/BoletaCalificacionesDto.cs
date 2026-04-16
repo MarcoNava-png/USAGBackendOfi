@@ -7,6 +7,7 @@ public class BoletaCalificacionesDto
     public string PlanEstudios { get; set; } = null!;
     public string PeriodoAcademico { get; set; } = null!;
     public string? Campus { get; set; }
+    public string? Grupo { get; set; }
     public List<MateriaBoletaDto> Materias { get; set; } = [];
     public decimal PromedioGeneral { get; set; }
 }

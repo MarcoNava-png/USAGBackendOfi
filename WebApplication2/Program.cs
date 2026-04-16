@@ -1,7 +1,9 @@
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
@@ -103,8 +105,8 @@ builder.Services.AddCors(o =>
     o.AddPolicy("frontend", p => p
         .WithOrigins(corsOrigins)
         .AllowAnyHeader()
-        .AllowAnyMethod()
-
+        .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        .AllowCredentials()
     );
 });
 
@@ -123,7 +125,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
     options.Lockout.AllowedForNewUsers = true;
     options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(3);
     options.Password.RequiredLength = 12;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
@@ -158,7 +160,7 @@ builder.Services.AddAuthentication(x =>
     x.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey ?? "")),
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey ?? throw new InvalidOperationException("Jwt:Key no está configurado. Configure Jwt__Key como variable de entorno."))),
         ValidateIssuer = true,
         ValidIssuer = jwtIssuer,
         ValidateAudience = true,
@@ -232,14 +234,18 @@ builder.Services.AddScoped<IDocumentoEstudianteService, DocumentoEstudianteServi
 builder.Services.AddScoped<IImportacionService, ImportacionService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IConvenioService, ConvenioService>();
-builder.Services.AddScoped<IEstudiantePanelService, EstudiantePanelService>();
 builder.Services.AddScoped<IBitacoraAccionService, BitacoraAccionService>();
 builder.Services.AddScoped<INotificacionInternalService, NotificacionInternalService>();
 builder.Services.AddScoped<IReporteAcademicoService, ReporteAcademicoService>();
 builder.Services.AddScoped<IPlaneacionDocenteService, PlaneacionDocenteService>();
 builder.Services.AddScoped<ITareaDocenteService, TareaDocenteService>();
 builder.Services.AddScoped<ITarifaAdmisionService, TarifaAdmisionService>();
+builder.Services.AddScoped<IEmpresaService, EmpresaService>();
 builder.Services.AddScoped<ITicketSoporteService, TicketSoporteService>();
+builder.Services.AddScoped<IConfiguracionTitulacionService, ConfiguracionTitulacionService>();
+builder.Services.AddScoped<ICertificadoElectronicoService, CertificadoElectronicoService>();
+builder.Services.AddScoped<ICertificadoXmlService, CertificadoXmlService>();
+builder.Services.AddScoped<IPlantillaReporteService, PlantillaReporteService>();
 builder.Services.AddHostedService<TareasAutomaticasService>();
 
 
@@ -250,6 +256,20 @@ builder.Services.AddDbContext<MasterDbContext>(options =>
     options.UseSqlServer(masterConn));
 
 builder.Services.AddMemoryCache();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 builder.Services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
 
@@ -265,7 +285,7 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-app.Services.InsertInitialData();
+await app.Services.InsertInitialDataAsync();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
@@ -280,7 +300,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-if (app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
@@ -288,6 +308,8 @@ if (app.Environment.IsDevelopment())
 app.UseRouting();
 
 app.UseCors("frontend");
+
+app.UseRateLimiter();
 
 app.UseTenantMiddleware();
 

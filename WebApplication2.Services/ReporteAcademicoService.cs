@@ -46,6 +46,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
             ?? throw new InvalidOperationException("Grupo no encontrado");
 
         var estudiantes = grupo.EstudianteGrupo
+            .Where(eg => eg.Status == Core.Enums.StatusEnum.Active)
             .OrderBy(eg => eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno)
             .ThenBy(eg => eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoMaterno)
             .ThenBy(eg => eg.IdEstudianteNavigation.IdPersonaNavigation?.Nombre)
@@ -143,6 +144,8 @@ public class ReporteAcademicoService : IReporteAcademicoService
         var promedioGeneral = materias.Where(m => m.CalificacionFinal.HasValue).Select(m => m.CalificacionFinal!.Value).DefaultIfEmpty(0).Average();
         var persona = estudiante.IdPersonaNavigation;
 
+        var grupo = inscripciones.FirstOrDefault()?.IdGrupoMateriaNavigation?.IdGrupoNavigation;
+
         return new BoletaCalificacionesDto
         {
             Matricula = estudiante.Matricula,
@@ -150,6 +153,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
             PlanEstudios = estudiante.IdPlanActualNavigation?.NombrePlanEstudios ?? "N/A",
             PeriodoAcademico = periodo.Nombre,
             Campus = estudiante.IdPlanActualNavigation?.IdCampusNavigation?.Nombre,
+            Grupo = grupo?.NombreGrupo ?? grupo?.CodigoGrupo,
             Materias = materias,
             PromedioGeneral = Math.Round(promedioGeneral, 2)
         };
@@ -347,59 +351,49 @@ public class ReporteAcademicoService : IReporteAcademicoService
 
     public byte[] GenerarEstudiantesPorGrupoPdf(ReporteEstudiantesGrupoDto data)
     {
-        var headerLogoPath = ResolveFilePath("header_logo.png");
         var watermarkPath = ResolveFilePath("watermark_listado.png");
+        var minFilas = 30;
 
         var document = Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.Letter);
-                page.MarginTop(20);
-                page.MarginBottom(30);
-                page.MarginHorizontal(35);
+                page.MarginTop(30);
+                page.MarginBottom(40);
+                page.MarginHorizontal(40);
 
-                // Watermark as background (pre-generated with transparency)
                 if (watermarkPath != null)
                 {
                     page.Background().AlignCenter().AlignMiddle()
+                        .Padding(100)
                         .Image(watermarkPath).FitArea();
                 }
 
                 page.Header().Column(col =>
                 {
-                    // Logo header centrado
-                    if (headerLogoPath != null)
-                    {
-                        col.Item().AlignCenter().PaddingBottom(5).Height(60).Image(headerLogoPath).FitHeight();
-                    }
+                    col.Item().PaddingBottom(15).AlignCenter()
+                        .Text("Listado Por Grupo").FontSize(16).Bold();
 
-                    // Título centrado
-                    col.Item().PaddingBottom(8).AlignCenter()
-                        .Text("Listado Por Grupo").FontSize(18).Bold().FontColor(ColorInstitucionalAzulOscuro);
-
-                    // Bloque info - replica exacta del Word
-                    col.Item().PaddingBottom(5).Table(table =>
+                    col.Item().PaddingBottom(3).Table(table =>
                     {
                         table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(); });
 
-                        // Fila 1: CARRERA y PERIODO con fondo azul claro
-                        table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(5)
+                        table.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
                             .Text(text =>
                             {
                                 text.Span("CARRERA: ").Bold().FontSize(10);
                                 text.Span(data.PlanEstudios).FontSize(10);
                             });
-                        table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(5)
+                        table.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
                             .Text(text =>
                             {
                                 text.Span("PERIODO: ").Bold().FontSize(10);
                                 text.Span(data.PeriodoAcademico).FontSize(10);
                             });
 
-                        // Fila 2: vacía y GRUPO con fondo azul claro
-                        table.Cell().Border(0.5f).BorderColor("#999999").Padding(5).Text("").FontSize(10);
-                        table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(5)
+                        table.Cell().Border(0.5f).BorderColor("#000000").Padding(5).Text("").FontSize(10);
+                        table.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
                             .Text(text =>
                             {
                                 text.Span("GRUPO: ").Bold().FontSize(10);
@@ -408,43 +402,59 @@ public class ReporteAcademicoService : IReporteAcademicoService
                     });
                 });
 
-                page.Content().PaddingVertical(5).Table(table =>
+                page.Content().PaddingTop(5).Column(contentCol =>
                 {
-                    table.ColumnsDefinition(c =>
+                    contentCol.Item().Table(table =>
                     {
-                        c.ConstantColumn(90);  // Matrícula
-                        c.ConstantColumn(70);  // Estatus
-                        c.RelativeColumn();    // Nombre
-                    });
-
-                    // Headers de tabla con azul oscuro institucional
-                    table.Header(header =>
-                    {
-                        foreach (var h in new[] { "MATRÍCULA", "ESTATUS", "NOMBRE" })
+                        table.ColumnsDefinition(c =>
                         {
-                            header.Cell().Border(0.5f).BorderColor("#000000")
-                                .Background(ColorInstitucionalAzulOscuro).Padding(5)
-                                .AlignCenter()
-                                .Text(h).FontSize(9).FontColor(Colors.White).Bold();
+                            c.ConstantColumn(90);
+                            c.ConstantColumn(70);
+                            c.RelativeColumn();
+                        });
+
+                        table.Header(header =>
+                        {
+                            header.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
+                                .AlignCenter().Text("MATRÍCULA").FontSize(9).Bold();
+                            header.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
+                                .AlignCenter().Text("ESTATUS").FontSize(9).Bold();
+                            header.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
+                                .Text("NOMBRE").FontSize(9).Bold();
+                        });
+
+                        var totalFilas = Math.Max(data.Estudiantes.Count, minFilas);
+
+                        for (int i = 0; i < totalFilas; i++)
+                        {
+                            if (i < data.Estudiantes.Count)
+                            {
+                                var est = data.Estudiantes[i];
+                                table.Cell().Border(0.5f).BorderColor("#000000").Padding(4)
+                                    .AlignCenter().Text(est.Matricula).FontSize(9);
+                                table.Cell().Border(0.5f).BorderColor("#000000").Padding(4)
+                                    .AlignCenter().Text(est.Estado).FontSize(9);
+                                table.Cell().Border(0.5f).BorderColor("#000000").Padding(4)
+                                    .Text(est.NombreCompleto).FontSize(9);
+                            }
+                            else
+                            {
+                                table.Cell().Border(0.5f).BorderColor("#000000").Padding(4).Height(18).Text("");
+                                table.Cell().Border(0.5f).BorderColor("#000000").Padding(4).Height(18).Text("");
+                                table.Cell().Border(0.5f).BorderColor("#000000").Padding(4).Height(18).Text("");
+                            }
                         }
                     });
-
-                    // Filas de datos con alternancia D9E2F3 / blanco (igual al Word)
-                    for (int i = 0; i < data.Estudiantes.Count; i++)
-                    {
-                        var est = data.Estudiantes[i];
-                        var bgColor = i % 2 == 0 ? "#FFFFFF" : ColorInstitucionalAzulClaro;
-
-                        table.Cell().Border(0.5f).BorderColor("#000000").Background(bgColor).Padding(4)
-                            .AlignCenter().Text(est.Matricula).FontSize(9);
-                        table.Cell().Border(0.5f).BorderColor("#000000").Background(bgColor).Padding(4)
-                            .AlignCenter().Text(est.Estado).FontSize(9);
-                        table.Cell().Border(0.5f).BorderColor("#000000").Background(bgColor).Padding(4)
-                            .Text(est.NombreCompleto).FontSize(9);
-                    }
                 });
 
-                page.Footer().Element(ComposeFooter);
+                page.Footer().Column(col =>
+                {
+                    col.Item().PaddingTop(20).AlignCenter().Column(firma =>
+                    {
+                        firma.Item().AlignCenter().Text("_____________").FontSize(10);
+                        firma.Item().AlignCenter().Text("Firma del Docente.").FontSize(10);
+                    });
+                });
             });
         });
 
@@ -624,7 +634,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
                     if (data.Subtitulo != null)
                         col.Item().PaddingBottom(10).Text(data.Subtitulo).FontSize(10).FontColor(ColorGris);
 
-                    var dias = new[] { "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado" };
+                    var dias = new[] { "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo" };
                     var horasUnicas = data.Bloques
                         .Select(b => b.HoraInicio)
                         .Distinct()
@@ -838,15 +848,15 @@ public class ReporteAcademicoService : IReporteAcademicoService
         ws.Cell(1, 1).Style.Font.Bold = true;
         ws.Cell(1, 1).Style.Font.FontSize = 14;
         ws.Cell(1, 1).Style.Font.FontColor = XLColor.FromHtml(ColorAzulOscuro);
-        ws.Range(1, 1, 1, 7).Merge();
+        ws.Range(1, 1, 1, 8).Merge();
 
         if (data.Subtitulo != null)
         {
             ws.Cell(2, 1).Value = data.Subtitulo;
-            ws.Range(2, 1, 2, 7).Merge();
+            ws.Range(2, 1, 2, 8).Merge();
         }
 
-        var dias = new[] { "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado" };
+        var dias = new[] { "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo" };
         ws.Cell(4, 1).Value = "Hora";
         ws.Cell(4, 1).Style.Font.Bold = true;
         ws.Cell(4, 1).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorAzulOscuro);
@@ -888,7 +898,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
 
         ws.Columns().AdjustToContents();
         ws.Column(1).Width = 15;
-        for (int i = 2; i <= 7; i++) ws.Column(i).Width = 25;
+        for (int i = 2; i <= 8; i++) ws.Column(i).Width = 25;
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -1048,5 +1058,395 @@ public class ReporteAcademicoService : IReporteAcademicoService
             "domingo" => 7,
             _ => 99
         };
+    }
+
+    public async Task<ReporteBajasDto> GetReporteBajasAsync(int? idCampus, int? idPlanEstudios, int? idPeriodo, int? mes, int? anio, CancellationToken ct = default)
+    {
+        var query = _context.Estudiante
+            .Include(e => e.IdPersonaNavigation)
+            .Include(e => e.IdPlanActualNavigation)
+            .Include(e => e.EstudianteGrupo)
+                .ThenInclude(eg => eg.IdGrupoNavigation)
+            .Where(e => !e.Activo && e.FechaBaja.HasValue);
+
+        if (idCampus.HasValue)
+            query = query.Where(e => e.IdPlanActualNavigation != null && e.IdPlanActualNavigation.IdCampus == idCampus.Value);
+
+        if (idPlanEstudios.HasValue)
+            query = query.Where(e => e.IdPlanActual == idPlanEstudios.Value);
+
+        if (idPeriodo.HasValue)
+        {
+            var periodo = await _context.PeriodoAcademico.FindAsync(new object[] { idPeriodo.Value }, ct);
+            if (periodo != null)
+            {
+                var inicio = periodo.FechaInicio.ToDateTime(TimeOnly.MinValue);
+                var fin = periodo.FechaFin.ToDateTime(TimeOnly.MaxValue);
+                query = query.Where(e => e.FechaBaja >= inicio && e.FechaBaja <= fin);
+            }
+        }
+
+        if (mes.HasValue && anio.HasValue)
+        {
+            var inicioMes = new DateTime(anio.Value, mes.Value, 1);
+            var finMes = inicioMes.AddMonths(1).AddTicks(-1);
+            query = query.Where(e => e.FechaBaja >= inicioMes && e.FechaBaja <= finMes);
+        }
+
+        var estudiantes = await query.OrderByDescending(e => e.FechaBaja).ToListAsync(ct);
+        var estudianteIds = estudiantes.Select(e => e.IdEstudiante).ToList();
+
+        var recibosDict = await _context.Recibo
+            .Where(r => r.IdEstudiante.HasValue && estudianteIds.Contains(r.IdEstudiante.Value))
+            .GroupBy(r => r.IdEstudiante!.Value)
+            .Select(g => new
+            {
+                IdEstudiante = g.Key,
+                SaldoPendiente = g.Where(r => r.Estatus == Core.Enums.EstatusRecibo.PENDIENTE
+                    || r.Estatus == Core.Enums.EstatusRecibo.PARCIAL
+                    || r.Estatus == Core.Enums.EstatusRecibo.VENCIDO).Sum(r => r.Saldo),
+                TotalPagado = g.Where(r => r.Estatus == Core.Enums.EstatusRecibo.PAGADO).Sum(r => r.Total)
+            })
+            .ToDictionaryAsync(x => x.IdEstudiante, ct);
+
+        var ultimosPagos = await _context.Recibo
+            .Where(r => r.IdEstudiante.HasValue && estudianteIds.Contains(r.IdEstudiante.Value))
+            .SelectMany(r => r.Detalles)
+            .SelectMany(d => d.Aplicaciones)
+            .Where(pa => pa.Pago.Estatus == Core.Enums.EstatusPago.CONFIRMADO)
+            .GroupBy(pa => pa.ReciboDetalle.Recibo.IdEstudiante!.Value)
+            .Select(g => new
+            {
+                IdEstudiante = g.Key,
+                UltimoPago = g.Max(pa => pa.Pago.FechaPagoUtc),
+                MontoUltimoPago = g.OrderByDescending(pa => pa.Pago.FechaPagoUtc).First().Pago.Monto
+            })
+            .ToDictionaryAsync(x => x.IdEstudiante, ct);
+
+        string? nombrePlan = null;
+        if (idPlanEstudios.HasValue)
+        {
+            nombrePlan = await _context.PlanEstudios
+                .Where(p => p.IdPlanEstudios == idPlanEstudios.Value)
+                .Select(p => p.NombrePlanEstudios)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        string? nombrePeriodo = null;
+        if (idPeriodo.HasValue)
+        {
+            nombrePeriodo = await _context.PeriodoAcademico
+                .Where(p => p.IdPeriodoAcademico == idPeriodo.Value)
+                .Select(p => p.Nombre)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        string? mesFiltroTexto = null;
+        if (mes.HasValue && anio.HasValue)
+        {
+            var meses = new[] { "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre" };
+            mesFiltroTexto = $"{meses[mes.Value]} {anio.Value}";
+        }
+
+        var items = estudiantes.Select(e =>
+        {
+            var persona = e.IdPersonaNavigation;
+            var ultimoGrupo = e.EstudianteGrupo
+                .OrderByDescending(eg => eg.FechaInscripcion)
+                .FirstOrDefault();
+
+            recibosDict.TryGetValue(e.IdEstudiante, out var recInfo);
+            ultimosPagos.TryGetValue(e.IdEstudiante, out var pagoInfo);
+
+            return new EstudianteBajaItemDto
+            {
+                IdEstudiante = e.IdEstudiante,
+                Matricula = e.Matricula,
+                NombreCompleto = persona != null
+                    ? $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim()
+                    : "Sin nombre",
+                PlanEstudios = e.IdPlanActualNavigation?.NombrePlanEstudios,
+                UltimoGrupo = ultimoGrupo?.IdGrupoNavigation?.CodigoGrupo ?? ultimoGrupo?.IdGrupoNavigation?.NombreGrupo,
+                TipoBaja = e.TipoBaja switch
+                {
+                    Core.Enums.TipoBajaEnum.Administrativa => "Administrativa",
+                    Core.Enums.TipoBajaEnum.Academica => "Académica",
+                    _ => "No especificado"
+                },
+                EstadoBaja = e.EstadoBaja switch
+                {
+                    Core.Enums.EstadoBajaEnum.Temporal => "Temporal",
+                    Core.Enums.EstadoBajaEnum.Definitiva => "Definitiva",
+                    _ => "No especificado"
+                },
+                MotivoBaja = e.MotivoBaja,
+                FechaBaja = e.FechaBaja,
+                Email = e.Email ?? persona?.Correo,
+                Telefono = persona?.Telefono,
+                SaldoPendiente = recInfo?.SaldoPendiente ?? 0,
+                TotalPagado = recInfo?.TotalPagado ?? 0,
+                UltimoPago = pagoInfo?.UltimoPago,
+                MontoUltimoPago = pagoInfo?.MontoUltimoPago
+            };
+        }).ToList();
+
+        var resultado = new ReporteBajasDto
+        {
+            PlanEstudios = nombrePlan,
+            PeriodoAcademico = nombrePeriodo,
+            MesFiltro = mesFiltroTexto,
+            TotalBajas = items.Count,
+            BajasTemporales = estudiantes.Count(e => e.EstadoBaja == Core.Enums.EstadoBajaEnum.Temporal),
+            BajasDefinitivas = estudiantes.Count(e => e.EstadoBaja == Core.Enums.EstadoBajaEnum.Definitiva),
+            BajasAdministrativas = estudiantes.Count(e => e.TipoBaja == Core.Enums.TipoBajaEnum.Administrativa),
+            BajasAcademicas = estudiantes.Count(e => e.TipoBaja == Core.Enums.TipoBajaEnum.Academica),
+            TotalSaldoPendiente = items.Sum(i => i.SaldoPendiente),
+            Estudiantes = items
+        };
+
+        return resultado;
+    }
+
+    public byte[] GenerarReporteBajasPdf(ReporteBajasDto data)
+    {
+        var headerLogoPath = ResolveFilePath("header_logo.png");
+
+        QuestPDF.Settings.License = LicenseType.Community;
+
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.Letter.Landscape());
+                page.MarginTop(20);
+                page.MarginBottom(30);
+                page.MarginHorizontal(30);
+                page.DefaultTextStyle(x => x.FontSize(8));
+
+                page.Header().Column(col =>
+                {
+                    if (headerLogoPath != null)
+                        col.Item().AlignCenter().PaddingBottom(5).Height(50).Image(headerLogoPath).FitHeight();
+
+                    col.Item().PaddingBottom(3).AlignCenter()
+                        .Text("REPORTE DE BAJAS").FontSize(16).Bold().FontColor(ColorInstitucionalAzulOscuro);
+
+                    col.Item().PaddingBottom(5).Table(table =>
+                    {
+                        table.ColumnsDefinition(c =>
+                        {
+                            c.RelativeColumn();
+                            c.RelativeColumn();
+                            c.RelativeColumn();
+                            c.RelativeColumn();
+                        });
+
+                        void FiltroCell(string label, string value)
+                        {
+                            table.Cell().Background(ColorInstitucionalAzulClaro).Border(0.5f).BorderColor("#999999").Padding(4)
+                                .Text(text =>
+                                {
+                                    text.Span($"{label}: ").Bold().FontSize(8);
+                                    text.Span(value).FontSize(8);
+                                });
+                        }
+
+                        FiltroCell("Plan de Estudios", data.PlanEstudios ?? "Todos");
+                        FiltroCell("Periodo", data.PeriodoAcademico ?? "Todos");
+                        FiltroCell("Mes", data.MesFiltro ?? "Todos");
+                        FiltroCell("Total Bajas", data.TotalBajas.ToString());
+                    });
+
+                    col.Item().PaddingBottom(3).Row(row =>
+                    {
+                        void StatBox(string label, int val, string bg, string color)
+                        {
+                            row.RelativeColumn().Background(bg).Border(0.5f).BorderColor("#999999").Padding(4).AlignCenter()
+                                .Text($"{label}: {val}").Bold().FontSize(8).FontColor(color);
+                        }
+                        StatBox("Temporales", data.BajasTemporales, "#FFF8E1", "#F57F17");
+                        StatBox("Definitivas", data.BajasDefinitivas, "#FCE4EC", "#C62828");
+                        StatBox("Administrativas", data.BajasAdministrativas, "#E3F2FD", "#1565C0");
+                        StatBox("Académicas", data.BajasAcademicas, "#F3E5F5", "#6A1B9A");
+                        row.RelativeColumn().Background("#FCE4EC").Border(0.5f).BorderColor("#999999").Padding(4).AlignCenter()
+                            .Text($"Saldo Pendiente: ${data.TotalSaldoPendiente:N2}").Bold().FontSize(8).FontColor("#C62828");
+                    });
+
+                    col.Item().LineHorizontal(1.5f).LineColor(ColorInstitucionalAzulOscuro);
+                });
+
+                page.Content().PaddingVertical(5).Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.ConstantColumn(20);
+                        c.ConstantColumn(65);
+                        c.RelativeColumn(2);
+                        c.RelativeColumn(1.5f);
+                        c.ConstantColumn(55);
+                        c.ConstantColumn(65);
+                        c.ConstantColumn(60);
+                        c.RelativeColumn(1.5f);
+                        c.ConstantColumn(60);
+                        c.ConstantColumn(70);
+                        c.ConstantColumn(70);
+                    });
+
+                    table.Header(header =>
+                    {
+                        void H(string text)
+                        {
+                            header.Cell().Background(ColorInstitucionalAzulOscuro).Border(0.5f)
+                                .BorderColor(ColorInstitucionalAzulOscuro).Padding(3)
+                                .Text(text).Bold().FontSize(6.5f).FontColor("#FFFFFF");
+                        }
+                        H("#");
+                        H("MATRÍCULA");
+                        H("NOMBRE");
+                        H("PLAN");
+                        H("GRUPO");
+                        H("TIPO");
+                        H("ESTADO");
+                        H("MOTIVO");
+                        H("FECHA BAJA");
+                        H("SALDO PEND.");
+                        H("ÚLTIMO PAGO");
+                    });
+
+                    for (int i = 0; i < data.Estudiantes.Count; i++)
+                    {
+                        var est = data.Estudiantes[i];
+                        var bg = i % 2 == 0 ? "#FFFFFF" : ColorGrisClaro;
+
+                        var (tipoBg, tipoColor) = est.TipoBaja switch
+                        {
+                            "Administrativa" => ("#E3F2FD", "#1565C0"),
+                            "Académica" => ("#F3E5F5", "#6A1B9A"),
+                            _ => (bg, "#333333")
+                        };
+
+                        var (estadoBg, estadoColor) = est.EstadoBaja switch
+                        {
+                            "Temporal" => ("#FFF8E1", "#F57F17"),
+                            "Definitiva" => ("#FCE4EC", "#C62828"),
+                            _ => (bg, "#333333")
+                        };
+
+                        void Cell(string text, string cellBg)
+                        {
+                            table.Cell().Background(cellBg).Border(0.5f).BorderColor("#CCCCCC").Padding(2)
+                                .Text(text).FontSize(6.5f);
+                        }
+
+                        Cell((i + 1).ToString(), bg);
+                        Cell(est.Matricula, bg);
+                        Cell(est.NombreCompleto, bg);
+                        Cell(est.PlanEstudios ?? "—", bg);
+                        Cell(est.UltimoGrupo ?? "—", bg);
+
+                        table.Cell().Background(tipoBg).Border(0.5f).BorderColor("#CCCCCC").Padding(2)
+                            .Text(est.TipoBaja).Bold().FontSize(6.5f).FontColor(tipoColor);
+
+                        table.Cell().Background(estadoBg).Border(0.5f).BorderColor("#CCCCCC").Padding(2)
+                            .Text(est.EstadoBaja).Bold().FontSize(6.5f).FontColor(estadoColor);
+
+                        Cell(est.MotivoBaja ?? "—", bg);
+                        Cell(est.FechaBaja?.ToString("dd/MM/yyyy") ?? "—", bg);
+
+                        var saldoBg = est.SaldoPendiente > 0 ? "#FCE4EC" : bg;
+                        table.Cell().Background(saldoBg).Border(0.5f).BorderColor("#CCCCCC").Padding(2)
+                            .Text($"${est.SaldoPendiente:N2}").FontSize(6.5f)
+                            .FontColor(est.SaldoPendiente > 0 ? "#C62828" : "#333333");
+
+                        Cell(est.UltimoPago.HasValue
+                            ? $"{est.UltimoPago.Value:dd/MM/yy} ${est.MontoUltimoPago:N0}"
+                            : "—", bg);
+                    }
+                });
+
+                page.Footer().Column(col =>
+                {
+                    col.Item().LineHorizontal(1).LineColor(ColorInstitucionalAzulOscuro);
+                    col.Item().PaddingTop(3).Row(row =>
+                    {
+                        row.RelativeColumn().Text($"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}").FontSize(7).FontColor(ColorGris);
+                        row.RelativeColumn().AlignCenter().Text(text =>
+                        {
+                            text.Span("Página ").FontSize(7).FontColor(ColorGris);
+                            text.CurrentPageNumber().FontSize(7).FontColor(ColorGris);
+                            text.Span(" de ").FontSize(7).FontColor(ColorGris);
+                            text.TotalPages().FontSize(7).FontColor(ColorGris);
+                        });
+                        row.RelativeColumn().AlignRight().Text("USAG - Reporte de Bajas").FontSize(7).FontColor(ColorGris);
+                    });
+                });
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    public byte[] GenerarReporteBajasExcel(ReporteBajasDto data)
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.AddWorksheet("Reporte de Bajas");
+
+        ws.Cell(1, 1).Value = "REPORTE DE BAJAS - UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO";
+        ws.Range(1, 1, 1, 9).Merge();
+        ws.Cell(1, 1).Style.Font.Bold = true;
+        ws.Cell(1, 1).Style.Font.FontSize = 14;
+        ws.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        ws.Cell(2, 1).Value = $"Plan: {data.PlanEstudios ?? "Todos"} | Periodo: {data.PeriodoAcademico ?? "Todos"} | Mes: {data.MesFiltro ?? "Todos"} | Total: {data.TotalBajas} | Saldo Pendiente: ${data.TotalSaldoPendiente:N2}";
+        ws.Range(2, 1, 2, 12).Merge();
+        ws.Cell(2, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        var headers = new[] { "#", "Matrícula", "Nombre Completo", "Plan de Estudios", "Último Grupo", "Tipo Baja", "Estado Baja", "Motivo", "Fecha Baja", "Saldo Pendiente", "Total Pagado", "Último Pago" };
+        for (int i = 0; i < headers.Length; i++)
+        {
+            ws.Cell(4, i + 1).Value = headers[i];
+            ws.Cell(4, i + 1).Style.Font.Bold = true;
+            ws.Cell(4, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml("#14356F");
+            ws.Cell(4, i + 1).Style.Font.FontColor = XLColor.White;
+            ws.Cell(4, i + 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        }
+
+        for (int i = 0; i < data.Estudiantes.Count; i++)
+        {
+            var est = data.Estudiantes[i];
+            var row = i + 5;
+
+            ws.Cell(row, 1).Value = i + 1;
+            ws.Cell(row, 2).Value = est.Matricula;
+            ws.Cell(row, 3).Value = est.NombreCompleto;
+            ws.Cell(row, 4).Value = est.PlanEstudios ?? "";
+            ws.Cell(row, 5).Value = est.UltimoGrupo ?? "";
+            ws.Cell(row, 6).Value = est.TipoBaja;
+            ws.Cell(row, 7).Value = est.EstadoBaja;
+            ws.Cell(row, 8).Value = est.MotivoBaja ?? "";
+            ws.Cell(row, 9).Value = est.FechaBaja?.ToString("dd/MM/yyyy") ?? "";
+            ws.Cell(row, 10).Value = est.SaldoPendiente;
+            ws.Cell(row, 10).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 11).Value = est.TotalPagado;
+            ws.Cell(row, 11).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 12).Value = est.UltimoPago?.ToString("dd/MM/yyyy") ?? "";
+
+            if (est.SaldoPendiente > 0)
+                ws.Cell(row, 10).Style.Font.FontColor = XLColor.Red;
+
+            if (i % 2 == 1)
+            {
+                ws.Range(row, 1, row, 12).Style.Fill.BackgroundColor = XLColor.FromHtml("#F5F5F5");
+            }
+
+            for (int c = 1; c <= 12; c++)
+                ws.Cell(row, c).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
     }
 }

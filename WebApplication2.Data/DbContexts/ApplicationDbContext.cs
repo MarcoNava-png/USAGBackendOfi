@@ -81,6 +81,7 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<RecargoPolitica> RecargoPolitica { get; set; }
         public virtual DbSet<BitacoraRecibo> BitacoraRecibo { get; set; }
         public virtual DbSet<MedioPago> MedioPago { get; set; }
+        public virtual DbSet<PagoMetodo> PagoMetodo { get; set; }
         public virtual DbSet<DocumentoRequisito> DocumentoRequisito { get; set; }
         public virtual DbSet<AspiranteDocumento> AspiranteDocumento { get; set; }
         public virtual DbSet<Beca> Beca { get; set; }
@@ -111,15 +112,59 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<TareaDocente> TareaDocente { get; set; }
         public virtual DbSet<EntregaTarea> EntregaTarea { get; set; }
 
+        public virtual DbSet<Empresa> Empresas { get; set; }
+
         public virtual DbSet<TarifaAdmision> TarifasAdmision { get; set; }
         public virtual DbSet<TarifaAdmisionDetalle> TarifasAdmisionDetalles { get; set; }
 
         public virtual DbSet<TicketSoporte> TicketsSoporte { get; set; }
         public virtual DbSet<TicketComentario> TicketComentarios { get; set; }
 
+        public virtual DbSet<PlantillaReporte> PlantillaReportes { get; set; }
+        public virtual DbSet<SolicitudBaja> SolicitudesBaja { get; set; }
+        public virtual DbSet<SolicitudPlanEstudios> SolicitudesPlanEstudios { get; set; }
+        public virtual DbSet<SeguimientoEgresado> SeguimientoEgresados { get; set; }
+
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.ConfiguracionIPES> ConfiguracionIPES { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.ResponsableFirma> ResponsableFirma { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CredencialSEP> CredencialSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoCarreraSEP> CatalogoCarreraSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoTipoPeriodoSEP> CatalogoTipoPeriodoSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoCargoSEP> CatalogoCargoSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoTipoCertificacionSEP> CatalogoTipoCertificacionSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoObservacionSEP> CatalogoObservacionSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CertificadoElectronico> CertificadoElectronico { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CertificadoAsignatura> CertificadoAsignatura { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoAsignaturaSEP> CatalogoAsignaturaSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoNivelEstudiosSEP> CatalogoNivelEstudiosSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoGeneroSEP> CatalogoGeneroSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoTipoAsignaturaSEP> CatalogoTipoAsignaturaSEP { get; set; }
+        public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoEntidadFederativaSEP> CatalogoEntidadFederativaSEP { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<SolicitudBaja>().HasKey(x => x.IdSolicitudBaja);
+            modelBuilder.Entity<SolicitudBaja>()
+                .HasOne(s => s.IdEstudianteNavigation)
+                .WithMany()
+                .HasForeignKey(s => s.IdEstudiante)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            modelBuilder.Entity<SeguimientoEgresado>().HasKey(x => x.IdSeguimientoEgresado);
+            modelBuilder.Entity<SeguimientoEgresado>()
+                .HasOne(s => s.EstudianteNavigation)
+                .WithMany()
+                .HasForeignKey(s => s.IdEstudiante)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            modelBuilder.Entity<SolicitudPlanEstudios>().HasKey(x => x.IdSolicitudPlanEstudios);
+            modelBuilder.Entity<SolicitudPlanEstudios>()
+                .HasOne(s => s.IdPlanEstudiosNavigation)
+                .WithMany()
+                .HasForeignKey(s => s.IdPlanEstudios)
+                .OnDelete(DeleteBehavior.ClientSetNull);
 
             modelBuilder.Entity<BitacoraRecibo>().HasKey(x => x.IdBitacora);
             modelBuilder.Entity<Recibo>().HasKey(x => x.IdRecibo);
@@ -207,6 +252,11 @@ namespace WebApplication2.Data.DbContexts
                 entity.HasOne(d => d.IdPeriodoAcademicoNavigation).WithMany()
                     .HasForeignKey(d => d.IdPeriodoAcademico)
                     .HasConstraintName("FK_Aspirante_PeriodoAcademico");
+
+                entity.HasOne(d => d.IdEmpresaNavigation).WithMany(e => e.Aspirantes)
+                    .HasForeignKey(d => d.IdEmpresa)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("FK_Aspirante_Empresa");
             });
 
             modelBuilder.Entity<AspiranteConvenio>(entity =>
@@ -652,7 +702,8 @@ namespace WebApplication2.Data.DbContexts
             {
                 entity.HasKey(e => e.IdPlanModalidadDia);
 
-                entity.HasIndex(e => new { e.IdPlanEstudios, e.IdModalidad, e.IdDiaSemana }, "UQ_PlanModalidadDia").IsUnique();
+                entity.Property(e => e.Grupo).HasDefaultValue(1);
+                entity.HasIndex(e => new { e.IdPlanEstudios, e.IdModalidad, e.Grupo, e.IdDiaSemana }, "UQ_PlanModalidadDia").IsUnique();
 
                 entity.HasOne(d => d.IdPlanEstudiosNavigation).WithMany()
                     .HasForeignKey(d => d.IdPlanEstudios)
@@ -1136,6 +1187,15 @@ namespace WebApplication2.Data.DbContexts
                 e.HasIndex(x => new { x.IdTarea, x.IdEstudiante });
             });
 
+            modelBuilder.Entity<Empresa>(e =>
+            {
+                e.HasKey(x => x.IdEmpresa);
+                e.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+                e.Property(x => x.Activo).HasDefaultValue(true);
+
+                e.HasIndex(x => x.Nombre);
+            });
+
             modelBuilder.Entity<TarifaAdmision>(e =>
             {
                 e.HasKey(x => x.IdTarifaAdmision);
@@ -1208,6 +1268,73 @@ namespace WebApplication2.Data.DbContexts
 
                 e.HasIndex(x => x.IdTicket);
             });
+
+            modelBuilder.Entity<WebApplication2.Core.Models.Titulacion.CertificadoElectronico>(e =>
+            {
+                e.HasOne(c => c.EstudianteNavigation).WithMany().HasForeignKey(c => c.IdEstudiante).OnDelete(DeleteBehavior.ClientSetNull);
+                e.HasOne(c => c.PersonaNavigation).WithMany().HasForeignKey(c => c.IdPersona).OnDelete(DeleteBehavior.ClientSetNull);
+                e.HasOne(c => c.ConfiguracionIPESNavigation).WithMany().HasForeignKey(c => c.IdConfiguracionIPES).OnDelete(DeleteBehavior.ClientSetNull);
+                e.HasOne(c => c.ResponsableFirmaNavigation).WithMany().HasForeignKey(c => c.IdResponsableFirma).OnDelete(DeleteBehavior.ClientSetNull);
+            });
+
+            modelBuilder.Entity<WebApplication2.Core.Models.Titulacion.CertificadoAsignatura>(e =>
+            {
+                e.HasOne(a => a.CertificadoElectronicoNavigation).WithMany(c => c.Asignaturas).HasForeignKey(a => a.IdCertificadoElectronico);
+            });
+
+            modelBuilder.Entity<WebApplication2.Core.Models.Titulacion.ConfiguracionIPES>(e =>
+            {
+                e.HasOne(c => c.CampusNavigation).WithMany().HasForeignKey(c => c.IdCampus).OnDelete(DeleteBehavior.ClientSetNull);
+            });
+
+            modelBuilder.Entity<WebApplication2.Core.Models.Titulacion.ResponsableFirma>(e =>
+            {
+                e.HasOne(r => r.ConfiguracionIPESNavigation).WithMany().HasForeignKey(r => r.IdConfiguracionIPES).OnDelete(DeleteBehavior.ClientSetNull);
+            });
+
+            modelBuilder.Entity<WebApplication2.Core.Models.Titulacion.CredencialSEP>(e =>
+            {
+                e.HasOne(c => c.ConfiguracionIPESNavigation).WithMany().HasForeignKey(c => c.IdConfiguracionIPES).OnDelete(DeleteBehavior.ClientSetNull);
+            });
+
+            modelBuilder.Entity<BitacoraRecibo>(e =>
+            {
+                e.HasOne(b => b.Recibo).WithMany().HasForeignKey(b => b.IdRecibo);
+            });
+
+            modelBuilder.Entity<ConceptoPrecio>(e =>
+            {
+                e.HasOne(cp => cp.ConceptoPago).WithMany(c => c.Precios).HasForeignKey(cp => cp.IdConceptoPago);
+            });
+
+            modelBuilder.Entity<LigaPago>(e =>
+            {
+                e.HasOne(l => l.Recibo).WithMany().HasForeignKey(l => l.IdRecibo);
+            });
+
+            modelBuilder.Entity<Pago>(e =>
+            {
+                e.HasOne(p => p.MedioPago).WithMany().HasForeignKey(p => p.IdMedioPago);
+                e.HasMany(p => p.MetodosPago).WithOne(pm => pm.Pago).HasForeignKey(pm => pm.IdPago);
+            });
+
+            modelBuilder.Entity<PagoMetodo>(e =>
+            {
+                e.HasKey(pm => pm.IdPagoMetodo);
+                e.HasOne(pm => pm.MedioPago).WithMany().HasForeignKey(pm => pm.IdMedioPago);
+            });
+
+            modelBuilder.Entity<PlanPagoAsignacion>(e =>
+            {
+                e.HasOne(pa => pa.PlanPago).WithMany().HasForeignKey(pa => pa.IdPlanPago);
+            });
+
+            modelBuilder.Entity<PlanPagoDetalle>(e =>
+            {
+                e.HasOne(pd => pd.PlanPago).WithMany(pp => pp.Detalles).HasForeignKey(pd => pd.IdPlanPago);
+                e.HasOne(pd => pd.ConceptoPago).WithMany().HasForeignKey(pd => pd.IdConceptoPago);
+            });
+
 
         }
 

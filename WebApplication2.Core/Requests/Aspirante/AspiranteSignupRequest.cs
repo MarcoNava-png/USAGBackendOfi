@@ -27,6 +27,8 @@ namespace WebApplication2.Core.Requests.Aspirante
 
         public int? IdModalidad { get; set; }
 
+        public int? GrupoDiasImparticion { get; set; }
+
         public int? IdPeriodoAcademico { get; set; }
 
         public bool? RecorridoPlantel { get; set; }
@@ -38,6 +40,8 @@ namespace WebApplication2.Core.Requests.Aspirante
         public string? DomicilioEmpresa { get; set; }
 
         public string? PuestoEmpresa { get; set; }
+
+        public int? IdEmpresa { get; set; }
 
         public string? QuienCubreGastos { get; set; }
     }

@@ -40,7 +40,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<PagedResult<EstudianteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 1000)
+        public async Task<ActionResult<PagedResult<EstudianteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 100)
         {
             var pagination = await _estudianteService.GetEstudiantes(page, pageSize);
             var estudiantesDto = _mapper.Map<IEnumerable<EstudianteDto>>(pagination.Items);
@@ -81,7 +81,7 @@ namespace WebApplication2.Controllers
             [FromQuery] int idPlanEstudios,
             [FromQuery] int idPeriodoAcademico,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 1000)
+            [FromQuery] int pageSize = 100)
         {
             var pagination = await _estudianteService.GetEstudiantesSinGrupo(idPlanEstudios, idPeriodoAcademico, page, pageSize);
             var estudiantesDto = _mapper.Map<IEnumerable<EstudianteDto>>(pagination.Items);

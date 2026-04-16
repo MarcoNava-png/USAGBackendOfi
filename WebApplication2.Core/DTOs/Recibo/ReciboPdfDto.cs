@@ -16,7 +16,9 @@ namespace WebApplication2.Core.DTOs.Recibo
         public decimal Total { get; set; }
         public decimal Saldo { get; set; }
         public string? Notas { get; set; }
+        public string? NombreEmpresa { get; set; }
         public bool EstaPagado { get; set; }
+        public bool EstaCancelado { get; set; }
         public DateTime? FechaPago { get; set; }
         public List<ReciboDetallePdfDto> Detalles { get; set; } = new();
         public InstitucionPdfDto? Institucion { get; set; }

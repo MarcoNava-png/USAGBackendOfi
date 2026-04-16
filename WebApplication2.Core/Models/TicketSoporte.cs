@@ -22,6 +22,8 @@ namespace WebApplication2.Core.Models
 
         public string NombreCreador { get; set; } = string.Empty;
 
+        public string? AreaDestino { get; set; }
+
         public string? UsuarioAsignadoId { get; set; }
 
         public string? NombreAsignado { get; set; }

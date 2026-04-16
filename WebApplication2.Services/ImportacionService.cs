@@ -1476,7 +1476,7 @@ namespace WebApplication2.Services
                     {
                         materia = new Materia
                         {
-                            Clave = claveNormalizada,
+                            Clave = claveNormalizada.ToUpper(),
                             Nombre = nombreNormalizado,
                             Creditos = dto.Creditos ?? 0,
                             HorasTeoria = dto.HorasTeoria ?? 0,

@@ -51,8 +51,31 @@ namespace WebApplication2.Services
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var notifService = scope.ServiceProvider.GetRequiredService<INotificacionInternalService>();
 
+            await MarcarRecibosVencidosAsync(db, ct);
             await VerificarSolicitudesVencidasAsync(db, notifService, ct);
             await VerificarProrrogasVencidasAsync(db, notifService, ct);
+        }
+
+        private async Task MarcarRecibosVencidosAsync(ApplicationDbContext db, CancellationToken ct)
+        {
+            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var recibosVencidos = await db.Recibo
+                .Where(r => (r.Estatus == EstatusRecibo.PENDIENTE || r.Estatus == EstatusRecibo.PARCIAL)
+                    && r.FechaVencimiento < hoy
+                    && r.Saldo > 0)
+                .ToListAsync(ct);
+
+            foreach (var recibo in recibosVencidos)
+            {
+                recibo.Estatus = EstatusRecibo.VENCIDO;
+            }
+
+            if (recibosVencidos.Count > 0)
+            {
+                await db.SaveChangesAsync(ct);
+                _logger.LogInformation("Marcados {Count} recibos como VENCIDO", recibosVencidos.Count);
+            }
         }
 
         private async Task VerificarSolicitudesVencidasAsync(ApplicationDbContext db, INotificacionInternalService notifService, CancellationToken ct)

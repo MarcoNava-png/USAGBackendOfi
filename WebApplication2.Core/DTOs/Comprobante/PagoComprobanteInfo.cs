@@ -11,5 +11,13 @@ namespace WebApplication2.Core.DTOs.Comprobante
         public string Moneda { get; set; } = "MXN";
         public string? Referencia { get; set; }
         public string? Notas { get; set; }
+        public List<MetodoPagoComprobanteInfo>? MetodosPago { get; set; }
+    }
+
+    public class MetodoPagoComprobanteInfo
+    {
+        public string MedioPago { get; set; } = string.Empty;
+        public decimal Monto { get; set; }
+        public string? Referencia { get; set; }
     }
 }

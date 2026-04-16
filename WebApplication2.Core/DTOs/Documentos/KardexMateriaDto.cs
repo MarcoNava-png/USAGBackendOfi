@@ -8,5 +8,6 @@ namespace WebApplication2.Core.DTOs.Documentos
         public decimal? CalificacionFinal { get; set; }
         public string Estatus { get; set; } = string.Empty;
         public string? TipoAcreditacion { get; set; }
+        public string? Ciclo { get; set; }
     }
 }

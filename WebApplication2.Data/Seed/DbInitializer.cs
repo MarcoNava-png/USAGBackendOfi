@@ -9,7 +9,7 @@ namespace WebApplication2.Data.Seed
 {
     public static class DbInitializer
     {
-        public static void InsertInitialData(this IServiceProvider services)
+        public static async Task InsertInitialDataAsync(this IServiceProvider services)
         {
             using (var scope = services.CreateScope())
             {
@@ -28,24 +28,24 @@ namespace WebApplication2.Data.Seed
                     Console.WriteLine($"Ambiente: {environment}, IsDevelopment: {isDevelopment}");
 
                     Console.WriteLine("Ejecutando migraciones Master...");
-                    masterContext.Database.Migrate();
+                    await masterContext.Database.MigrateAsync();
                     Console.WriteLine("Migraciones Master completadas.");
 
                     Console.WriteLine("Ejecutando migraciones...");
-                    context.Database.Migrate();
+                    await context.Database.MigrateAsync();
                     Console.WriteLine("Migraciones completadas.");
 
                     Console.WriteLine("Ejecutando RoleSeed...");
-                    RoleSeed.Seed(roleManager);
+                    await RoleSeed.SeedAsync(roleManager);
 
                     if (isDevelopment)
                     {
                         Console.WriteLine("Ejecutando UserSeed...");
-                        UserSeed.Seed(userManager);
+                        await UserSeed.SeedAsync(userManager);
                     }
 
                     Console.WriteLine("Ejecutando CatalogosSeed...");
-                    CatalogosSeed.Seed(context, isDevelopment, userManager);
+                    await CatalogosSeed.SeedAsync(context, isDevelopment, userManager);
 
                     Console.WriteLine("Ejecutando PermissionSeed...");
                     PermissionSeed.Seed(context, roleManager);

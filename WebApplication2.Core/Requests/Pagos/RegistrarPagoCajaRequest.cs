@@ -13,5 +13,13 @@ namespace WebApplication2.Core.Requests.Pagos
         public string? Notas { get; set; }
         public List<ReciboParaPago> RecibosSeleccionados { get; set; } = new();
         public DescuentoAutorizado? DescuentoAutorizado { get; set; }
+        public List<MetodoPagoItem>? MetodosPago { get; set; }
+    }
+
+    public class MetodoPagoItem
+    {
+        public int IdMedioPago { get; set; }
+        public decimal Monto { get; set; }
+        public string? Referencia { get; set; }
     }
 }
