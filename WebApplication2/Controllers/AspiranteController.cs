@@ -49,9 +49,9 @@ namespace WebApplication2.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<PagedResult<AspiranteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 100, [FromQuery] string filter = "", CancellationToken ct = default)
+        public async Task<ActionResult<PagedResult<AspiranteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 100, [FromQuery] string filter = "", [FromQuery] string? registradoPor = null, CancellationToken ct = default)
         {
-            var pagination = await _aspiranteService.GetAspirantes(page, pageSize, filter);
+            var pagination = await _aspiranteService.GetAspirantes(page, pageSize, filter, registradoPor);
 
             var aspirantesDtos = _mapper.Map<IEnumerable<AspiranteDto>>(pagination.Items);
 
@@ -195,6 +195,29 @@ namespace WebApplication2.Controllers
         {
             var contadores = await _aspiranteService.GetContadoresAsync();
             return Ok(contadores);
+        }
+
+        [HttpGet("asesores")]
+        public async Task<ActionResult> GetAsesores()
+        {
+            var creadorIds = await _dbContext.Aspirante
+                .Where(a => a.Status != Core.Enums.StatusEnum.Deleted && a.CreatedBy != null)
+                .Select(a => a.CreatedBy!)
+                .Distinct()
+                .ToListAsync();
+
+            var asesores = new List<object>();
+            foreach (var id in creadorIds)
+            {
+                var user = await _authService.GetUserById(id);
+                if (user != null)
+                {
+                    var nombre = $"{user.Nombres} {user.Apellidos}".Trim();
+                    asesores.Add(new { id, nombre = string.IsNullOrWhiteSpace(nombre) ? user.Email : nombre });
+                }
+            }
+
+            return Ok(asesores.OrderBy(a => ((dynamic)a).nombre));
         }
 
         [HttpGet("debug/{id}")]
@@ -762,6 +785,21 @@ namespace WebApplication2.Controllers
             return Ok(estadisticas);
         }
 
+        [HttpGet("{id:int}/inscripcion-previa")]
+        public async Task<ActionResult<Core.DTOs.Aspirante.InscripcionPreviaAspiranteDto>> ObtenerInscripcionPrevia(int id, CancellationToken ct = default)
+        {
+            try
+            {
+                var previa = await _aspiranteService.ObtenerInscripcionPreviaAsync(id, ct);
+                if (previa == null) return NotFound(new { mensaje = $"Aspirante {id} no encontrado o sin datos suficientes" });
+                return Ok(previa);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
         [HttpGet("{id:int}/ficha-admision")]
         public async Task<ActionResult<FichaAdmisionDto>> ObtenerFichaAdmision(int id)
         {
@@ -804,6 +842,25 @@ namespace WebApplication2.Controllers
             {
                 var inner = ex.InnerException != null ? $" | Inner: {ex.InnerException.Message}" : "";
                 return StatusCode(500, new { Error = $"Error al generar PDF: {ex.Message}{inner}" });
+            }
+        }
+
+        [HttpPost("{id:int}/generar-mensualidades-completas")]
+        public async Task<IActionResult> GenerarMensualidadesCompletas(int id, CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _aspiranteService.GenerarMensualidadesCompletasAsync(id, ct);
+                return Ok(resultado);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                var inner = ex.InnerException != null ? $" | Inner: {ex.InnerException.Message}" : "";
+                return StatusCode(500, new { Error = $"Error al generar mensualidades: {ex.Message}{inner}" });
             }
         }
 

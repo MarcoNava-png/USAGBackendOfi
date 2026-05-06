@@ -1123,9 +1123,7 @@ namespace WebApplication2.Services
 
             var nuevoImporte = nuevoMonto * detalle.Cantidad;
 
-            await _context.Database.ExecuteSqlRawAsync(
-                "UPDATE ReciboDetalle SET PrecioUnitario = {0} WHERE IdReciboDetalle = {1}",
-                nuevoMonto, detalle.IdReciboDetalle);
+            detalle.PrecioUnitario = nuevoMonto;
 
             var nuevoSubtotal = recibo.Detalles.Where(d => d.IdReciboDetalle != detalle.IdReciboDetalle).Sum(d => d.Importe) + nuevoImporte;
 
@@ -1136,9 +1134,9 @@ namespace WebApplication2.Services
             var nuevaNota = $"[MONTO MODIFICADO: {detalle.Descripcion} de ${montoAnterior:N2} a ${nuevoMonto:N2} - {motivo} - Por: {nombreUsuario} - {DateTime.Now:dd/MM/yyyy HH:mm}]";
             var notaFinal = string.IsNullOrEmpty(recibo.Notas) ? nuevaNota : $"{recibo.Notas}\n{nuevaNota}";
 
-            await _context.Database.ExecuteSqlRawAsync(
-                "UPDATE Recibo SET Subtotal = {0}, Saldo = {1}, Notas = {2} WHERE IdRecibo = {3}",
-                nuevoSubtotal, nuevoSaldo, notaFinal, recibo.IdRecibo);
+            recibo.Subtotal = nuevoSubtotal;
+            recibo.Saldo = nuevoSaldo;
+            recibo.Notas = notaFinal;
 
             await _context.SaveChangesAsync();
 
@@ -1207,9 +1205,9 @@ namespace WebApplication2.Services
             var nuevaNota = $"[RECARGO MODIFICADO: de ${recargoAnterior:N2} a ${nuevoRecargo:N2} - {motivo} - Por: {nombreUsuario} - {DateTime.Now:dd/MM/yyyy HH:mm}]";
             var notaFinal = string.IsNullOrEmpty(recibo.Notas) ? nuevaNota : $"{recibo.Notas}\n{nuevaNota}";
 
-            await _context.Database.ExecuteSqlRawAsync(
-                "UPDATE Recibo SET Recargos = {0}, Saldo = {1}, Notas = {2} WHERE IdRecibo = {3}",
-                nuevoRecargo, nuevoSaldo, notaFinal, recibo.IdRecibo);
+            recibo.Recargos = nuevoRecargo;
+            recibo.Saldo = nuevoSaldo;
+            recibo.Notas = notaFinal;
 
             await _context.SaveChangesAsync();
 

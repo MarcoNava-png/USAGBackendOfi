@@ -4,6 +4,7 @@ namespace WebApplication2.Core.DTOs.TarifaAdmision
 {
     public class ActualizarTarifaAdmisionDto
     {
+        public int? IdPlanEstudios { get; set; }
         public string Nombre { get; set; } = null!;
         public bool AplicaConvenioMensualidad { get; set; }
         public bool EsConvenioEmpresarial { get; set; }

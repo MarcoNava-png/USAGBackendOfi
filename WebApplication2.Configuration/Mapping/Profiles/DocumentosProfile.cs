@@ -22,7 +22,9 @@ namespace WebApplication2.Configuration.Mapping.Profiles
                 .ForMember(d => d.Descripcion, o => o.MapFrom(s => s.Requisito != null ? s.Requisito.Descripcion : string.Empty))
                 .ForMember(d => d.Estatus, o => o.MapFrom(s => s.Estatus))
                 .ForMember(d => d.UrlArchivo, o => o.MapFrom(s => s.UrlArchivo))
-                .ForMember(d => d.Notas, o => o.MapFrom(s => s.Notas));
+                .ForMember(d => d.Notas, o => o.MapFrom(s => s.Notas))
+                .ForMember(d => d.FechaProrroga, o => o.MapFrom(s => s.FechaProrroga))
+                .ForMember(d => d.MotivoProrroga, o => o.MapFrom(s => s.MotivoProrroga));
 
             CreateMap<CargarDocumentoRequestDto, AspiranteDocumento>()
                 .ForMember(d => d.IdAspiranteDocumento, o => o.Ignore())

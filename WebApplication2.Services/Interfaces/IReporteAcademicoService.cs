@@ -29,4 +29,12 @@ public interface IReporteAcademicoService
     byte[] GenerarEstudiantesPorGrupoExcel(ReporteEstudiantesGrupoDto data);
     byte[] GenerarHorarioExcel(HorarioReporteDto data);
     Task<byte[]> GenerarPlanesEstudioExcelAsync(CancellationToken ct = default);
+
+    // Alumnos inscritos por periodo
+    Task<ReporteAlumnosInscritosDto> GetAlumnosInscritosAsync(int[] idsPeriodo, int? idPlanEstudios, int? idCampus, int? idGrupo = null, CancellationToken ct = default);
+    byte[] GenerarAlumnosInscritosExcel(ReporteAlumnosInscritosDto data);
+
+    // Adeudo de documentos
+    Task<ReporteAdeudoDocumentosDto> GetAdeudoDocumentosAsync(int[] idsPlanEstudios, int? idPeriodoAcademico, string? tipoFiltro, int? idCampus = null, int? idGrupo = null, CancellationToken ct = default);
+    byte[] GenerarAdeudoDocumentosExcel(ReporteAdeudoDocumentosDto data);
 }

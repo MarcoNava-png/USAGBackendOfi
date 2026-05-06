@@ -10,6 +10,10 @@
 
         public string PlanEstudios { get; set; }
 
+        public int? IdCampus { get; set; }
+
+        public string? Campus { get; set; }
+
         public string PeriodoAcademico { get; set; }
 
         public byte ConsecutivoPeriodicidad { get; set; }

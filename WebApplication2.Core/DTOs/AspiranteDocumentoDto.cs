@@ -16,5 +16,7 @@ namespace WebApplication2.Core.DTOs
         public EstatusDocumentoEnum Estatus { get; set; }
         public string? UrlArchivo { get; set; }
         public string? Notas { get; set; }
+        public DateTime? FechaProrroga { get; set; }
+        public string? MotivoProrroga { get; set; }
     }
 }

@@ -20,4 +20,6 @@ public interface IPdfService
     byte[] GenerarReciboPdf(ReciboPdfDto recibo);
 
     byte[] GenerarCotizacionAdmisionPdf(CotizacionAdmisionPdfDto cotizacion);
+
+    byte[] GenerarComprobanteInscripcion(ComprobanteInscripcionDto comprobante);
 }

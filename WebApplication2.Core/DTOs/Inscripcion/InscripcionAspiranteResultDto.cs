@@ -10,6 +10,9 @@ namespace WebApplication2.Core.DTOs.Inscripcion
         public string Email { get; set; } = string.Empty;
         public DateOnly FechaIngreso { get; set; }
         public string PlanEstudios { get; set; } = string.Empty;
+        public int? IdGrupo { get; set; }
+        public string? NombreGrupo { get; set; }
+        public string? CodigoGrupo { get; set; }
         public CredencialesAccesoDto Credenciales { get; set; } = new();
         public List<ReciboGeneradoDto> RecibosGenerados { get; set; } = new();
         public ValidacionesInscripcionDto Validaciones { get; set; } = new();

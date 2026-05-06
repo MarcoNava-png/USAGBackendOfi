@@ -11,5 +11,9 @@ namespace WebApplication2.Core.DTOs.Admision
         public DateTime? FechaSubida { get; set; }
         public string? UrlArchivo { get; set; }
         public string? Notas { get; set; }
+        public DateTime? FechaProrroga { get; set; }
+        public string? MotivoProrroga { get; set; }
+        public bool TieneProrrogaVigente { get; set; }
+        public bool ProrrogaVencida { get; set; }
     }
 }

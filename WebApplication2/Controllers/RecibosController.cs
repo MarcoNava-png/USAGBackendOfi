@@ -302,6 +302,28 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpPut("{id:long}/aplicar-descuento")]
+        public async Task<ActionResult<ReciboDto>> AplicarDescuento(
+            long id,
+            [FromBody] AplicarDescuentoReciboDto dto,
+            CancellationToken ct)
+        {
+            try
+            {
+                var usuario = User.Identity?.Name ?? "Sistema";
+                var resultado = await _svc.AplicarDescuentoAsync(id, dto.Porcentaje, dto.Monto, dto.Motivo, usuario, ct);
+                return Ok(resultado);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al aplicar el descuento", error = ex.Message });
+            }
+        }
+
         [HttpPut("{id:long}/reversar")]
         public async Task<ActionResult<ReciboDto>> ReversarRecibo(
             long id,

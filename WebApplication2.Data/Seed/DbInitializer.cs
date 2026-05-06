@@ -27,13 +27,43 @@ namespace WebApplication2.Data.Seed
                     var isDevelopment = environment == Environments.Development;
                     Console.WriteLine($"Ambiente: {environment}, IsDevelopment: {isDevelopment}");
 
-                    Console.WriteLine("Ejecutando migraciones Master...");
-                    await masterContext.Database.MigrateAsync();
-                    Console.WriteLine("Migraciones Master completadas.");
+                    try
+                    {
+                        Console.WriteLine("Ejecutando migraciones Master...");
+                        if (!await masterContext.Database.CanConnectAsync() ||
+                            (await masterContext.Database.GetAppliedMigrationsAsync()).Count() == 0)
+                        {
+                            await masterContext.Database.MigrateAsync();
+                            Console.WriteLine("Migraciones Master completadas.");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Master DB ya inicializada, omitiendo migraciones.");
+                        }
+                    }
+                    catch (Exception exMaster)
+                    {
+                        Console.WriteLine($"Advertencia migraciones Master (omitido): {exMaster.Message}");
+                    }
 
-                    Console.WriteLine("Ejecutando migraciones...");
-                    await context.Database.MigrateAsync();
-                    Console.WriteLine("Migraciones completadas.");
+                    try
+                    {
+                        Console.WriteLine("Ejecutando migraciones...");
+                        if (!await context.Database.CanConnectAsync() ||
+                            (await context.Database.GetAppliedMigrationsAsync()).Count() == 0)
+                        {
+                            await context.Database.MigrateAsync();
+                            Console.WriteLine("Migraciones completadas.");
+                        }
+                        else
+                        {
+                            Console.WriteLine("App DB ya inicializada, omitiendo migraciones.");
+                        }
+                    }
+                    catch (Exception exApp)
+                    {
+                        Console.WriteLine($"Advertencia migraciones App (omitido): {exApp.Message}");
+                    }
 
                     Console.WriteLine("Ejecutando RoleSeed...");
                     await RoleSeed.SeedAsync(roleManager);

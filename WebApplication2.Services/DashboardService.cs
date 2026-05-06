@@ -652,24 +652,35 @@ namespace WebApplication2.Services
             var persona = estudiante.IdPersonaNavigation;
             var nombreCompleto = $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim();
 
-            var horarioHoy = await _context.Inscripcion
+            var horarioHoyRaw = await _context.Inscripcion
                 .Where(i => i.IdEstudiante == estudiante.IdEstudiante && i.Estado == "Inscrito")
                 .SelectMany(i => i.IdGrupoMateriaNavigation.Horario
                     .Where(h => h.IdDiaSemana == diaSemana)
-                    .Select(h => new ClaseAlumnoDto
+                    .Select(h => new
                     {
-                        IdGrupoMateria = h.IdGrupoMateria,
+                        h.IdGrupoMateria,
                         Materia = h.IdGrupoMateriaNavigation.IdMateriaPlanNavigation.IdMateriaNavigation.Nombre,
                         Profesor = h.IdGrupoMateriaNavigation.IdProfesor != null
                             ? $"{h.IdGrupoMateriaNavigation.IdProfesorNavigation!.IdPersonaNavigation.Nombre} {h.IdGrupoMateriaNavigation.IdProfesorNavigation.IdPersonaNavigation.ApellidoPaterno}"
                             : "Sin asignar",
                         Aula = h.Aula ?? h.IdGrupoMateriaNavigation.Aula ?? "Sin asignar",
-                        HoraInicio = h.HoraInicio.ToTimeSpan(),
-                        HoraFin = h.HoraFin.ToTimeSpan(),
+                        h.HoraInicio,
+                        h.HoraFin,
                         DiaSemana = h.IdDiaSemanaNavigation.Nombre
                     }))
                 .OrderBy(c => c.HoraInicio)
                 .ToListAsync();
+
+            var horarioHoy = horarioHoyRaw.Select(h => new ClaseAlumnoDto
+            {
+                IdGrupoMateria = h.IdGrupoMateria,
+                Materia = h.Materia,
+                Profesor = h.Profesor,
+                Aula = h.Aula,
+                HoraInicio = h.HoraInicio.ToTimeSpan(),
+                HoraFin = h.HoraFin.ToTimeSpan(),
+                DiaSemana = h.DiaSemana
+            }).ToList();
 
             var calificacionesRecientes = await _context.CalificacionDetalle
                 .Include(cd => cd.CalificacionParcial)
@@ -1197,8 +1208,57 @@ namespace WebApplication2.Services
                     Tipo = "danger",
                     Titulo = "Pago vencido",
                     Mensaje = $"Tienes un pago vencido de ${reciboVencido.Saldo:N2}",
-                    Link = "/dashboard/payments"
+                    Link = "/dashboard/portal-alumno/mis-pagos"
                 });
+            }
+
+            var idPersona = await _context.Estudiante
+                .Where(e => e.IdEstudiante == idEstudiante)
+                .Select(e => e.IdPersona)
+                .FirstOrDefaultAsync();
+
+            var aspiranteId = await _context.Aspirante
+                .Where(a => a.IdPersona == idPersona)
+                .OrderByDescending(a => a.IdAspirante)
+                .Select(a => (int?)a.IdAspirante)
+                .FirstOrDefaultAsync();
+
+            if (aspiranteId.HasValue)
+            {
+                var ahora = DateTime.UtcNow;
+                var limiteAlerta = ahora.AddDays(7);
+
+                var pendientes = await _context.AspiranteDocumento
+                    .Include(d => d.Requisito)
+                    .Where(d => d.IdAspirante == aspiranteId.Value
+                        && d.Estatus == EstatusDocumentoEnum.PENDIENTE
+                        && d.Requisito != null
+                        && d.Requisito.EsObligatorio)
+                    .ToListAsync();
+
+                var vencidas = pendientes.Count(d => d.FechaProrroga.HasValue && d.FechaProrroga.Value <= ahora);
+                var porVencer = pendientes.Count(d => d.FechaProrroga.HasValue && d.FechaProrroga.Value > ahora && d.FechaProrroga.Value <= limiteAlerta);
+
+                if (vencidas > 0)
+                {
+                    alertas.Add(new AlertaDto
+                    {
+                        Tipo = "danger",
+                        Titulo = "Documentos con prórroga vencida",
+                        Mensaje = $"Tienes {vencidas} documento(s) con prórroga vencida. Entrégalos cuanto antes para evitar problemas con tu expediente.",
+                        Link = "/dashboard/portal-alumno/mi-perfil"
+                    });
+                }
+                else if (porVencer > 0)
+                {
+                    alertas.Add(new AlertaDto
+                    {
+                        Tipo = "warning",
+                        Titulo = "Documentos próximos a vencer",
+                        Mensaje = $"Tienes {porVencer} documento(s) con prórroga que vence en los próximos 7 días.",
+                        Link = "/dashboard/portal-alumno/mi-perfil"
+                    });
+                }
             }
 
             return alertas;

@@ -2,12 +2,12 @@ using Microsoft.EntityFrameworkCore;
 using WebApplication2.Core.Common;
 using WebApplication2.Core.DTOs;
 using WebApplication2.Core.DTOs.Admision;
+using WebApplication2.Core.DTOs.Aspirante;
 using WebApplication2.Core.DTOs.Inscripcion;
 using WebApplication2.Core.DTOs.PlantillaCobro;
 using WebApplication2.Core.Enums;
 using WebApplication2.Core.Models;
 using WebApplication2.Data.DbContexts;
-using WebApplication2.Data.Migrations;
 using WebApplication2.Services.Interfaces;
 
 namespace WebApplication2.Services
@@ -78,7 +78,7 @@ namespace WebApplication2.Services
             _graphService = graphService;
         }
 
-        public async Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter)
+        public async Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter, string? createdBy = null)
         {
             var baseQuery = _dbContext.Aspirante
                 .Include(a => a.IdPlanNavigation)
@@ -89,6 +89,11 @@ namespace WebApplication2.Services
                             .ThenInclude(cp => cp.Municipio)
                                 .ThenInclude(m => m.Estado)
                 .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(createdBy))
+            {
+                baseQuery = baseQuery.Where(a => a.CreatedBy == createdBy);
+            }
 
             if (!string.IsNullOrWhiteSpace(filter))
             {
@@ -885,7 +890,11 @@ namespace WebApplication2.Services
                     Estatus = d.Estatus,
                     FechaSubida = d.FechaSubidoUtc,
                     UrlArchivo = d.UrlArchivo,
-                    Notas = d.Notas
+                    Notas = d.Notas,
+                    FechaProrroga = d.FechaProrroga,
+                    MotivoProrroga = d.MotivoProrroga,
+                    TieneProrrogaVigente = d.FechaProrroga.HasValue && d.FechaProrroga.Value > DateTime.UtcNow && d.Estatus != Core.Enums.EstatusDocumentoEnum.VALIDADO,
+                    ProrrogaVencida = d.FechaProrroga.HasValue && d.FechaProrroga.Value <= DateTime.UtcNow && d.Estatus != Core.Enums.EstatusDocumentoEnum.VALIDADO
                 }).OrderBy(d => d.Descripcion).ToList(),
 
                 InformacionPagos = new InformacionPagosDto
@@ -1001,9 +1010,12 @@ namespace WebApplication2.Services
                     .Where(d => d.Requisito != null && d.Requisito.EsObligatorio)
                     .ToList();
 
-                var documentosValidados = documentosObligatorios
-                    .Where(d => d.Estatus == EstatusDocumentoEnum.VALIDADO)
-                    .Count();
+                var ahora = DateTime.UtcNow;
+                bool CumpleParaInscripcion(AspiranteDocumento d) =>
+                    d.Estatus == EstatusDocumentoEnum.VALIDADO ||
+                    (d.FechaProrroga.HasValue && d.FechaProrroga.Value > ahora);
+
+                var documentosValidados = documentosObligatorios.Count(CumpleParaInscripcion);
 
                 validaciones.DocumentosCompletos = documentosValidados == documentosObligatorios.Count;
                 validaciones.DetalleDocumentos = aspirante.Documentos
@@ -1012,15 +1024,18 @@ namespace WebApplication2.Services
                     {
                         Descripcion = d.Requisito?.Descripcion ?? "N/A",
                         EsObligatorio = true,
-                        Estatus = d.Estatus.ToString(),
-                        Cumple = d.Estatus == EstatusDocumentoEnum.VALIDADO
+                        Estatus = d.FechaProrroga.HasValue && d.FechaProrroga.Value > ahora && d.Estatus != EstatusDocumentoEnum.VALIDADO
+                            ? "PRORROGA_VIGENTE"
+                            : d.Estatus.ToString(),
+                        Cumple = CumpleParaInscripcion(d)
                     }).ToList();
 
                 if (!validaciones.DocumentosCompletos && !request.ForzarInscripcion)
                 {
+                    var faltantes = documentosObligatorios.Count - documentosValidados;
                     throw new InvalidOperationException(
-                        $"El aspirante debe tener todos los documentos obligatorios validados. " +
-                        $"Documentos validados: {documentosValidados}/{documentosObligatorios.Count}");
+                        $"El aspirante tiene {faltantes} documento(s) obligatorio(s) pendientes sin prórroga vigente. " +
+                        $"Marque como recibidos o asigne prórroga antes de inscribir.");
                 }
                 if (!validaciones.DocumentosCompletos)
                     advertencias.Add($"Documentos incompletos: {documentosValidados}/{documentosObligatorios.Count} (se forzo la inscripcion)");
@@ -1198,6 +1213,25 @@ namespace WebApplication2.Services
 
                 var recibosGenerados = new List<ReciboGeneradoDto>();
 
+                int? idGrupoInscrito = null;
+                string? nombreGrupoInscrito = null;
+                string? codigoGrupoInscrito = null;
+                if (request.IdGrupo.HasValue)
+                {
+                    idGrupoInscrito = await InscribirEstudianteAGrupoEnContextoAsync(
+                        estudianteCreado.IdEstudiante,
+                        request.IdGrupo.Value,
+                        request.Observaciones,
+                        usuarioProcesa);
+
+                    var grupoAsignado = await _dbContext.Grupo
+                        .Where(g => g.IdGrupo == request.IdGrupo.Value)
+                        .Select(g => new { g.NombreGrupo, g.CodigoGrupo })
+                        .FirstOrDefaultAsync();
+                    nombreGrupoInscrito = grupoAsignado?.NombreGrupo;
+                    codigoGrupoInscrito = grupoAsignado?.CodigoGrupo;
+                }
+
                 await transaction.CommitAsync();
 
                 var resultado = new InscripcionAspiranteResultDto
@@ -1210,6 +1244,9 @@ namespace WebApplication2.Services
                     Email = emailUsuario,
                     FechaIngreso = estudianteCreado.FechaIngreso,
                     PlanEstudios = plan.NombrePlanEstudios ?? "N/A",
+                    IdGrupo = idGrupoInscrito,
+                    NombreGrupo = nombreGrupoInscrito,
+                    CodigoGrupo = codigoGrupoInscrito,
                     Credenciales = new CredencialesAccesoDto
                     {
                         Usuario = emailUsuario,
@@ -1303,6 +1340,113 @@ namespace WebApplication2.Services
             }
 
             return recibosGenerados;
+        }
+
+        public async Task<GenerarMensualidadesResultDto> GenerarMensualidadesCompletasAsync(int idAspirante, CancellationToken ct)
+        {
+            if (_plantillaCobroService == null || _reciboService == null)
+                throw new InvalidOperationException("IPlantillaCobroService e IReciboService son requeridos.");
+
+            var aspirante = await _dbContext.Aspirante
+                .Include(a => a.IdPlanNavigation).ThenInclude(p => p!.IdPeriodicidadNavigation)
+                .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante, ct);
+
+            if (aspirante == null)
+                throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
+
+            if (aspirante.IdPeriodoAcademico == null)
+                throw new InvalidOperationException("El aspirante no tiene un periodo académico asignado.");
+
+            var periodicidad = aspirante.IdPlanNavigation?.IdPeriodicidadNavigation
+                ?? throw new InvalidOperationException("El plan de estudios no tiene periodicidad configurada.");
+
+            var mesesPorPeriodo = (int)periodicidad.MesesPorPeriodo;
+            if (mesesPorPeriodo <= 1)
+                throw new InvalidOperationException("La periodicidad del plan no requiere mensualidades adicionales.");
+
+            var periodoAcademico = await _dbContext.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == aspirante.IdPeriodoAcademico.Value, ct)
+                ?? throw new InvalidOperationException("No se encontró el periodo académico del aspirante.");
+
+            var plantilla = await _plantillaCobroService.BuscarPlantillaActivaAsync(
+                aspirante.IdPlan,
+                aspirante.CuatrimestreInteres ?? 1,
+                idTurno: aspirante.TurnoId,
+                ct: ct)
+                ?? throw new InvalidOperationException("No hay una plantilla de cobro activa para el plan/cuatrimestre del aspirante.");
+
+            var detalleMensualidad = plantilla.Detalles?
+                .FirstOrDefault(d =>
+                    (d.NombreConcepto ?? "").ToUpperInvariant().Contains("MENSUALIDAD") ||
+                    (d.NombreConcepto ?? "").ToUpperInvariant().Contains("COLEGIATURA") ||
+                    (d.Descripcion ?? "").ToUpperInvariant().Contains("MENSUALIDAD") ||
+                    (d.Descripcion ?? "").ToUpperInvariant().Contains("COLEGIATURA"))
+                ?? throw new InvalidOperationException("La plantilla de cobro no contiene un concepto de Mensualidad o Colegiatura.");
+
+            var idConceptoMensualidad = detalleMensualidad.IdConceptoPago;
+            var montoMensualidad = detalleMensualidad.PrecioUnitario * detalleMensualidad.Cantidad;
+
+            var recibosExistentes = await _dbContext.Recibo
+                .Include(r => r.Detalles)
+                .Where(r => r.IdAspirante == idAspirante && r.Status == Core.Enums.StatusEnum.Active)
+                .ToListAsync(ct);
+
+            var mensualidadesExistentes = recibosExistentes
+                .Count(r => r.Detalles.Any(d => d.IdConceptoPago == idConceptoMensualidad));
+
+            var mensualidadesAGenerar = mesesPorPeriodo - mensualidadesExistentes;
+
+            if (mensualidadesAGenerar <= 0)
+            {
+                return new GenerarMensualidadesResultDto
+                {
+                    Success = true,
+                    Mensaje = "Ya están generadas todas las mensualidades del periodo.",
+                    RecibosGenerados = 0,
+                    MensualidadesPorPeriodo = mesesPorPeriodo,
+                };
+            }
+
+            var nombresMeses = new[]
+            {
+                "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            };
+
+            var fechaInicio = periodoAcademico.FechaInicio;
+            var diaVencimiento = plantilla.DiaVencimiento > 0 ? plantilla.DiaVencimiento : 1;
+            var generados = new List<ReciboDto>();
+
+            for (int i = 0; i < mensualidadesAGenerar; i++)
+            {
+                var indiceMes = mensualidadesExistentes + i;
+                var fechaMes = fechaInicio.AddMonths(indiceMes);
+                var diasMes = DateTime.DaysInMonth(fechaMes.Year, fechaMes.Month);
+                var dia = Math.Min(diaVencimiento, diasMes);
+                var fechaVencimiento = new DateOnly(fechaMes.Year, fechaMes.Month, dia);
+
+                var nombreMes = nombresMeses[fechaMes.Month - 1];
+                var descripcion = $"Mensualidad - {nombreMes} {fechaMes.Year}";
+
+                var recibo = await _reciboService.GenerarReciboAspiranteMensualidadAsync(
+                    idAspirante,
+                    idConceptoMensualidad,
+                    montoMensualidad,
+                    descripcion,
+                    fechaVencimiento,
+                    ct);
+
+                generados.Add(recibo);
+            }
+
+            return new GenerarMensualidadesResultDto
+            {
+                Success = true,
+                Mensaje = $"Se generaron {generados.Count} mensualidades.",
+                RecibosGenerados = generados.Count,
+                MensualidadesPorPeriodo = mesesPorPeriodo,
+                Recibos = generados,
+            };
         }
 
         public async Task<bool> OcultarAspiranteAsync(int idAspirante, string usuarioId)
@@ -1426,5 +1570,142 @@ namespace WebApplication2.Services
             };
         }
 
+        private async Task<int?> InscribirEstudianteAGrupoEnContextoAsync(int idEstudiante, int idGrupo, string? observaciones, string? usuarioProcesa)
+        {
+            var grupoExiste = await _dbContext.Grupo
+                .AnyAsync(g => g.IdGrupo == idGrupo && g.Status == Core.Enums.StatusEnum.Active);
+            if (!grupoExiste) return null;
+
+            var yaInscrito = await _dbContext.EstudianteGrupo
+                .AnyAsync(eg => eg.IdEstudiante == idEstudiante && eg.IdGrupo == idGrupo && eg.Status == Core.Enums.StatusEnum.Active);
+
+            if (!yaInscrito)
+            {
+                _dbContext.EstudianteGrupo.Add(new Core.Models.EstudianteGrupo
+                {
+                    IdEstudiante = idEstudiante,
+                    IdGrupo = idGrupo,
+                    FechaInscripcion = DateTime.UtcNow,
+                    Estado = "Inscrito",
+                    Observaciones = observaciones,
+                    Status = Core.Enums.StatusEnum.Active,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = usuarioProcesa ?? string.Empty
+                });
+            }
+
+            var materias = await _dbContext.GrupoMateria
+                .Where(gm => gm.IdGrupo == idGrupo && gm.Status == Core.Enums.StatusEnum.Active)
+                .Select(gm => gm.IdGrupoMateria)
+                .ToListAsync();
+
+            var existentes = await _dbContext.Inscripcion
+                .Where(i => i.IdEstudiante == idEstudiante && materias.Contains(i.IdGrupoMateria) && i.Status == Core.Enums.StatusEnum.Active)
+                .Select(i => i.IdGrupoMateria)
+                .ToListAsync();
+
+            foreach (var idGm in materias.Except(existentes))
+            {
+                _dbContext.Inscripcion.Add(new Core.Models.Inscripcion
+                {
+                    IdEstudiante = idEstudiante,
+                    IdGrupoMateria = idGm,
+                    FechaInscripcion = DateTime.UtcNow,
+                    Estado = "Inscrito",
+                    Status = Core.Enums.StatusEnum.Active,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = usuarioProcesa ?? string.Empty
+                });
+            }
+
+            await _dbContext.SaveChangesAsync();
+            return idGrupo;
+        }
+
+        public async Task<InscripcionPreviaAspiranteDto?> ObtenerInscripcionPreviaAsync(int aspiranteId, CancellationToken ct = default)
+        {
+            if (_matriculaService == null)
+                throw new InvalidOperationException("ObtenerInscripcionPreviaAsync requiere IMatriculaService");
+
+            var aspirante = await _dbContext.Aspirante
+                .Include(a => a.IdPersonaNavigation)
+                .Include(a => a.IdPlanNavigation)
+                .Include(a => a.IdPeriodoAcademicoNavigation)
+                .Include(a => a.Turno)
+                .FirstOrDefaultAsync(a => a.IdAspirante == aspiranteId, ct);
+
+            if (aspirante == null) return null;
+            if (aspirante.IdPersonaNavigation == null || aspirante.IdPlanNavigation == null) return null;
+
+            var persona = aspirante.IdPersonaNavigation;
+            var plan = aspirante.IdPlanNavigation;
+
+            var matriculaProyectada = await _matriculaService.GenerarMatriculaAsync(plan.NombrePlanEstudios ?? "");
+            var correoProyectado = $"{matriculaProyectada}@usaguanajuato.edu.mx";
+
+            var dto = new InscripcionPreviaAspiranteDto
+            {
+                IdAspirante = aspirante.IdAspirante,
+                NombreCompleto = $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim(),
+                MatriculaProyectada = matriculaProyectada,
+                CorreoProyectado = correoProyectado,
+                IdPlanEstudios = plan.IdPlanEstudios,
+                NombrePlanEstudios = plan.NombrePlanEstudios,
+                ClavePlanEstudios = plan.ClavePlanEstudios,
+                IdPeriodoAcademico = aspirante.IdPeriodoAcademico,
+                NombrePeriodoAcademico = aspirante.IdPeriodoAcademicoNavigation?.Nombre,
+                IdTurnoAspirante = aspirante.TurnoId,
+                TurnoAspirante = aspirante.Turno?.Nombre
+            };
+
+            if (aspirante.IdPeriodoAcademico.HasValue)
+            {
+                var gruposQuery = _dbContext.Grupo
+                    .AsNoTracking()
+                    .Where(g => g.IdPlanEstudios == plan.IdPlanEstudios
+                        && g.IdPeriodoAcademico == aspirante.IdPeriodoAcademico.Value
+                        && g.Status == Core.Enums.StatusEnum.Active);
+
+                if (aspirante.TurnoId.HasValue)
+                    gruposQuery = gruposQuery.Where(g => g.IdTurno == aspirante.TurnoId.Value);
+
+                var gruposRaw = await gruposQuery
+                    .Include(g => g.IdTurnoNavigation)
+                    .Include(g => g.IdPeriodoAcademicoNavigation)
+                    .OrderBy(g => g.NumeroCuatrimestre).ThenBy(g => g.NumeroGrupo)
+                    .Select(g => new
+                    {
+                        g.IdGrupo,
+                        g.NombreGrupo,
+                        g.CodigoGrupo,
+                        g.NumeroCuatrimestre,
+                        g.IdTurno,
+                        TurnoNombre = g.IdTurnoNavigation != null ? g.IdTurnoNavigation.Nombre : null,
+                        g.CapacidadMaxima,
+                        Ocupados = g.EstudianteGrupo.Count(eg => eg.Status == Core.Enums.StatusEnum.Active),
+                        PeriodoNombre = g.IdPeriodoAcademicoNavigation != null ? g.IdPeriodoAcademicoNavigation.Nombre : null,
+                        g.IdPeriodoAcademico
+                    })
+                    .ToListAsync(ct);
+
+                dto.GruposDisponibles = gruposRaw.Select(g => new GrupoDisponibleParaAspiranteDto
+                {
+                    IdGrupo = g.IdGrupo,
+                    NombreGrupo = g.NombreGrupo,
+                    CodigoGrupo = g.CodigoGrupo,
+                    NumeroCuatrimestre = g.NumeroCuatrimestre,
+                    IdTurno = g.IdTurno,
+                    Turno = g.TurnoNombre,
+                    CapacidadMaxima = g.CapacidadMaxima,
+                    Ocupados = g.Ocupados,
+                    CupoDisponible = g.CapacidadMaxima - g.Ocupados,
+                    TieneCupo = (g.CapacidadMaxima - g.Ocupados) > 0,
+                    PeriodoAcademico = g.PeriodoNombre,
+                    IdPeriodoAcademico = g.IdPeriodoAcademico
+                }).ToList();
+            }
+
+            return dto;
+        }
     }
 }

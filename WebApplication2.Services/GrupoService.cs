@@ -44,6 +44,7 @@ namespace WebApplication2.Services
                 .Include(g => g.IdPeriodoAcademicoNavigation)
                 .Include(g => g.IdTurnoNavigation)
                 .Include(g => g.IdPlanEstudiosNavigation)
+                    .ThenInclude(p => p.IdCampusNavigation)
                 .Include(g => g.GrupoMateria)
                     .ThenInclude(gm => gm.Inscripcion)
                 .Where(d => d.Status == Core.Enums.StatusEnum.Active);
@@ -916,7 +917,94 @@ namespace WebApplication2.Services
             _dbContext.GrupoMateria.Add(grupoMateria);
             await _dbContext.SaveChangesAsync(ct);
 
+            var estudiantesDelGrupo = await _dbContext.EstudianteGrupo
+                .Where(eg => eg.IdGrupo == idGrupo && eg.Status == StatusEnum.Active)
+                .Select(eg => eg.IdEstudiante)
+                .ToListAsync(ct);
+
+            if (estudiantesDelGrupo.Count > 0)
+            {
+                foreach (var idEstudiante in estudiantesDelGrupo)
+                {
+                    _dbContext.Inscripcion.Add(new Inscripcion
+                    {
+                        IdEstudiante = idEstudiante,
+                        IdGrupoMateria = grupoMateria.IdGrupoMateria,
+                        FechaInscripcion = DateTime.UtcNow,
+                        Estado = "Inscrito",
+                        Status = StatusEnum.Active,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = "Sistema"
+                    });
+                }
+                await _dbContext.SaveChangesAsync(ct);
+            }
+
             return grupoMateria;
+        }
+
+        public async Task<SincronizacionInscripcionesResultDto> SincronizarInscripcionesGrupoAsync(
+            int idGrupo,
+            CancellationToken ct = default)
+        {
+            var resultado = new SincronizacionInscripcionesResultDto { IdGrupo = idGrupo };
+
+            var grupo = await _dbContext.Grupo
+                .FirstOrDefaultAsync(g => g.IdGrupo == idGrupo && g.Status == StatusEnum.Active, ct);
+            if (grupo == null)
+                throw new KeyNotFoundException($"Grupo {idGrupo} no encontrado");
+
+            resultado.NombreGrupo = grupo.NombreGrupo;
+            resultado.CodigoGrupo = grupo.CodigoGrupo;
+
+            var estudiantes = await _dbContext.EstudianteGrupo
+                .Where(eg => eg.IdGrupo == idGrupo && eg.Status == StatusEnum.Active)
+                .Select(eg => eg.IdEstudiante)
+                .ToListAsync(ct);
+
+            var materias = await _dbContext.GrupoMateria
+                .Where(gm => gm.IdGrupo == idGrupo && gm.Status == StatusEnum.Active)
+                .Select(gm => gm.IdGrupoMateria)
+                .ToListAsync(ct);
+
+            resultado.TotalEstudiantes = estudiantes.Count;
+            resultado.TotalMaterias = materias.Count;
+
+            var existentes = await _dbContext.Inscripcion
+                .Where(i => estudiantes.Contains(i.IdEstudiante)
+                    && materias.Contains(i.IdGrupoMateria)
+                    && i.Status == StatusEnum.Active)
+                .Select(i => new { i.IdEstudiante, i.IdGrupoMateria })
+                .ToListAsync(ct);
+
+            var existentesSet = existentes.Select(e => (e.IdEstudiante, e.IdGrupoMateria)).ToHashSet();
+            int creadas = 0;
+
+            foreach (var idEst in estudiantes)
+            {
+                foreach (var idGm in materias)
+                {
+                    if (existentesSet.Contains((idEst, idGm))) continue;
+                    _dbContext.Inscripcion.Add(new Inscripcion
+                    {
+                        IdEstudiante = idEst,
+                        IdGrupoMateria = idGm,
+                        FechaInscripcion = DateTime.UtcNow,
+                        Estado = "Inscrito",
+                        Status = StatusEnum.Active,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = "Sistema"
+                    });
+                    creadas++;
+                }
+            }
+
+            if (creadas > 0)
+                await _dbContext.SaveChangesAsync(ct);
+
+            resultado.InscripcionesCreadas = creadas;
+            resultado.YaEstabaSincronizado = creadas == 0;
+            return resultado;
         }
 
         public async Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, CancellationToken ct = default)
@@ -1432,6 +1520,33 @@ namespace WebApplication2.Services
                 };
 
                 _dbContext.EstudianteGrupo.Add(estudianteGrupo);
+
+                var materiasGrupo = await _dbContext.GrupoMateria
+                    .Where(gm => gm.IdGrupo == idGrupo && gm.Status == StatusEnum.Active)
+                    .Select(gm => gm.IdGrupoMateria)
+                    .ToListAsync(ct);
+
+                var inscripcionesExistentes = await _dbContext.Inscripcion
+                    .Where(i => i.IdEstudiante == idEstudiante
+                        && materiasGrupo.Contains(i.IdGrupoMateria)
+                        && i.Status == StatusEnum.Active)
+                    .Select(i => i.IdGrupoMateria)
+                    .ToListAsync(ct);
+
+                foreach (var idGrupoMateria in materiasGrupo.Except(inscripcionesExistentes))
+                {
+                    _dbContext.Inscripcion.Add(new Inscripcion
+                    {
+                        IdEstudiante = idEstudiante,
+                        IdGrupoMateria = idGrupoMateria,
+                        FechaInscripcion = DateTime.UtcNow,
+                        Estado = "Inscrito",
+                        Status = StatusEnum.Active,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = estudianteGrupo.CreatedBy ?? string.Empty
+                    });
+                }
+
                 await _dbContext.SaveChangesAsync(ct);
 
                 resultado.IdEstudianteGrupo = estudianteGrupo.IdEstudianteGrupo;
@@ -1542,6 +1657,23 @@ namespace WebApplication2.Services
 
             estudianteGrupo.Status = StatusEnum.Deleted;
             estudianteGrupo.UpdatedAt = DateTime.UtcNow;
+
+            var materiasGrupo = await _dbContext.GrupoMateria
+                .Where(gm => gm.IdGrupo == estudianteGrupo.IdGrupo)
+                .Select(gm => gm.IdGrupoMateria)
+                .ToListAsync(ct);
+
+            var inscripciones = await _dbContext.Inscripcion
+                .Where(i => i.IdEstudiante == estudianteGrupo.IdEstudiante
+                    && materiasGrupo.Contains(i.IdGrupoMateria)
+                    && i.Status == StatusEnum.Active)
+                .ToListAsync(ct);
+
+            foreach (var insc in inscripciones)
+            {
+                insc.Status = StatusEnum.Deleted;
+                insc.UpdatedAt = DateTime.UtcNow;
+            }
 
             await _dbContext.SaveChangesAsync(ct);
             return true;

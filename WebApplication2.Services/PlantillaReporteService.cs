@@ -198,41 +198,68 @@ namespace WebApplication2.Services
 
                 if (templateRowIndex < 0) continue;
 
-                var templateRows = new List<TableRow>();
-                templateRows.Add(rows[templateRowIndex]);
-
+                var templateRow = rows[templateRowIndex];
+                TableRow? styleRow = null;
                 if (templateRowIndex + 1 < rows.Count)
                 {
-                    var nextRowText = string.Concat(rows[templateRowIndex + 1].Descendants<Text>().Select(t => t.Text));
-                    if (!nextRowText.Contains("{{") || string.IsNullOrWhiteSpace(nextRowText))
+                    var nextRow = rows[templateRowIndex + 1];
+                    var nextRowText = string.Concat(nextRow.Descendants<Text>().Select(t => t.Text));
+                    if (nextRowText.Contains("{{"))
                     {
-                        templateRows.Add(rows[templateRowIndex + 1]);
+                        styleRow = nextRow;
+                    }
+                    else if (string.IsNullOrWhiteSpace(nextRowText))
+                    {
+                        styleRow = nextRow;
+                        CopiarContenidoCeldas(templateRow, styleRow);
                     }
                 }
 
-                foreach (var tr in templateRows) tr.Remove();
+                var rowBeforeTemplate = templateRowIndex > 0 ? rows[templateRowIndex - 1] : null;
 
-                var remainingEmpty = rows.Skip(templateRowIndex + templateRows.Count)
+                var skip = styleRow != null ? 2 : 1;
+                var emptyRowsCount = rows.Skip(templateRowIndex + skip)
+                    .TakeWhile(r => string.IsNullOrWhiteSpace(string.Concat(r.Descendants<Text>().Select(t => t.Text))))
+                    .Count();
+                var minTotal = skip + emptyRowsCount;
+
+                var totalRows = Math.Max(filas.Count, minTotal);
+
+                var templates = new List<TableRow> { templateRow };
+                if (styleRow != null) templates.Add(styleRow);
+
+                templateRow.Remove();
+                styleRow?.Remove();
+
+                var emptyAfter = table.Elements<TableRow>().ToList()
                     .Where(r => string.IsNullOrWhiteSpace(string.Concat(r.Descendants<Text>().Select(t => t.Text))))
                     .ToList();
-                foreach (var emptyRow in remainingEmpty) emptyRow.Remove();
-
-                var refreshedRows = table.Elements<TableRow>().ToList();
-                var insertAfter = refreshedRows.Count > 0 ? refreshedRows.Last() : null;
-
-                for (int i = 0; i < filas.Count; i++)
+                foreach (var er in emptyAfter)
                 {
-                    var templateIndex = templateRows.Count > 1 ? (i % 2) : 0;
-                    var newRow = (TableRow)templateRows[templateIndex].CloneNode(true);
+                    if (rowBeforeTemplate != null && er == rowBeforeTemplate) continue;
+                    er.Remove();
+                }
 
+                var insertAfter = rowBeforeTemplate ?? table.Elements<TableRow>().LastOrDefault();
+
+                for (int i = 0; i < totalRows; i++)
+                {
+                    var templateIndex = templates.Count > 1 ? (i % 2) : 0;
+                    var newRow = (TableRow)templates[templateIndex].CloneNode(true);
+
+                    var data = i < filas.Count ? filas[i] : null;
                     foreach (var text in newRow.Descendants<Text>())
                     {
                         var t = text.Text;
                         t = t.Replace(marcador, "");
-                        foreach (var (key, value) in filas[i])
+                        if (data != null)
                         {
-                            t = t.Replace($"{{{{{key}}}}}", value ?? "");
+                            foreach (var (key, value) in data)
+                            {
+                                t = t.Replace($"{{{{{key}}}}}", value ?? "");
+                            }
                         }
+                        t = Regex.Replace(t, @"\{\{[^}]+\}\}", "");
                         text.Text = t;
                     }
 
@@ -246,6 +273,21 @@ namespace WebApplication2.Services
                         table.PrependChild(newRow);
                         insertAfter = newRow;
                     }
+                }
+            }
+        }
+
+        private static void CopiarContenidoCeldas(TableRow from, TableRow to)
+        {
+            var fromCells = from.Elements<TableCell>().ToList();
+            var toCells = to.Elements<TableCell>().ToList();
+            var n = Math.Min(fromCells.Count, toCells.Count);
+            for (int i = 0; i < n; i++)
+            {
+                toCells[i].RemoveAllChildren<Paragraph>();
+                foreach (var para in fromCells[i].Elements<Paragraph>())
+                {
+                    toCells[i].AppendChild((Paragraph)para.CloneNode(true));
                 }
             }
         }

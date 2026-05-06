@@ -153,7 +153,23 @@ public class PdfService : IPdfService
                 FichaFilasProgramaEducativo(col, ficha);
                 FichaFilasSocioeconomicos(col, ficha);
                 FichaFilasFinancieros(col, ficha);
+                FichaFilasNotas(col, ficha);
             });
+    }
+
+    private void FichaFilasNotas(ColumnDescriptor col, FichaAdmisionDto ficha)
+    {
+        if (string.IsNullOrWhiteSpace(ficha.Observaciones))
+            return;
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+            .Background(ColorSeccionHeader).MinHeight(14)
+            .AlignCenter().AlignMiddle()
+            .Text("NOTAS ADICIONALES").FontSize(8);
+
+        col.Item().BorderTop(0.5f).BorderColor(ColorBorde)
+            .PaddingHorizontal(6).PaddingVertical(4)
+            .Text(ficha.Observaciones).FontSize(7);
     }
 
     private void FichaFilasDatosGenerales(ColumnDescriptor col, FichaAdmisionDto ficha)
@@ -1704,6 +1720,111 @@ public class PdfService : IPdfService
                 });
             });
         });
+    }
+
+    #endregion
+
+    #region Comprobante de Inscripción
+
+    public byte[] GenerarComprobanteInscripcion(ComprobanteInscripcionDto c)
+    {
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.Letter);
+                page.Margin(40);
+                page.DefaultTextStyle(t => t.FontFamily(FontePrincipal).FontSize(10));
+
+                page.Header().Column(col =>
+                {
+                    col.Item().AlignCenter().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO").Bold().FontSize(14);
+                    col.Item().AlignCenter().Text("Comprobante de Inscripción").FontSize(12).FontColor(ColorGris);
+                    col.Item().PaddingTop(4).LineHorizontal(1).LineColor(ColorGris);
+                });
+
+                page.Content().PaddingVertical(12).Column(col =>
+                {
+                    col.Spacing(10);
+
+                    col.Item().Background(Colors.Grey.Lighten4).Padding(10).Column(b =>
+                    {
+                        b.Spacing(4);
+                        b.Item().Text("Datos del Estudiante").Bold().FontSize(11);
+                        b.Item().Row(r =>
+                        {
+                            r.RelativeItem().Text(t => { t.Span("Matrícula: ").SemiBold(); t.Span(c.Matricula); });
+                            r.RelativeItem().Text(t => { t.Span("Fecha de ingreso: ").SemiBold(); t.Span(c.FechaIngreso.ToString("dd/MM/yyyy")); });
+                        });
+                        b.Item().Text(t => { t.Span("Nombre: ").SemiBold(); t.Span(c.NombreCompleto); });
+                        if (!string.IsNullOrEmpty(c.Curp))
+                            b.Item().Text(t => { t.Span("CURP: ").SemiBold(); t.Span(c.Curp); });
+                    });
+
+                    col.Item().Background(Colors.Grey.Lighten4).Padding(10).Column(b =>
+                    {
+                        b.Spacing(4);
+                        b.Item().Text("Información Académica").Bold().FontSize(11);
+                        b.Item().Text(t => { t.Span("Plan de estudios: ").SemiBold(); t.Span(c.PlanEstudios); });
+                        if (!string.IsNullOrEmpty(c.ClavePlanEstudios))
+                            b.Item().Text(t => { t.Span("Clave del plan: ").SemiBold(); t.Span(c.ClavePlanEstudios); });
+                        if (!string.IsNullOrEmpty(c.Campus))
+                            b.Item().Text(t => { t.Span("Campus: ").SemiBold(); t.Span(c.Campus); });
+                        if (!string.IsNullOrEmpty(c.Turno))
+                            b.Item().Text(t => { t.Span("Turno: ").SemiBold(); t.Span(c.Turno); });
+                        if (!string.IsNullOrEmpty(c.PeriodoAcademico))
+                            b.Item().Text(t => { t.Span("Periodo académico: ").SemiBold(); t.Span(c.PeriodoAcademico); });
+                        if (!string.IsNullOrEmpty(c.GrupoCodigo))
+                            b.Item().Text(t =>
+                            {
+                                t.Span("Grupo: ").SemiBold();
+                                t.Span($"{c.GrupoCodigo}");
+                                if (!string.IsNullOrEmpty(c.GrupoNombre)) t.Span($" — {c.GrupoNombre}");
+                                if (c.NumeroCuatrimestre.HasValue) t.Span($" · Cuatrimestre {c.NumeroCuatrimestre}");
+                            });
+                    });
+
+                    col.Item().Background("#EEF7FF").Border(1).BorderColor("#4A90E2").Padding(10).Column(b =>
+                    {
+                        b.Spacing(4);
+                        b.Item().Text("Credenciales de Acceso").Bold().FontSize(11).FontColor("#2760A0");
+                        b.Item().Text(t => { t.Span("Correo institucional: ").SemiBold(); t.Span(c.CorreoInstitucional); });
+                        if (c.IncluyeCredenciales && !string.IsNullOrEmpty(c.PasswordTemporal))
+                        {
+                            b.Item().Text(t => { t.Span("Contraseña temporal: ").SemiBold(); t.Span(c.PasswordTemporal).FontFamily(FontePrincipal); });
+                            b.Item().Text("Importante: el estudiante debe cambiar la contraseña en su primer inicio de sesión.")
+                                .FontSize(8).FontColor(ColorGris).Italic();
+                        }
+                        else
+                        {
+                            b.Item().Text("La contraseña no se muestra en reimpresiones. Si el estudiante la olvidó, solicite un restablecimiento desde Accesos de Alumnos y Docentes.")
+                                .FontSize(8).FontColor(ColorGris).Italic();
+                        }
+                        if (!string.IsNullOrEmpty(c.UrlPortal))
+                            b.Item().Text(t => { t.Span("Portal: ").SemiBold(); t.Span(c.UrlPortal); });
+                    });
+
+                    col.Item().PaddingTop(20).Column(f =>
+                    {
+                        f.Item().LineHorizontal(0.5f).LineColor(ColorGris);
+                        f.Item().PaddingTop(30).AlignCenter().Text("_____________________________________").FontColor(ColorGris);
+                        f.Item().AlignCenter().Text("Firma del Estudiante").FontSize(9);
+                    });
+                });
+
+                page.Footer().Column(f =>
+                {
+                    f.Item().LineHorizontal(0.5f).LineColor(ColorGris);
+                    f.Item().PaddingTop(4).Row(r =>
+                    {
+                        r.RelativeItem().Text(t => { t.Span("Generado: ").FontSize(7).FontColor(ColorGris); t.Span(c.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")).FontSize(7).FontColor(ColorGris); });
+                        r.RelativeItem().AlignRight().Text(t => { t.CurrentPageNumber().FontSize(7).FontColor(ColorGris); t.Span(" de ").FontSize(7).FontColor(ColorGris); t.TotalPages().FontSize(7).FontColor(ColorGris); });
+                    });
+                });
+            });
+        });
+
+        return document.GeneratePdf();
     }
 
     #endregion

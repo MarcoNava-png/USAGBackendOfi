@@ -120,7 +120,7 @@ namespace WebApplication2.Filters
 
             var nombreUsuario = context.HttpContext.User.FindFirst(ClaimTypes.Name)?.Value ?? userId;
             var modulo = ControllerModuleMap.GetValueOrDefault(controller, "General");
-            var entidadId = context.RouteData.Values.TryGetValue("id", out var idVal) ? idVal?.ToString() : null;
+            var entidadId = ExtractEntidadId(context);
             var accionFinal = FormatAction(method, action);
 
             try
@@ -138,6 +138,35 @@ namespace WebApplication2.Filters
             {
                 // Never let logging fail the request
             }
+        }
+
+        private static readonly string[] IdRouteKeys =
+        {
+            "id", "idRecibo", "idPago", "idAspirante", "idEstudiante", "idDocumento",
+            "idGrupo", "idMateria", "idPersona", "idSolicitud", "idTicket", "idConcepto",
+            "idPlan", "idCampus", "idProfesor", "idBeca", "idConvenio", "idEmpresa",
+            "idTarifa", "idPlantilla", "idPeriodo", "idInscripcion", "idCalificacion"
+        };
+
+        private static string? ExtractEntidadId(ActionExecutingContext context)
+        {
+            foreach (var key in IdRouteKeys)
+            {
+                if (context.RouteData.Values.TryGetValue(key, out var routeVal) && routeVal != null)
+                {
+                    var s = routeVal.ToString();
+                    if (!string.IsNullOrWhiteSpace(s)) return s;
+                }
+            }
+            foreach (var kv in context.ActionArguments)
+            {
+                if (IdRouteKeys.Contains(kv.Key, StringComparer.OrdinalIgnoreCase) && kv.Value != null)
+                {
+                    var s = kv.Value.ToString();
+                    if (!string.IsNullOrWhiteSpace(s) && s != "0") return s;
+                }
+            }
+            return null;
         }
 
         private static string? ExtractEmailFromArgs(ActionExecutingContext context)

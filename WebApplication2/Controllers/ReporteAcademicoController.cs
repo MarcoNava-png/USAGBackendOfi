@@ -44,11 +44,16 @@ public class ReporteAcademicoController : ControllerBase
                 var plantilla = await _plantillaSvc.ObtenerPorCodigoAsync("listado_grupo", ct);
                 if (plantilla != null)
                 {
+                    var periodoCorto = (data.PeriodoAcademico ?? "")
+                        .Replace("CUATRIMESTRE ", "", StringComparison.OrdinalIgnoreCase)
+                        .Trim();
                     var variables = new Dictionary<string, string>
                     {
                         { "carrera", data.PlanEstudios ?? "" },
-                        { "periodo", data.PeriodoAcademico ?? "" },
-                        { "grupo", data.CodigoGrupo ?? "" }
+                        { "periodo", periodoCorto },
+                        { "grupo", data.CodigoGrupo ?? "" },
+                        { "campus", data.Campus ?? "" },
+                        { "cuatrimestre", data.Cuatrimestre.HasValue ? $"{data.Cuatrimestre}°" : "" }
                     };
                     var tablaEstudiantes = data.Estudiantes.Select(e => new Dictionary<string, string>
                     {
@@ -206,6 +211,45 @@ public class ReporteAcademicoController : ControllerBase
         try
         {
             var data = await _svc.GetListaAsistenciaAsync(idGrupoMateria, ct);
+
+            if (_plantillaSvc != null)
+            {
+                var plantilla = await _plantillaSvc.ObtenerPorCodigoAsync("lista_asistencia", ct);
+                if (plantilla != null)
+                {
+                    var periodoCorto = (data.PeriodoAcademico ?? "")
+                        .Replace("CUATRIMESTRE ", "", StringComparison.OrdinalIgnoreCase)
+                        .Trim();
+
+                    var variables = new Dictionary<string, string>
+                    {
+                        { "carrera", data.PlanEstudios ?? "" },
+                        { "periodo", periodoCorto },
+                        { "materia", data.NombreMateria ?? "" },
+                        { "clave_materia", data.ClaveMateria ?? "" },
+                        { "clave", data.ClaveMateria ?? "" },
+                        { "docente", data.NombreProfesor ?? "" },
+                        { "profesor", data.NombreProfesor ?? "" },
+                        { "grupo", data.CodigoGrupo ?? data.NombreGrupo ?? "" },
+                        { "nombre_grupo", data.NombreGrupo ?? "" },
+                        { "campus", data.Campus ?? "" },
+                        { "cuatrimestre", data.Cuatrimestre.HasValue ? $"{data.Cuatrimestre}°" : "" }
+                    };
+
+                    var tablaAlumnos = data.Alumnos.Select(a => new Dictionary<string, string>
+                    {
+                        { "matricula", a.Matricula ?? "" },
+                        { "estatus", a.Estatus ?? "Inscrito" },
+                        { "nombre", a.NombreCompleto ?? "" }
+                    }).ToList();
+                    var tablas = new Dictionary<string, List<Dictionary<string, string>>> { { "tabla_estudiantes", tablaAlumnos } };
+
+                    var docxBytes = await _plantillaSvc.GenerarDocumentoAsync("lista_asistencia", variables, tablas, ct);
+                    var pdfBytes = await Services.DocxToPdfConverter.ConvertAsync(docxBytes, ct);
+                    return File(pdfBytes, "application/pdf", $"ListaAsistencia_{data.NombreMateria}_{DateTime.Now:yyyyMMdd}.pdf");
+                }
+            }
+
             var pdf = _svc.GenerarListaAsistenciaPdf(data);
             return File(pdf, "application/pdf", $"ListaAsistencia_{data.NombreMateria}_{DateTime.Now:yyyyMMdd}.pdf");
         }
@@ -250,5 +294,69 @@ public class ReporteAcademicoController : ControllerBase
         var excel = _svc.GenerarReporteBajasExcel(data);
         return File(excel, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"ReporteBajas_{DateTime.Now:yyyyMMdd}.xlsx");
+    }
+
+    [HttpGet("alumnos-inscritos")]
+    public async Task<IActionResult> GetAlumnosInscritos(
+        [FromQuery] string idsPeriodo,
+        [FromQuery] int? idPlanEstudios,
+        [FromQuery] int? idCampus,
+        [FromQuery] int? idGrupo,
+        CancellationToken ct)
+    {
+        var ids = (idsPeriodo ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s, out var i) ? i : 0).Where(i => i > 0).ToArray();
+        if (ids.Length == 0) return BadRequest(new { mensaje = "Debe indicar al menos un periodo" });
+        var data = await _svc.GetAlumnosInscritosAsync(ids, idPlanEstudios, idCampus, idGrupo, ct);
+        return Ok(data);
+    }
+
+    [HttpGet("alumnos-inscritos/excel")]
+    public async Task<IActionResult> GetAlumnosInscritosExcel(
+        [FromQuery] string idsPeriodo,
+        [FromQuery] int? idPlanEstudios,
+        [FromQuery] int? idCampus,
+        [FromQuery] int? idGrupo,
+        CancellationToken ct)
+    {
+        var ids = (idsPeriodo ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s, out var i) ? i : 0).Where(i => i > 0).ToArray();
+        if (ids.Length == 0) return BadRequest(new { mensaje = "Debe indicar al menos un periodo" });
+        var data = await _svc.GetAlumnosInscritosAsync(ids, idPlanEstudios, idCampus, idGrupo, ct);
+        var excel = _svc.GenerarAlumnosInscritosExcel(data);
+        return File(excel, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"AlumnosInscritos_{DateTime.Now:yyyyMMdd}.xlsx");
+    }
+
+    [HttpGet("adeudo-documentos")]
+    public async Task<IActionResult> GetAdeudoDocumentos(
+        [FromQuery] string? idsPlanEstudios,
+        [FromQuery] int? idPeriodoAcademico,
+        [FromQuery] string? tipoFiltro,
+        [FromQuery] int? idCampus,
+        [FromQuery] int? idGrupo,
+        CancellationToken ct)
+    {
+        var ids = (idsPlanEstudios ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s, out var i) ? i : 0).Where(i => i > 0).ToArray();
+        var data = await _svc.GetAdeudoDocumentosAsync(ids, idPeriodoAcademico, tipoFiltro, idCampus, idGrupo, ct);
+        return Ok(data);
+    }
+
+    [HttpGet("adeudo-documentos/excel")]
+    public async Task<IActionResult> GetAdeudoDocumentosExcel(
+        [FromQuery] string? idsPlanEstudios,
+        [FromQuery] int? idPeriodoAcademico,
+        [FromQuery] string? tipoFiltro,
+        [FromQuery] int? idCampus,
+        [FromQuery] int? idGrupo,
+        CancellationToken ct)
+    {
+        var ids = (idsPlanEstudios ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => int.TryParse(s, out var i) ? i : 0).Where(i => i > 0).ToArray();
+        var data = await _svc.GetAdeudoDocumentosAsync(ids, idPeriodoAcademico, tipoFiltro, idCampus, idGrupo, ct);
+        var excel = _svc.GenerarAdeudoDocumentosExcel(data);
+        return File(excel, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"AdeudoDocumentos_{DateTime.Now:yyyyMMdd}.xlsx");
     }
 }

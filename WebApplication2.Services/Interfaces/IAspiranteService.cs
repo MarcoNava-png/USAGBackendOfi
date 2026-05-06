@@ -1,6 +1,7 @@
 ﻿using WebApplication2.Core.Common;
 using WebApplication2.Core.DTOs;
 using WebApplication2.Core.DTOs.Admision;
+using WebApplication2.Core.DTOs.Aspirante;
 using WebApplication2.Core.DTOs.Inscripcion;
 using WebApplication2.Core.DTOs.PlantillaCobro;
 using WebApplication2.Core.Models;
@@ -10,7 +11,7 @@ namespace WebApplication2.Services.Interfaces
 {
     public interface IAspiranteService
     {
-        Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter);
+        Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter, string? createdBy = null);
         Task<Dictionary<string, int>> GetContadoresAsync();
         Task<Aspirante> GetAspiranteByPersonaId(int id);
         Task<Aspirante> CrearAspirante(Aspirante aspirante);
@@ -22,9 +23,11 @@ namespace WebApplication2.Services.Interfaces
         Task<EstadisticasAspirantesDto> ObtenerEstadisticasAsync(int? periodoId);
         Task<FichaAdmisionDto?> ObtenerFichaCompleta(int aspiranteId, string? usuarioGeneraId = null);
         Task<InscripcionAspiranteResultDto> InscribirAspiranteComoEstudianteAsync(int aspiranteId, InscribirAspiranteRequest request, string? usuarioProcesa = null);
+        Task<InscripcionPreviaAspiranteDto?> ObtenerInscripcionPreviaAsync(int aspiranteId, CancellationToken ct = default);
         Task<AspiranteEstatus?> ObtenerEstatusEnProcesoAsync();
         Task<PlantillaCobroDto?> BuscarPlantillaParaAspiranteAsync(int idAspirante, CancellationToken ct);
         Task<IReadOnlyList<ReciboDto>> GenerarRecibosDesdeePlantillaParaAspiranteAsync(int idAspirante, int idPlantillaCobro, bool eliminarPendientes, CancellationToken ct);
+        Task<GenerarMensualidadesResultDto> GenerarMensualidadesCompletasAsync(int idAspirante, CancellationToken ct);
         Task<bool> OcultarAspiranteAsync(int idAspirante, string usuarioId);
         Task<ComisionReporteDto> CalcularComisionesAsync(DateTime fechaDesde, DateTime fechaHasta, decimal comisionPorRegistro, decimal porcentajePorPago, string? filtrarPorUsuarioId = null);
     }

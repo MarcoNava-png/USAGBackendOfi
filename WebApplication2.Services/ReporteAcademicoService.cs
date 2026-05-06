@@ -6,6 +6,7 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using WebApplication2.Core.DTOs;
 using WebApplication2.Core.DTOs.Reportes;
+using WebApplication2.Core.Models;
 using WebApplication2.Data.DbContexts;
 using WebApplication2.Services.Interfaces;
 
@@ -36,7 +37,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
     public async Task<ReporteEstudiantesGrupoDto> GetEstudiantesPorGrupoAsync(int idGrupo, CancellationToken ct = default)
     {
         var grupo = await _context.Grupo
-            .Include(g => g.IdPlanEstudiosNavigation)
+            .Include(g => g.IdPlanEstudiosNavigation).ThenInclude(p => p!.IdCampusNavigation)
             .Include(g => g.IdPeriodoAcademicoNavigation)
             .Include(g => g.IdTurnoNavigation)
             .Include(g => g.EstudianteGrupo)
@@ -69,6 +70,8 @@ public class ReporteAcademicoService : IReporteAcademicoService
             NombreGrupo = grupo.NombreGrupo,
             CodigoGrupo = grupo.CodigoGrupo ?? grupo.NombreGrupo,
             PlanEstudios = grupo.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? grupo.IdPlanEstudiosNavigation?.ClavePlanEstudios ?? "N/A",
+            Campus = grupo.IdPlanEstudiosNavigation?.IdCampusNavigation?.Nombre,
+            Cuatrimestre = grupo.NumeroCuatrimestre,
             PeriodoAcademico = grupo.IdPeriodoAcademicoNavigation?.Nombre ?? "N/A",
             Turno = grupo.IdTurnoNavigation?.Nombre ?? "N/A",
             TotalEstudiantes = estudiantes.Count,
@@ -317,6 +320,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
     {
         var gm = await _context.GrupoMateria
             .Include(g => g.IdGrupoNavigation).ThenInclude(gr => gr.IdPeriodoAcademicoNavigation)
+            .Include(g => g.IdGrupoNavigation).ThenInclude(gr => gr.IdPlanEstudiosNavigation).ThenInclude(p => p!.IdCampusNavigation)
             .Include(g => g.IdMateriaPlanNavigation).ThenInclude(mp => mp.IdMateriaNavigation)
             .Include(g => g.IdProfesorNavigation).ThenInclude(p => p!.IdPersonaNavigation)
             .Include(g => g.Inscripcion).ThenInclude(i => i.IdEstudianteNavigation).ThenInclude(e => e.IdPersonaNavigation)
@@ -333,16 +337,24 @@ public class ReporteAcademicoService : IReporteAcademicoService
                 return new AlumnoListaDto
                 {
                     Matricula = i.IdEstudianteNavigation.Matricula,
-                    NombreCompleto = $"{p?.ApellidoPaterno} {p?.ApellidoMaterno} {p?.Nombre}".Trim()
+                    NombreCompleto = $"{p?.ApellidoPaterno} {p?.ApellidoMaterno} {p?.Nombre}".Trim(),
+                    Estatus = string.IsNullOrWhiteSpace(i.Estado) ? "Inscrito" : i.Estado!
                 };
             }).ToList();
 
+        var plan = gm.IdGrupoNavigation.IdPlanEstudiosNavigation;
+        var materia = gm.IdMateriaPlanNavigation.IdMateriaNavigation;
         return new ListaAsistenciaDto
         {
             NombreGrupo = gm.IdGrupoNavigation.NombreGrupo,
-            NombreMateria = gm.IdMateriaPlanNavigation.IdMateriaNavigation.Nombre,
+            CodigoGrupo = gm.IdGrupoNavigation.CodigoGrupo,
+            NombreMateria = materia.Nombre,
+            ClaveMateria = materia.Clave,
             NombreProfesor = profPersona != null ? $"{profPersona.Nombre} {profPersona.ApellidoPaterno} {profPersona.ApellidoMaterno}".Trim() : "Sin asignar",
             PeriodoAcademico = gm.IdGrupoNavigation.IdPeriodoAcademicoNavigation?.Nombre ?? "N/A",
+            PlanEstudios = plan?.NombrePlanEstudios ?? plan?.ClavePlanEstudios,
+            Campus = plan?.IdCampusNavigation?.Nombre,
+            Cuatrimestre = gm.IdGrupoNavigation.NumeroCuatrimestre,
             Alumnos = alumnos
         };
     }
@@ -388,16 +400,26 @@ public class ReporteAcademicoService : IReporteAcademicoService
                         table.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
                             .Text(text =>
                             {
+                                text.Span("CAMPUS: ").Bold().FontSize(10);
+                                text.Span(data.Campus ?? "N/A").FontSize(10);
+                            });
+
+                        table.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
+                            .Text(text =>
+                            {
                                 text.Span("PERIODO: ").Bold().FontSize(10);
                                 text.Span(data.PeriodoAcademico).FontSize(10);
                             });
-
-                        table.Cell().Border(0.5f).BorderColor("#000000").Padding(5).Text("").FontSize(10);
                         table.Cell().Border(0.5f).BorderColor("#000000").Padding(5)
                             .Text(text =>
                             {
                                 text.Span("GRUPO: ").Bold().FontSize(10);
                                 text.Span(data.CodigoGrupo).FontSize(10);
+                                if (data.Cuatrimestre.HasValue)
+                                {
+                                    text.Span($"   CUATRI: ").Bold().FontSize(10);
+                                    text.Span($"{data.Cuatrimestre}°").FontSize(10);
+                                }
                             });
                     });
                 });
@@ -707,7 +729,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.Letter);
+                page.Size(PageSizes.Letter.Landscape());
                 page.MarginVertical(30);
                 page.MarginHorizontal(40);
 
@@ -718,8 +740,10 @@ public class ReporteAcademicoService : IReporteAcademicoService
                     col.Item().PaddingBottom(10).Table(table =>
                     {
                         table.ColumnsDefinition(c => { c.RelativeColumn(); c.RelativeColumn(); });
+                        table.Cell().Text($"Carrera: {data.PlanEstudios ?? "N/A"}").FontSize(9).Bold().FontColor(ColorAzulOscuro);
+                        table.Cell().Text($"Campus: {data.Campus ?? "N/A"}").FontSize(9).FontColor(ColorGris);
                         table.Cell().Text($"Materia: {data.NombreMateria}").FontSize(9).Bold().FontColor(ColorAzulOscuro);
-                        table.Cell().Text($"Grupo: {data.NombreGrupo}").FontSize(9).FontColor(ColorGris);
+                        table.Cell().Text($"Grupo: {data.NombreGrupo}{(data.Cuatrimestre.HasValue ? $"  ·  Cuatri: {data.Cuatrimestre}°" : "")}").FontSize(9).FontColor(ColorGris);
                         table.Cell().Text($"Profesor: {data.NombreProfesor}").FontSize(9).FontColor(ColorGris);
                         table.Cell().Text($"Periodo: {data.PeriodoAcademico}").FontSize(9).FontColor(ColorGris);
                     });
@@ -1449,4 +1473,426 @@ public class ReporteAcademicoService : IReporteAcademicoService
         workbook.SaveAs(stream);
         return stream.ToArray();
     }
+
+    #region Alumnos Inscritos por Periodo
+
+    public async Task<ReporteAlumnosInscritosDto> GetAlumnosInscritosAsync(int[] idsPeriodo, int? idPlanEstudios, int? idCampus, int? idGrupo = null, CancellationToken ct = default)
+    {
+        var periodos = await _context.PeriodoAcademico
+            .AsNoTracking()
+            .Where(p => idsPeriodo.Contains(p.IdPeriodoAcademico))
+            .Select(p => new { p.IdPeriodoAcademico, p.Nombre })
+            .ToListAsync(ct);
+
+        var query = _context.EstudianteGrupo
+            .AsNoTracking()
+            .Where(eg => eg.Status == Core.Enums.StatusEnum.Active)
+            .Include(eg => eg.IdEstudianteNavigation!)
+                .ThenInclude(e => e.IdPersonaNavigation)
+            .Include(eg => eg.IdEstudianteNavigation!)
+                .ThenInclude(e => e.IdPlanActualNavigation!)
+                    .ThenInclude(p => p.IdCampusNavigation)
+            .Include(eg => eg.IdGrupoNavigation!)
+                .ThenInclude(g => g.IdPeriodoAcademicoNavigation)
+            .Include(eg => eg.IdGrupoNavigation!)
+                .ThenInclude(g => g.IdTurnoNavigation)
+            .Where(eg => idsPeriodo.Contains(eg.IdGrupoNavigation!.IdPeriodoAcademico));
+
+        if (idPlanEstudios.HasValue)
+            query = query.Where(eg => eg.IdEstudianteNavigation!.IdPlanActual == idPlanEstudios.Value);
+
+        if (idCampus.HasValue)
+            query = query.Where(eg => eg.IdEstudianteNavigation!.IdPlanActualNavigation!.IdCampus == idCampus.Value);
+
+        if (idGrupo.HasValue)
+            query = query.Where(eg => eg.IdGrupo == idGrupo.Value);
+
+        var raw = await query
+            .OrderBy(eg => eg.IdEstudianteNavigation!.IdPlanActualNavigation!.NombrePlanEstudios)
+            .ThenBy(eg => eg.IdGrupoNavigation!.CodigoGrupo)
+            .ThenBy(eg => eg.IdEstudianteNavigation!.IdPersonaNavigation!.ApellidoPaterno)
+            .ToListAsync(ct);
+
+        var alumnos = raw.Select(eg => new AlumnoInscritoReporteDto
+        {
+            IdEstudiante = eg.IdEstudiante,
+            Matricula = eg.IdEstudianteNavigation!.Matricula,
+            NombreCompleto = $"{eg.IdEstudianteNavigation.IdPersonaNavigation?.Nombre} {eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno} {eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoMaterno}".Trim(),
+            Email = eg.IdEstudianteNavigation.Email ?? eg.IdEstudianteNavigation.IdPersonaNavigation?.Correo,
+            Telefono = eg.IdEstudianteNavigation.IdPersonaNavigation?.Celular ?? eg.IdEstudianteNavigation.IdPersonaNavigation?.Telefono,
+            PlanEstudios = eg.IdEstudianteNavigation.IdPlanActualNavigation?.NombrePlanEstudios ?? "",
+            ClavePlan = eg.IdEstudianteNavigation.IdPlanActualNavigation?.ClavePlanEstudios,
+            Campus = eg.IdEstudianteNavigation.IdPlanActualNavigation?.IdCampusNavigation?.Nombre,
+            GrupoCodigo = eg.IdGrupoNavigation!.CodigoGrupo,
+            Turno = eg.IdGrupoNavigation.IdTurnoNavigation?.Nombre,
+            NumeroCuatrimestre = eg.IdGrupoNavigation.NumeroCuatrimestre,
+            PeriodoAcademico = eg.IdGrupoNavigation.IdPeriodoAcademicoNavigation?.Nombre ?? "",
+            FechaInscripcion = eg.FechaInscripcion,
+            Estado = eg.Estado
+        }).ToList();
+
+        var plan = idPlanEstudios.HasValue
+            ? await _context.PlanEstudios.AsNoTracking().Where(p => p.IdPlanEstudios == idPlanEstudios.Value).Select(p => p.NombrePlanEstudios).FirstOrDefaultAsync(ct)
+            : null;
+        var campus = idCampus.HasValue
+            ? await _context.Campus.AsNoTracking().Where(c => c.IdCampus == idCampus.Value).Select(c => c.Nombre).FirstOrDefaultAsync(ct)
+            : null;
+
+        return new ReporteAlumnosInscritosDto
+        {
+            IdsPeriodo = idsPeriodo.ToList(),
+            NombresPeriodo = periodos.Select(p => p.Nombre).ToList(),
+            IdPlanEstudios = idPlanEstudios,
+            NombrePlanEstudios = plan,
+            IdCampus = idCampus,
+            NombreCampus = campus,
+            TotalAlumnos = alumnos.Count,
+            Alumnos = alumnos
+        };
+    }
+
+    public byte[] GenerarAlumnosInscritosExcel(ReporteAlumnosInscritosDto data)
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Alumnos Inscritos");
+
+        ws.Cell(1, 1).Value = "REPORTE DE ALUMNOS INSCRITOS";
+        ws.Range(1, 1, 1, 11).Merge().Style.Font.SetBold().Font.FontSize = 14;
+        ws.Cell(2, 1).Value = $"Periodos: {string.Join(", ", data.NombresPeriodo)}";
+        ws.Range(2, 1, 2, 11).Merge();
+        if (!string.IsNullOrEmpty(data.NombrePlanEstudios))
+        {
+            ws.Cell(3, 1).Value = $"Plan de estudios: {data.NombrePlanEstudios}";
+            ws.Range(3, 1, 3, 11).Merge();
+        }
+        ws.Cell(4, 1).Value = $"Total: {data.TotalAlumnos}  ·  Generado: {data.FechaGeneracion:dd/MM/yyyy HH:mm}";
+        ws.Range(4, 1, 4, 11).Merge();
+
+        var header = new[] { "Matrícula", "Nombre Completo", "Plan de Estudios", "Clave Plan", "Campus", "Periodo", "Grupo", "Turno", "Cuatri", "Email", "Teléfono" };
+        for (int i = 0; i < header.Length; i++)
+        {
+            ws.Cell(6, i + 1).Value = header[i];
+            ws.Cell(6, i + 1).Style.Font.SetBold();
+            ws.Cell(6, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorAzulOscuro);
+            ws.Cell(6, i + 1).Style.Font.FontColor = XLColor.White;
+        }
+
+        int row = 7;
+        foreach (var a in data.Alumnos)
+        {
+            ws.Cell(row, 1).Value = a.Matricula;
+            ws.Cell(row, 2).Value = a.NombreCompleto;
+            ws.Cell(row, 3).Value = a.PlanEstudios;
+            ws.Cell(row, 4).Value = a.ClavePlan ?? "";
+            ws.Cell(row, 5).Value = a.Campus ?? "";
+            ws.Cell(row, 6).Value = a.PeriodoAcademico;
+            ws.Cell(row, 7).Value = a.GrupoCodigo ?? "";
+            ws.Cell(row, 8).Value = a.Turno ?? "";
+            ws.Cell(row, 9).Value = a.NumeroCuatrimestre ?? 0;
+            ws.Cell(row, 10).Value = a.Email ?? "";
+            ws.Cell(row, 11).Value = a.Telefono ?? "";
+            row++;
+        }
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    #endregion
+
+    #region Adeudo de Documentos
+
+    public async Task<ReporteAdeudoDocumentosDto> GetAdeudoDocumentosAsync(int[] idsPlanEstudios, int? idPeriodoAcademico, string? tipoFiltro, int? idCampus = null, int? idGrupo = null, CancellationToken ct = default)
+    {
+        var query = _context.Estudiante
+            .AsNoTracking()
+            .Where(e => e.Activo)
+            .Include(e => e.IdPersonaNavigation)
+            .Include(e => e.IdPlanActualNavigation)
+            .AsQueryable();
+
+        if (idsPlanEstudios.Length > 0)
+            query = query.Where(e => e.IdPlanActual.HasValue && idsPlanEstudios.Contains(e.IdPlanActual!.Value));
+
+        if (idCampus.HasValue)
+            query = query.Where(e => e.IdPlanActualNavigation!.IdCampus == idCampus.Value);
+
+        if (idGrupo.HasValue)
+        {
+            query = query.Where(e => _context.EstudianteGrupo
+                .Any(eg => eg.IdEstudiante == e.IdEstudiante
+                    && eg.Status == Core.Enums.StatusEnum.Active
+                    && eg.IdGrupo == idGrupo.Value));
+        }
+        else if (idPeriodoAcademico.HasValue)
+        {
+            query = query.Where(e => _context.EstudianteGrupo
+                .Any(eg => eg.IdEstudiante == e.IdEstudiante
+                    && eg.Status == Core.Enums.StatusEnum.Active
+                    && eg.IdGrupoNavigation!.IdPeriodoAcademico == idPeriodoAcademico.Value));
+        }
+
+        var estudiantes = await query
+            .OrderBy(e => e.IdPlanActualNavigation!.NombrePlanEstudios)
+            .ThenBy(e => e.IdPersonaNavigation!.ApellidoPaterno)
+            .Select(e => new
+            {
+                e.IdEstudiante,
+                e.Matricula,
+                e.IdPersona,
+                e.IdPlanActual,
+                Nombre = e.IdPersonaNavigation!.Nombre,
+                ApePa = e.IdPersonaNavigation.ApellidoPaterno,
+                ApeMa = e.IdPersonaNavigation.ApellidoMaterno,
+                Email = e.Email ?? e.IdPersonaNavigation.Correo,
+                Telefono = e.IdPersonaNavigation.Celular ?? e.IdPersonaNavigation.Telefono,
+                Plan = e.IdPlanActualNavigation!.NombrePlanEstudios
+            })
+            .ToListAsync(ct);
+
+        var idsPersona = estudiantes.Select(x => x.IdPersona).Distinct().ToList();
+        var idsPlanEstudiantes = estudiantes.Where(x => x.IdPlanActual.HasValue).Select(x => x.IdPlanActual!.Value).Distinct().ToList();
+
+        var requisitosGlobales = await _context.Set<DocumentoRequisito>()
+            .AsNoTracking()
+            .Where(r => r.Activo && r.EsObligatorio)
+            .Select(r => new { r.IdDocumentoRequisito, r.Clave, r.Descripcion })
+            .ToListAsync(ct);
+
+        var requisitosPorPlan = await _context.Set<PlanDocumentoRequisito>()
+            .AsNoTracking()
+            .Where(p => idsPlanEstudiantes.Contains(p.IdPlanEstudios) && p.EsObligatorio)
+            .Select(p => new { p.IdPlanEstudios, p.IdDocumentoRequisito, p.DocumentoRequisito.Clave, p.DocumentoRequisito.Descripcion, p.DocumentoRequisito.Activo })
+            .ToListAsync(ct);
+
+        var reqsPorPlan = requisitosPorPlan
+            .Where(x => x.Activo)
+            .GroupBy(x => x.IdPlanEstudios)
+            .ToDictionary(g => g.Key, g => g.Select(x => new { x.IdDocumentoRequisito, x.Clave, x.Descripcion }).ToList());
+
+        var aspirantesMap = await _context.Aspirante
+            .AsNoTracking()
+            .Where(a => a.IdPersona.HasValue && idsPersona.Contains(a.IdPersona!.Value))
+            .GroupBy(a => a.IdPersona!.Value)
+            .Select(g => new { IdPersona = g.Key, IdAspirante = g.OrderByDescending(x => x.IdAspirante).First().IdAspirante })
+            .ToListAsync(ct);
+        var mapIdAspirante = aspirantesMap.ToDictionary(x => x.IdPersona, x => x.IdAspirante);
+
+        var idsAspirante = aspirantesMap.Select(x => x.IdAspirante).ToList();
+
+        var docsEntregados = await _context.AspiranteDocumento
+            .AsNoTracking()
+            .Where(d => idsAspirante.Contains(d.IdAspirante))
+            .Select(d => new
+            {
+                d.IdAspirante,
+                d.IdDocumentoRequisito,
+                d.Estatus,
+                d.FechaProrroga,
+                d.MotivoProrroga
+            })
+            .ToListAsync(ct);
+
+        var docsPorAspirante = docsEntregados
+            .GroupBy(x => x.IdAspirante)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.IdDocumentoRequisito, x => x));
+
+        var ahora = DateTime.UtcNow;
+
+        var gruposEstudiante = await _context.EstudianteGrupo
+            .AsNoTracking()
+            .Where(eg => eg.Status == Core.Enums.StatusEnum.Active
+                && estudiantes.Select(e => e.IdEstudiante).Contains(eg.IdEstudiante))
+            .Select(eg => new { eg.IdEstudiante, CodigoGrupo = eg.IdGrupoNavigation!.CodigoGrupo })
+            .ToListAsync(ct);
+        var grupoPorEstudiante = gruposEstudiante
+            .GroupBy(g => g.IdEstudiante)
+            .ToDictionary(g => g.Key, g => g.First().CodigoGrupo);
+
+        var resultado = new List<AlumnoAdeudoDocumentoDto>();
+        foreach (var e in estudiantes)
+        {
+            List<(int IdDocumentoRequisito, string Clave, string Descripcion)> requeridos;
+            if (e.IdPlanActual.HasValue && reqsPorPlan.TryGetValue(e.IdPlanActual.Value, out var reqsPlan) && reqsPlan.Count > 0)
+            {
+                requeridos = reqsPlan.Select(r => (r.IdDocumentoRequisito, r.Clave, r.Descripcion)).ToList();
+            }
+            else
+            {
+                requeridos = requisitosGlobales.Select(r => (r.IdDocumentoRequisito, r.Clave, r.Descripcion)).ToList();
+            }
+
+            if (requeridos.Count == 0) continue;
+
+            Dictionary<int, dynamic>? docsAlumno = null;
+            if (mapIdAspirante.TryGetValue(e.IdPersona, out var idAsp) && docsPorAspirante.TryGetValue(idAsp, out var d))
+                docsAlumno = d.ToDictionary(x => x.Key, x => (dynamic)x.Value);
+
+            var detalle = new List<DocumentoFaltanteDto>();
+            foreach (var req in requeridos)
+            {
+                DateTime? fechaProrroga = null;
+                string? motivoProrroga = null;
+                bool cumplido = false;
+
+                if (docsAlumno != null && docsAlumno.TryGetValue(req.IdDocumentoRequisito, out var doc))
+                {
+                    fechaProrroga = doc.FechaProrroga;
+                    motivoProrroga = doc.MotivoProrroga;
+                    if (doc.Estatus == Core.Enums.EstatusDocumentoEnum.VALIDADO) cumplido = true;
+                }
+
+                if (cumplido) continue;
+
+                var estatus = fechaProrroga.HasValue && fechaProrroga.Value > ahora
+                    ? "PRORROGA_VIGENTE"
+                    : fechaProrroga.HasValue && fechaProrroga.Value <= ahora
+                        ? "PRORROGA_VENCIDA"
+                        : "SIN_PRORROGA";
+
+                detalle.Add(new DocumentoFaltanteDto
+                {
+                    Clave = req.Clave,
+                    Descripcion = req.Descripcion,
+                    FechaProrroga = fechaProrroga,
+                    MotivoProrroga = motivoProrroga,
+                    EstatusProrroga = estatus
+                });
+            }
+
+            if (detalle.Count == 0) continue;
+
+            if (!string.IsNullOrEmpty(tipoFiltro))
+            {
+                detalle = detalle.Where(x => x.EstatusProrroga == tipoFiltro).ToList();
+                if (detalle.Count == 0) continue;
+            }
+
+            grupoPorEstudiante.TryGetValue(e.IdEstudiante, out var codigoGrupo);
+
+            resultado.Add(new AlumnoAdeudoDocumentoDto
+            {
+                IdEstudiante = e.IdEstudiante,
+                Matricula = e.Matricula,
+                NombreCompleto = $"{e.Nombre} {e.ApePa} {e.ApeMa}".Trim(),
+                Email = e.Email,
+                Telefono = e.Telefono,
+                PlanEstudios = e.Plan ?? "",
+                GrupoCodigo = codigoGrupo,
+                DocumentosFaltantes = detalle.Count,
+                ConProrrogaVigente = detalle.Count(d => d.EstatusProrroga == "PRORROGA_VIGENTE"),
+                ConProrrogaVencida = detalle.Count(d => d.EstatusProrroga == "PRORROGA_VENCIDA"),
+                SinProrroga = detalle.Count(d => d.EstatusProrroga == "SIN_PRORROGA"),
+                Detalle = detalle
+            });
+        }
+
+        var nombresPlanes = idsPlanEstudios.Length > 0
+            ? await _context.PlanEstudios.AsNoTracking().Where(p => idsPlanEstudios.Contains(p.IdPlanEstudios)).Select(p => p.NombrePlanEstudios).ToListAsync(ct)
+            : new List<string?>();
+        var nombrePeriodo = idPeriodoAcademico.HasValue
+            ? await _context.PeriodoAcademico.AsNoTracking().Where(p => p.IdPeriodoAcademico == idPeriodoAcademico.Value).Select(p => p.Nombre).FirstOrDefaultAsync(ct)
+            : null;
+
+        return new ReporteAdeudoDocumentosDto
+        {
+            IdsPlanEstudios = idsPlanEstudios.ToList(),
+            NombresPlanEstudios = nombresPlanes.Where(n => n != null).Select(n => n!).ToList(),
+            IdPeriodoAcademico = idPeriodoAcademico,
+            NombrePeriodoAcademico = nombrePeriodo,
+            TotalAlumnosConAdeudo = resultado.Count,
+            TotalDocumentosFaltantes = resultado.Sum(x => x.DocumentosFaltantes),
+            ConProrrogaVigente = resultado.Sum(x => x.ConProrrogaVigente),
+            ConProrrogaVencida = resultado.Sum(x => x.ConProrrogaVencida),
+            SinProrroga = resultado.Sum(x => x.SinProrroga),
+            Alumnos = resultado
+        };
+    }
+
+    public byte[] GenerarAdeudoDocumentosExcel(ReporteAdeudoDocumentosDto data)
+    {
+        using var workbook = new XLWorkbook();
+        var wsResumen = workbook.Worksheets.Add("Resumen");
+
+        wsResumen.Cell(1, 1).Value = "REPORTE DE ADEUDO DE DOCUMENTOS";
+        wsResumen.Range(1, 1, 1, 10).Merge().Style.Font.SetBold().Font.FontSize = 14;
+        wsResumen.Cell(2, 1).Value = data.NombresPlanEstudios.Count > 0
+            ? $"Planes: {string.Join(", ", data.NombresPlanEstudios)}"
+            : "Planes: Todos";
+        wsResumen.Range(2, 1, 2, 10).Merge();
+        if (!string.IsNullOrEmpty(data.NombrePeriodoAcademico))
+        {
+            wsResumen.Cell(3, 1).Value = $"Periodo: {data.NombrePeriodoAcademico}";
+            wsResumen.Range(3, 1, 3, 10).Merge();
+        }
+        wsResumen.Cell(4, 1).Value = $"Alumnos con adeudo: {data.TotalAlumnosConAdeudo}   ·   Docs faltantes: {data.TotalDocumentosFaltantes}   ·   Vigente: {data.ConProrrogaVigente}   ·   Vencida: {data.ConProrrogaVencida}   ·   Sin prórroga: {data.SinProrroga}";
+        wsResumen.Range(4, 1, 4, 10).Merge();
+        wsResumen.Cell(5, 1).Value = $"Generado: {data.FechaGeneracion:dd/MM/yyyy HH:mm}";
+        wsResumen.Range(5, 1, 5, 10).Merge();
+
+        var header = new[] { "Matrícula", "Nombre Completo", "Plan de Estudios", "Grupo", "Docs Faltantes", "Prórroga Vigente", "Prórroga Vencida", "Sin Prórroga", "Email", "Teléfono" };
+        for (int i = 0; i < header.Length; i++)
+        {
+            wsResumen.Cell(7, i + 1).Value = header[i];
+            wsResumen.Cell(7, i + 1).Style.Font.SetBold();
+            wsResumen.Cell(7, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorAzulOscuro);
+            wsResumen.Cell(7, i + 1).Style.Font.FontColor = XLColor.White;
+        }
+
+        int row = 8;
+        foreach (var a in data.Alumnos)
+        {
+            wsResumen.Cell(row, 1).Value = a.Matricula;
+            wsResumen.Cell(row, 2).Value = a.NombreCompleto;
+            wsResumen.Cell(row, 3).Value = a.PlanEstudios;
+            wsResumen.Cell(row, 4).Value = a.GrupoCodigo ?? "";
+            wsResumen.Cell(row, 5).Value = a.DocumentosFaltantes;
+            wsResumen.Cell(row, 6).Value = a.ConProrrogaVigente;
+            wsResumen.Cell(row, 7).Value = a.ConProrrogaVencida;
+            wsResumen.Cell(row, 8).Value = a.SinProrroga;
+            wsResumen.Cell(row, 9).Value = a.Email ?? "";
+            wsResumen.Cell(row, 10).Value = a.Telefono ?? "";
+            if (a.ConProrrogaVencida > 0)
+                wsResumen.Range(row, 1, row, 10).Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE2E2");
+            row++;
+        }
+        wsResumen.Columns().AdjustToContents();
+
+        var wsDetalle = workbook.Worksheets.Add("Detalle");
+        var headerDet = new[] { "Matrícula", "Alumno", "Plan", "Clave Doc", "Descripción", "Estatus", "Fecha Prórroga", "Motivo" };
+        for (int i = 0; i < headerDet.Length; i++)
+        {
+            wsDetalle.Cell(1, i + 1).Value = headerDet[i];
+            wsDetalle.Cell(1, i + 1).Style.Font.SetBold();
+            wsDetalle.Cell(1, i + 1).Style.Fill.BackgroundColor = XLColor.FromHtml(ColorAzulOscuro);
+            wsDetalle.Cell(1, i + 1).Style.Font.FontColor = XLColor.White;
+        }
+        int rd = 2;
+        foreach (var a in data.Alumnos)
+        {
+            foreach (var d in a.Detalle)
+            {
+                wsDetalle.Cell(rd, 1).Value = a.Matricula;
+                wsDetalle.Cell(rd, 2).Value = a.NombreCompleto;
+                wsDetalle.Cell(rd, 3).Value = a.PlanEstudios;
+                wsDetalle.Cell(rd, 4).Value = d.Clave;
+                wsDetalle.Cell(rd, 5).Value = d.Descripcion;
+                wsDetalle.Cell(rd, 6).Value = d.EstatusProrroga;
+                wsDetalle.Cell(rd, 7).Value = d.FechaProrroga.HasValue ? d.FechaProrroga.Value.ToString("dd/MM/yyyy") : "";
+                wsDetalle.Cell(rd, 8).Value = d.MotivoProrroga ?? "";
+                if (d.EstatusProrroga == "PRORROGA_VENCIDA")
+                    wsDetalle.Range(rd, 1, rd, 8).Style.Fill.BackgroundColor = XLColor.FromHtml("#FEE2E2");
+                rd++;
+            }
+        }
+        wsDetalle.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    #endregion
 }

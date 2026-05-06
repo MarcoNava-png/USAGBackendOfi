@@ -441,9 +441,14 @@ namespace WebApplication2.Services
                 Console.WriteLine($"Saldo: {recibo.Saldo:C} → {nuevoSaldo:C}");
                 Console.WriteLine($"Estatus: {recibo.Estatus} → {nuevoEstatus}");
 
-                await _db.Database.ExecuteSqlRawAsync(
-                    "UPDATE Recibo SET Saldo = {0}, Estatus = {1}, UpdatedAt = GETUTCDATE() WHERE IdRecibo = {2}",
-                    nuevoSaldo, nuevoEstatus.ToString(), dto.IdRecibo);
+                var reciboUpdate = await _db.Recibo.FindAsync(dto.IdRecibo);
+                if (reciboUpdate != null)
+                {
+                    reciboUpdate.Saldo = nuevoSaldo;
+                    reciboUpdate.Estatus = nuevoEstatus;
+                    reciboUpdate.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                }
 
                 var bitacora = new BitacoraRecibo
                 {
@@ -726,9 +731,10 @@ namespace WebApplication2.Services
 
                     Console.WriteLine($"Saldo: {saldoAnterior:C} → {nuevoSaldo:C}, Estatus: {estatusAnterior} → {nuevoEstatus}");
 
-                    await _db.Database.ExecuteSqlRawAsync(
-                        "UPDATE Recibo SET Saldo = {0}, Estatus = {1}, UpdatedAt = GETUTCDATE() WHERE IdRecibo = {2}",
-                        nuevoSaldo, nuevoEstatus.ToString(), recibo.IdRecibo);
+                    recibo.Saldo = nuevoSaldo;
+                    recibo.Estatus = nuevoEstatus;
+                    recibo.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync(ct);
 
                     var bitacora = new BitacoraRecibo
                     {

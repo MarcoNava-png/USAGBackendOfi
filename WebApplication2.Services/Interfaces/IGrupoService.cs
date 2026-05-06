@@ -43,6 +43,8 @@ namespace WebApplication2.Services.Interfaces
 
         Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, CancellationToken ct = default);
 
+        Task<Core.DTOs.Grupo.SincronizacionInscripcionesResultDto> SincronizarInscripcionesGrupoAsync(int idGrupo, CancellationToken ct = default);
+
         Task<List<GrupoMateriaDetalleDto>> ObtenerMateriasDelGrupoAsync(int idGrupo, CancellationToken ct = default);
 
         Task<GrupoMateria?> ObtenerGrupoMateriaPorIdAsync(int idGrupoMateria, CancellationToken ct = default);

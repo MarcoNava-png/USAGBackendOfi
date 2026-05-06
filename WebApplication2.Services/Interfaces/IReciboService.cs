@@ -21,6 +21,7 @@ namespace WebApplication2.Services.Interfaces
         Task<IReadOnlyList<ReciboDto>> ListarPorAspiranteAsync(int idAspirante, CancellationToken ct);
         Task<int> RecalcularRecargosAsync(int idPeriodoAcademico, DateOnly? fechaCorte, CancellationToken ct);
         Task<ReciboDto> GenerarReciboAspiranteAsync(int idAspirante, decimal monto, string concepto, int diasVencimiento, CancellationToken ct);
+        Task<ReciboDto> GenerarReciboAspiranteMensualidadAsync(int idAspirante, int idConceptoPago, decimal monto, string descripcion, DateOnly fechaVencimiento, CancellationToken ct);
         Task<int> RepararRecibosSinDetallesAsync(CancellationToken ct);
         Task<bool> EliminarReciboAsync(long idRecibo, CancellationToken ct);
 
@@ -37,6 +38,8 @@ namespace WebApplication2.Services.Interfaces
         Task<ReciboDto> CancelarReciboAsync(long idRecibo, string usuario, string? motivo, CancellationToken ct);
 
         Task<ReciboDto> ReversarReciboAsync(long idRecibo, string usuario, string? motivo, CancellationToken ct);
+
+        Task<ReciboDto> AplicarDescuentoAsync(long idRecibo, decimal? porcentaje, decimal? monto, string? motivo, string usuario, CancellationToken ct);
 
         Task<ReciboDto?> BuscarPorFolioAsync(string folio, CancellationToken ct);
 

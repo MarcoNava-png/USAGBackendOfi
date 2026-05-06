@@ -5,6 +5,8 @@ public class ReporteEstudiantesGrupoDto
     public string NombreGrupo { get; set; } = null!;
     public string CodigoGrupo { get; set; } = null!;
     public string PlanEstudios { get; set; } = null!;
+    public string? Campus { get; set; }
+    public int? Cuatrimestre { get; set; }
     public string PeriodoAcademico { get; set; } = null!;
     public string Turno { get; set; } = null!;
     public int TotalEstudiantes { get; set; }

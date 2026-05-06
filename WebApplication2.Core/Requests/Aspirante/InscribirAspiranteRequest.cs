@@ -4,6 +4,8 @@ namespace WebApplication2.Core.Requests.Aspirante
     {
         public int? IdPeriodoAcademico { get; set; }
 
+        public int? IdGrupo { get; set; }
+
         public bool ForzarInscripcion { get; set; } = false;
 
         public string? Observaciones { get; set; }

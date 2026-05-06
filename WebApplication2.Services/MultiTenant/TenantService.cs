@@ -1,3 +1,4 @@
+using System.Data.Common;
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
@@ -5,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using WebApplication2.Core.DTOs.MultiTenant;
 using WebApplication2.Core.Models;
 using WebApplication2.Core.Models.MultiTenant;
@@ -36,6 +38,16 @@ public class TenantService : ITenantService
         _cache = cache;
         _logger = logger;
         _tenantContextAccessor = tenantContextAccessor;
+    }
+
+    private bool UsePostgreSQL => (_configuration["DatabaseProvider"] ?? "SqlServer") == "PostgreSQL";
+
+    private void ConfigureDbProvider(DbContextOptionsBuilder optionsBuilder, string connectionString)
+    {
+        if (UsePostgreSQL)
+            optionsBuilder.UseNpgsql(connectionString);
+        else
+            ConfigureDbProvider(optionsBuilder,connectionString);
     }
 
     public TenantContext? GetCurrentTenant() => _tenantContextAccessor.TenantContext;
@@ -194,9 +206,19 @@ public class TenantService : ITenantService
             var serverConnectionString = _configuration.GetConnectionString("TenantServerConnection")
                 ?? _configuration.GetConnectionString("DefaultConnection");
 
-            var builder = new SqlConnectionStringBuilder(serverConnectionString);
-            builder.InitialCatalog = dbName;
-            var tenantConnectionString = builder.ConnectionString;
+            string tenantConnectionString;
+            if (UsePostgreSQL)
+            {
+                var npgBuilder = new NpgsqlConnectionStringBuilder(serverConnectionString);
+                npgBuilder.Database = dbName;
+                tenantConnectionString = npgBuilder.ConnectionString;
+            }
+            else
+            {
+                var sqlBuilder = new SqlConnectionStringBuilder(serverConnectionString);
+                sqlBuilder.InitialCatalog = dbName;
+                tenantConnectionString = sqlBuilder.ConnectionString;
+            }
 
             var tenant = new Tenant
             {
@@ -406,7 +428,7 @@ public class TenantService : ITenantService
         try
         {
             var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-            optionsBuilder.UseSqlServer(tenant.ConnectionString);
+            ConfigureDbProvider(optionsBuilder,tenant.ConnectionString);
 
             using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 
@@ -463,21 +485,44 @@ public class TenantService : ITenantService
 
     private async Task CrearBaseDatosTenantAsync(string serverConnection, string dbName, CancellationToken ct)
     {
-        var builder = new SqlConnectionStringBuilder(serverConnection);
-        builder.InitialCatalog = "master";
+        if (UsePostgreSQL)
+        {
+            var npgsqlBuilder = new NpgsqlConnectionStringBuilder(serverConnection);
+            npgsqlBuilder.Database = "postgres";
 
-        using var connection = new SqlConnection(builder.ConnectionString);
-        await connection.OpenAsync(ct);
+            using var connection = new NpgsqlConnection(npgsqlBuilder.ConnectionString);
+            await connection.OpenAsync(ct);
 
-        var sql = $@"
-            IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{dbName}')
-            BEGIN
-                CREATE DATABASE [{dbName}]
-            END";
+            var checkSql = $"SELECT 1 FROM pg_database WHERE datname = '{dbName}'";
+            using var checkCmd = new NpgsqlCommand(checkSql, connection);
+            var exists = await checkCmd.ExecuteScalarAsync(ct);
 
-        using var command = new SqlCommand(sql, connection);
-        command.CommandTimeout = 60;
-        await command.ExecuteNonQueryAsync(ct);
+            if (exists == null)
+            {
+                var createSql = $"CREATE DATABASE \"{dbName}\"";
+                using var createCmd = new NpgsqlCommand(createSql, connection);
+                createCmd.CommandTimeout = 60;
+                await createCmd.ExecuteNonQueryAsync(ct);
+            }
+        }
+        else
+        {
+            var builder = new SqlConnectionStringBuilder(serverConnection);
+            builder.InitialCatalog = "master";
+
+            using var connection = new SqlConnection(builder.ConnectionString);
+            await connection.OpenAsync(ct);
+
+            var sql = $@"
+                IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '{dbName}')
+                BEGIN
+                    CREATE DATABASE [{dbName}]
+                END";
+
+            using var command = new SqlCommand(sql, connection);
+            command.CommandTimeout = 60;
+            await command.ExecuteNonQueryAsync(ct);
+        }
 
         await Task.Delay(2000, ct);
     }
@@ -485,7 +530,7 @@ public class TenantService : ITenantService
     private async Task AplicarMigracionesTenantAsync(string connectionString, CancellationToken ct)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseSqlServer(connectionString);
+        ConfigureDbProvider(optionsBuilder,connectionString);
 
         using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 
@@ -495,7 +540,7 @@ public class TenantService : ITenantService
     private async Task CrearAdminInicialAsync(string connectionString, CrearTenantRequest request, CancellationToken ct)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseSqlServer(connectionString);
+        ConfigureDbProvider(optionsBuilder,connectionString);
 
         using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 
@@ -545,7 +590,7 @@ public class TenantService : ITenantService
     private async Task SembrarDatosInicialesAsync(string connectionString, CancellationToken ct)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseSqlServer(connectionString);
+        ConfigureDbProvider(optionsBuilder,connectionString);
 
         using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 
@@ -871,7 +916,7 @@ public class TenantService : ITenantService
             try
             {
                 var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-                optionsBuilder.UseSqlServer(tenant.ConnectionString);
+                ConfigureDbProvider(optionsBuilder,tenant.ConnectionString);
 
                 using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 
@@ -962,7 +1007,7 @@ public class TenantService : ITenantService
             try
             {
                 var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-                optionsBuilder.UseSqlServer(tenant.ConnectionString);
+                ConfigureDbProvider(optionsBuilder,tenant.ConnectionString);
 
                 using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 
@@ -1048,7 +1093,7 @@ public class TenantService : ITenantService
             try
             {
                 var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-                optionsBuilder.UseSqlServer(tenant.ConnectionString);
+                ConfigureDbProvider(optionsBuilder,tenant.ConnectionString);
 
                 using var context = new ApplicationDbContext(optionsBuilder.Options, forProvisioning: true);
 

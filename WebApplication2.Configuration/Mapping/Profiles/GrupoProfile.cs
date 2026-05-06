@@ -13,6 +13,8 @@ namespace WebApplication2.Configuration.Mapping.Profiles
             CreateMap<Grupo, GrupoDto>()
                 .ForMember(dto => dto.NombreGrupo, config => config.MapFrom(model => model.NombreGrupo))
                 .ForMember(dto => dto.PlanEstudios, config => config.MapFrom(model => model.IdPlanEstudiosNavigation.NombrePlanEstudios))
+                .ForMember(dto => dto.IdCampus, config => config.MapFrom(model => model.IdPlanEstudiosNavigation.IdCampus))
+                .ForMember(dto => dto.Campus, config => config.MapFrom(model => model.IdPlanEstudiosNavigation.IdCampusNavigation != null ? model.IdPlanEstudiosNavigation.IdCampusNavigation.Nombre : null))
                 .ForMember(dto => dto.PeriodoAcademico, config => config.MapFrom(model => model.IdPeriodoAcademicoNavigation.Nombre))
                 .ForMember(dto => dto.Turno, config => config.MapFrom(model => model.IdTurnoNavigation.Nombre))
                 .ForMember(dto => dto.EstudiantesInscritos, config => config.MapFrom(model => GetTotalEstudiantesInscritos(model)));

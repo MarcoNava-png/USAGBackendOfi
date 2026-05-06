@@ -22,6 +22,8 @@ namespace WebApplication2.Controllers
         private readonly IConfiguration _configuration;
         private readonly IAspiranteService _aspiranteService;
         private readonly ICatalogoService _catalogoService;
+        private readonly IComprobanteInscripcionService _comprobanteService;
+        private readonly IAspiranteDocumentoService _aspiranteDocumentoService;
 
         public EstudianteController(
             IEstudianteService estudianteService,
@@ -29,7 +31,9 @@ namespace WebApplication2.Controllers
             IAuthService authService,
             IConfiguration configuration,
             IAspiranteService aspiranteService,
-            ICatalogoService catalogoService)
+            ICatalogoService catalogoService,
+            IComprobanteInscripcionService comprobanteService,
+            IAspiranteDocumentoService aspiranteDocumentoService)
         {
             _estudianteService = estudianteService;
             _mapper = mapper;
@@ -37,6 +41,81 @@ namespace WebApplication2.Controllers
             _configuration = configuration;
             _aspiranteService = aspiranteService;
             _catalogoService = catalogoService;
+            _comprobanteService = comprobanteService;
+            _aspiranteDocumentoService = aspiranteDocumentoService;
+        }
+
+        [HttpGet("{id:int}/expediente")]
+        public async Task<ActionResult<IReadOnlyList<Core.DTOs.AspiranteDocumentoDto>>> ObtenerExpediente(int id, CancellationToken ct = default)
+        {
+            try
+            {
+                var estudiante = await _estudianteService.GetEstudianteDetalle(id);
+                if (estudiante == null) return NotFound(new { mensaje = "Estudiante no encontrado" });
+
+                var aspirante = await _aspiranteService.GetAspiranteByPersonaId(estudiante.IdPersona);
+                if (aspirante == null) return Ok(new List<Core.DTOs.AspiranteDocumentoDto>());
+
+                var docs = await _aspiranteDocumentoService.ListarEstadoAsync(
+                    new Core.Requests.Requisitos.ListarEstadoDocumentosRequest { IdAspirante = aspirante.IdAspirante });
+                return Ok(docs);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPost("{id:int}/expediente/cargar")]
+        public async Task<ActionResult> CargarDocumentoExpediente(
+            int id,
+            [FromForm] int idDocumentoRequisito,
+            IFormFile archivo,
+            [FromForm] string? notas,
+            CancellationToken ct = default)
+        {
+            if (archivo == null || archivo.Length == 0)
+                return BadRequest(new { mensaje = "Debe proporcionar un archivo" });
+
+            try
+            {
+                var estudiante = await _estudianteService.GetEstudianteDetalle(id);
+                if (estudiante == null) return NotFound(new { mensaje = "Estudiante no encontrado" });
+
+                var aspirante = await _aspiranteService.GetAspiranteByPersonaId(estudiante.IdPersona);
+                if (aspirante == null) return BadRequest(new { mensaje = "El estudiante no tiene un registro de aspirante vinculado" });
+
+                var docId = await _aspiranteDocumentoService.CargarDocumentoConArchivoAsync(
+                    aspirante.IdAspirante, idDocumentoRequisito, archivo, notas);
+
+                return Ok(new { idAspiranteDocumento = docId, mensaje = "Escaneo cargado exitosamente" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id:int}/comprobante-inscripcion/pdf")]
+        public async Task<IActionResult> DescargarComprobanteInscripcion(int id, [FromQuery] string? passwordTemporal = null, CancellationToken ct = default)
+        {
+            try
+            {
+                var pdf = await _comprobanteService.GenerarPdfAsync(id, passwordTemporal, ct);
+                return File(pdf, "application/pdf", $"comprobante-inscripcion-{id}.pdf");
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
         }
 
         [HttpGet]

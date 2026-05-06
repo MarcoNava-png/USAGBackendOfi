@@ -335,6 +335,24 @@ namespace WebApplication2.Controllers
         }
 
 
+        [HttpPost("{idGrupo:int}/sincronizar-inscripciones")]
+        public async Task<ActionResult<Core.DTOs.Grupo.SincronizacionInscripcionesResultDto>> SincronizarInscripciones(int idGrupo, CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _grupoService.SincronizarInscripcionesGrupoAsync(idGrupo, ct);
+                return Ok(resultado);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
         [HttpDelete("materias/{idGrupoMateria:int}")]
         public async Task<ActionResult> QuitarMateriaDelGrupo(int idGrupoMateria, CancellationToken ct = default)
         {

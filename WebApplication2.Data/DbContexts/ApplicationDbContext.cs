@@ -217,7 +217,7 @@ namespace WebApplication2.Data.DbContexts
             {
                 entity.HasKey(e => e.IdAspirante).HasName("PK__Aspirant__09EE6349C82C95C4");
 
-                entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
                 entity.Property(e => e.Observaciones).HasMaxLength(250);
 
                 entity.Property(e => e.InstitucionProcedencia).HasMaxLength(200);
@@ -269,7 +269,7 @@ namespace WebApplication2.Data.DbContexts
                     .HasMaxLength(20)
                     .HasDefaultValue("Pendiente");
                 entity.Property(e => e.Evidencia).HasMaxLength(200);
-                entity.Property(e => e.FechaAsignacion).HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.FechaAsignacion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 entity.HasOne(d => d.IdAspiranteNavigation).WithMany(p => p.AspiranteConvenio)
                     .HasForeignKey(d => d.IdAspirante)
@@ -375,7 +375,7 @@ namespace WebApplication2.Data.DbContexts
 
                 entity.Property(e => e.Activo).HasDefaultValue(true);
                 entity.Property(e => e.Email).HasMaxLength(120);
-                entity.Property(e => e.FechaIngreso).HasDefaultValueSql("(CONVERT([date],getdate()))");
+                entity.Property(e => e.FechaIngreso).HasDefaultValueSql("(CURRENT_DATE)");
                 entity.Property(e => e.Matricula).HasMaxLength(30);
 
                 entity.HasOne(d => d.IdPersonaNavigation).WithMany(p => p.Estudiante)
@@ -394,7 +394,7 @@ namespace WebApplication2.Data.DbContexts
 
                 entity.HasIndex(e => new { e.IdEstudiante, e.IdPlanEstudios, e.FechaInicio }, "UQ_EstudiantePlan").IsUnique();
 
-                entity.Property(e => e.FechaInicio).HasDefaultValueSql("(CONVERT([date],getdate()))");
+                entity.Property(e => e.FechaInicio).HasDefaultValueSql("(CURRENT_DATE)");
 
                 entity.HasOne(d => d.IdEstudianteNavigation).WithMany(p => p.EstudiantePlan)
                     .HasForeignKey(d => d.IdEstudiante)
@@ -495,7 +495,7 @@ namespace WebApplication2.Data.DbContexts
                 entity.Property(e => e.Estado)
                     .HasMaxLength(20)
                     .HasDefaultValue("Inscrito");
-                entity.Property(e => e.FechaInscripcion).HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.FechaInscripcion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 entity.HasOne(d => d.IdEstudianteNavigation).WithMany(p => p.Inscripcion)
                     .HasForeignKey(d => d.IdEstudiante)
@@ -733,7 +733,7 @@ namespace WebApplication2.Data.DbContexts
                 entity.HasKey(e => e.IdAsistencia);
 
                 entity.Property(e => e.Observaciones).HasMaxLength(500);
-                entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 entity.HasOne(d => d.Inscripcion)
                     .WithMany()
@@ -851,7 +851,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(p => p.Saldo).HasPrecision(12, 2);
                 e.Property(p => p.Total)
                     .HasPrecision(12, 2)
-                    .HasComputedColumnSql("ROUND([Subtotal]-[Descuento]+[Recargos],2)", stored: true);
+                    .HasComputedColumnSql("ROUND(\"Subtotal\"-\"Descuento\"+\"Recargos\",2)", stored: true);
             });
 
             modelBuilder.Entity<ConceptoPago>()
@@ -864,7 +864,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(p => p.PrecioUnitario).HasPrecision(12, 2);
                 e.Property(p => p.Importe)
                     .HasPrecision(12, 2)
-                    .HasComputedColumnSql("ROUND([Cantidad]*[PrecioUnitario],2)", stored: true);
+                    .HasComputedColumnSql("ROUND(\"Cantidad\"*\"PrecioUnitario\",2)", stored: true);
 
                 e.HasOne(d => d.Recibo)
                     .WithMany(r => r.Detalles)
@@ -925,7 +925,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.EstrategiaEmision).HasDefaultValue(0);
                 e.Property(x => x.NumeroRecibos).HasDefaultValue(4);
                 e.Property(x => x.DiaVencimiento).HasDefaultValue(10);
-                e.Property(x => x.FechaCreacion).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.FechaCreacion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 e.HasOne(x => x.IdPlanEstudiosNavigation)
                     .WithMany()
@@ -973,7 +973,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.Description).HasMaxLength(500);
                 e.Property(x => x.Module).HasMaxLength(100).IsRequired();
                 e.Property(x => x.IsActive).HasDefaultValue(true);
-                e.Property(x => x.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 e.HasIndex(x => x.Code).IsUnique();
                 e.HasIndex(x => x.Module);
@@ -984,7 +984,7 @@ namespace WebApplication2.Data.DbContexts
                 e.HasKey(x => x.IdRolePermission);
                 e.Property(x => x.RoleId).HasMaxLength(450).IsRequired();
                 e.Property(x => x.AssignedBy).HasMaxLength(450);
-                e.Property(x => x.AssignedAt).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.AssignedAt).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
                 e.Property(x => x.CanView).HasDefaultValue(true);
                 e.Property(x => x.CanCreate).HasDefaultValue(false);
                 e.Property(x => x.CanEdit).HasDefaultValue(false);
@@ -1014,7 +1014,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.RequierePago).HasDefaultValue(true);
                 e.Property(x => x.Activo).HasDefaultValue(true);
                 e.Property(x => x.Orden).HasDefaultValue(0);
-                e.Property(x => x.FechaCreacion).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.FechaCreacion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 e.HasIndex(x => x.Clave).IsUnique();
             });
@@ -1024,7 +1024,7 @@ namespace WebApplication2.Data.DbContexts
                 e.HasKey(x => x.IdEstudianteGrupo);
                 e.Property(x => x.Estado).HasMaxLength(30).HasDefaultValue("Inscrito");
                 e.Property(x => x.Observaciones).HasMaxLength(500);
-                e.Property(x => x.FechaInscripcion).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.FechaInscripcion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 e.HasIndex(x => new { x.IdEstudiante, x.IdGrupo }).IsUnique();
 
@@ -1050,7 +1050,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.EntidadId).HasMaxLength(100);
                 e.Property(x => x.Descripcion).HasMaxLength(1000);
                 e.Property(x => x.IpAddress).HasMaxLength(50);
-                e.Property(x => x.FechaUtc).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.FechaUtc).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 e.HasIndex(x => x.Modulo);
                 e.HasIndex(x => x.UsuarioId);
@@ -1067,7 +1067,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.Modulo).HasMaxLength(100);
                 e.Property(x => x.UrlAccion).HasMaxLength(500);
                 e.Property(x => x.Leida).HasDefaultValue(false);
-                e.Property(x => x.FechaCreacion).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.FechaCreacion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                 e.HasIndex(x => x.UsuarioDestinoId);
                 e.HasIndex(x => new { x.UsuarioDestinoId, x.Leida });
@@ -1098,7 +1098,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.Notas).HasMaxLength(500);
                 e.Property(x => x.UsuarioSolicita).HasMaxLength(450);
                 e.Property(x => x.UsuarioGenera).HasMaxLength(450);
-                e.Property(x => x.FechaSolicitud).HasDefaultValueSql("(sysutcdatetime())");
+                e.Property(x => x.FechaSolicitud).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
                 e.Property(x => x.Estatus).HasDefaultValue(EstatusSolicitudDocumento.PENDIENTE_PAGO);
                 e.Property(x => x.Variante).HasDefaultValue(VarianteDocumento.COMPLETO);
                 e.Property(x => x.VecesImpreso).HasDefaultValue(0);

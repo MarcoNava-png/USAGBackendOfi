@@ -111,6 +111,16 @@ namespace WebApplication2.Services
                 .FirstOrDefaultAsync(t => t.IdTarifaAdmision == id && t.Status != StatusEnum.Deleted, ct)
                 ?? throw new InvalidOperationException($"No se encontró la tarifa con ID {id}");
 
+            if (dto.IdPlanEstudios.HasValue && dto.IdPlanEstudios.Value != tarifa.IdPlanEstudios)
+            {
+                var planExiste = await _db.PlanEstudios
+                    .AnyAsync(p => p.IdPlanEstudios == dto.IdPlanEstudios.Value, ct);
+                if (!planExiste)
+                    throw new InvalidOperationException($"No se encontró el plan de estudios con ID {dto.IdPlanEstudios.Value}");
+
+                tarifa.IdPlanEstudios = dto.IdPlanEstudios.Value;
+            }
+
             tarifa.Nombre = dto.Nombre;
             tarifa.AplicaConvenioMensualidad = dto.AplicaConvenioMensualidad;
             tarifa.EsConvenioEmpresarial = dto.EsConvenioEmpresarial;

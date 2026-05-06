@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using QuestPDF.Infrastructure;
 using System.Text;
 using System.Text.Json;
 using System.Security.Claims;
@@ -24,6 +25,11 @@ using WebApplication2.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var questPdfTempPath = Environment.GetEnvironmentVariable("QUESTPDF_TEMP_PATH") ?? "/app/tmp";
+Directory.CreateDirectory(questPdfTempPath);
+QuestPDF.Settings.License = LicenseType.Community;
+QuestPDF.Settings.CheckIfAllTextGlyphsAreAvailable = false;
+QuestPDF.Settings.TemporaryStoragePath = questPdfTempPath;
 
 var jwtKey = builder.Configuration.GetValue<string>("Jwt:Key");
 var jwtIssuer = builder.Configuration.GetValue<string>("Jwt:Issuer");
@@ -117,9 +123,17 @@ if (string.IsNullOrWhiteSpace(conn))
     Console.WriteLine("WARNING: ConnectionStrings:DefaultConnection está vacío (ConnectionStrings__DefaultConnection).");
 }
 
+var dbProvider = builder.Configuration["DatabaseProvider"] ?? "SqlServer";
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(conn)
-           .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+{
+    if (dbProvider == "PostgreSQL")
+        options.UseNpgsql(conn);
+    else
+        options.UseSqlServer(conn);
+
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+});
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -175,6 +189,8 @@ builder.Services.AddAuthentication(x =>
 
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAccesoAlumnoDocenteService, AccesoAlumnoDocenteService>();
+builder.Services.AddScoped<IComprobanteInscripcionService, ComprobanteInscripcionService>();
 builder.Services.AddScoped<IProfesorService, ProfesorService>();
 builder.Services.AddScoped<IDirectorService, DirectorService>();
 builder.Services.AddScoped<ICoordinadorService, CoordinadorService>();
@@ -233,6 +249,7 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IDocumentoEstudianteService, DocumentoEstudianteService>();
 builder.Services.AddScoped<IImportacionService, ImportacionService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IPortalAlumnoService, PortalAlumnoService>();
 builder.Services.AddScoped<IConvenioService, ConvenioService>();
 builder.Services.AddScoped<IBitacoraAccionService, BitacoraAccionService>();
 builder.Services.AddScoped<INotificacionInternalService, NotificacionInternalService>();
@@ -253,7 +270,14 @@ var masterConn = builder.Configuration.GetConnectionString("MasterConnection") ?
 
 
 builder.Services.AddDbContext<MasterDbContext>(options =>
-    options.UseSqlServer(masterConn));
+{
+    if (dbProvider == "PostgreSQL")
+        options.UseNpgsql(masterConn);
+    else
+        options.UseSqlServer(masterConn);
+
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+});
 
 builder.Services.AddMemoryCache();
 

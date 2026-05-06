@@ -156,15 +156,25 @@ public class TenantMiddleware
         return await tenantService.GetTenantBySubdomainAsync(host);
     }
 
+    private static readonly HashSet<string> ReservedSubdomains = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "www", "api", "admin", "test", "test-api", "staging", "dev"
+    };
+
     private bool IsRootDomain(string host)
     {
         host = host.Split(':')[0].ToLower();
 
-        return host == _baseDomain ||
-               host == $"www.{_baseDomain}" ||
-               host == $"api.{_baseDomain}" ||
-               host == "localhost" ||
-               host == "127.0.0.1";
+        if (host == _baseDomain || host == "localhost" || host == "127.0.0.1")
+            return true;
+
+        if (host.EndsWith($".{_baseDomain}"))
+        {
+            var subdomain = host.Replace($".{_baseDomain}", "");
+            return ReservedSubdomains.Contains(subdomain);
+        }
+
+        return false;
     }
 
     private string? ExtractSubdomain(string host)
@@ -176,7 +186,7 @@ public class TenantMiddleware
             return null;
         }
 
-        if (host == _baseDomain || host == $"www.{_baseDomain}" || host == $"api.{_baseDomain}")
+        if (host == _baseDomain)
         {
             return null;
         }
@@ -184,7 +194,7 @@ public class TenantMiddleware
         if (host.EndsWith($".{_baseDomain}"))
         {
             var subdomain = host.Replace($".{_baseDomain}", "");
-            if (subdomain != "www" && subdomain != "api" && subdomain != "admin")
+            if (!ReservedSubdomains.Contains(subdomain))
             {
                 return subdomain;
             }

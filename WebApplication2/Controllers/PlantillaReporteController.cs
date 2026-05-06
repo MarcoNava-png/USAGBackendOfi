@@ -200,6 +200,20 @@ namespace WebApplication2.Controllers
                 { "periodo", "CUATRIMESTRE ENERO-ABRIL 2026" },
                 { "grupo", "1A Matutino (111)" }
             },
+            "lista_asistencia" => new()
+            {
+                { "carrera", "LICENCIATURA EN RADIOLOGÍA E IMAGEN" },
+                { "periodo", "ENERO-ABRIL 2026" },
+                { "materia", "Laboratorio De Simulación Imagenológica VII" },
+                { "clave", "RALS0806" },
+                { "clave_materia", "RALS0806" },
+                { "docente", "José Laguna Zaragoza" },
+                { "profesor", "José Laguna Zaragoza" },
+                { "grupo", "831" },
+                { "nombre_grupo", "8A Sabatino" },
+                { "campus", "Campus Veracruz" },
+                { "cuatrimestre", "8°" }
+            },
             "constancia_estudios" => new()
             {
                 { "nombre_alumno", "JUAN CARLOS PÉREZ LÓPEZ" },
@@ -235,6 +249,20 @@ namespace WebApplication2.Controllers
                         new() { { "matricula", "L00503" }, { "estatus", "Inscrito" }, { "nombre", "LÓPEZ MARTÍNEZ JOSÉ ANTONIO" } },
                         new() { { "matricula", "L00504" }, { "estatus", "Inscrito" }, { "nombre", "RAMÍREZ SILVA KAREN LIZBETH" } },
                         new() { { "matricula", "L00505" }, { "estatus", "Inscrito" }, { "nombre", "TORRES GARCÍA HÉCTOR GAEL" } },
+                    }
+                }
+            },
+            "lista_asistencia" => new()
+            {
+                { "tabla_estudiantes", new List<Dictionary<string, string>>
+                    {
+                        new() { { "matricula", "L00029" }, { "estatus", "Inscrito" }, { "nombre", "ALANIS SALDAÑA ALVARO" } },
+                        new() { { "matricula", "L00030" }, { "estatus", "Inscrito" }, { "nombre", "ARAUJO MARTINEZ ERIK ULISES" } },
+                        new() { { "matricula", "L00032" }, { "estatus", "Inscrito" }, { "nombre", "CAUDILLO GARNICA JOAQUIN" } },
+                        new() { { "matricula", "L00033" }, { "estatus", "Inscrito" }, { "nombre", "CHAVEZ SANCHEZ MAYRA BEATRIZ" } },
+                        new() { { "matricula", "L00099" }, { "estatus", "Inscrito" }, { "nombre", "GONZÁLEZ REYES KAREN ALEJANDRA" } },
+                        new() { { "matricula", "L00035" }, { "estatus", "Inscrito" }, { "nombre", "LOPEZ CRUZ JESUS" } },
+                        new() { { "matricula", "L00037" }, { "estatus", "Inscrito" }, { "nombre", "MEDEL RAMIREZ MIGUEL" } },
                     }
                 }
             },

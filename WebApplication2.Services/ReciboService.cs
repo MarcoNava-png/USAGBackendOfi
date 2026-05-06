@@ -195,14 +195,14 @@ namespace WebApplication2.Services
         {
             var r = await _db.Recibo
                 .Include(x => x.Detalles)
-                .FirstOrDefaultAsync(x => x.IdRecibo == idRecibo, ct);
+                .FirstOrDefaultAsync(x => x.IdRecibo == idRecibo && x.Status == StatusEnum.Active, ct);
             return r == null ? null : _mapper.Map<ReciboDto>(r);
         }
 
         public async Task<IReadOnlyList<ReciboDto>> ListarPorPeriodoAsync(int idPeriodoAcademico, int? idEstudiante, CancellationToken ct)
         {
             var q = _db.Recibo.Include(r => r.Detalles)
-                .Where(r => r.IdPeriodoAcademico == idPeriodoAcademico);
+                .Where(r => r.IdPeriodoAcademico == idPeriodoAcademico && r.Status == StatusEnum.Active);
 
             if (idEstudiante.HasValue) q = q.Where(r => r.IdEstudiante == idEstudiante.Value);
 
@@ -214,7 +214,7 @@ namespace WebApplication2.Services
         {
             var list = await _db.Recibo
                 .Include(r => r.Detalles)
-                .Where(r => r.IdAspirante == idAspirante)
+                .Where(r => r.IdAspirante == idAspirante && r.Status == StatusEnum.Active)
                 .AsNoTracking()
                 .ToListAsync(ct);
 
@@ -592,6 +592,55 @@ namespace WebApplication2.Services
             return _mapper.Map<ReciboDto>(reciboCreado);
         }
 
+        public async Task<ReciboDto> GenerarReciboAspiranteMensualidadAsync(
+            int idAspirante, int idConceptoPago, decimal monto, string descripcion, DateOnly fechaVencimiento, CancellationToken ct)
+        {
+            var aspirante = await _db.Aspirante.FindAsync(new object[] { idAspirante }, ct);
+            if (aspirante == null)
+                throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
+
+            var concepto = await _db.ConceptoPago.FirstOrDefaultAsync(c => c.IdConceptoPago == idConceptoPago, ct);
+            if (concepto == null)
+                throw new InvalidOperationException($"No se encontró el ConceptoPago con ID {idConceptoPago}");
+
+            var fechaEmision = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var recibo = new Recibo
+            {
+                Folio = await GenerarFolioAsync(ct),
+                IdAspirante = idAspirante,
+                FechaEmision = fechaEmision,
+                FechaVencimiento = fechaVencimiento,
+                Estatus = EstatusRecibo.PENDIENTE,
+                Subtotal = monto,
+                Descuento = 0,
+                Recargos = 0,
+                Saldo = monto,
+                Notas = $"Recibo de {descripcion} generado automáticamente"
+            };
+
+            _db.Recibo.Add(recibo);
+            await _db.SaveChangesAsync(ct);
+
+            var detalle = new ReciboDetalle
+            {
+                IdRecibo = recibo.IdRecibo,
+                IdConceptoPago = idConceptoPago,
+                Descripcion = descripcion,
+                Cantidad = 1,
+                PrecioUnitario = monto
+            };
+
+            _db.ReciboDetalle.Add(detalle);
+            await _db.SaveChangesAsync(ct);
+
+            var reciboCreado = await _db.Recibo
+                .Include(r => r.Detalles)
+                .FirstOrDefaultAsync(r => r.IdRecibo == recibo.IdRecibo, ct);
+
+            return _mapper.Map<ReciboDto>(reciboCreado);
+        }
+
         public async Task<int> RepararRecibosSinDetallesAsync(CancellationToken ct)
         {
             var recibosSinDetalles = await _db.Recibo
@@ -654,7 +703,7 @@ namespace WebApplication2.Services
             var recibo = await _db.Recibo
                 .Include(r => r.Detalles)
                 .ThenInclude(d => d.Aplicaciones)
-                .FirstOrDefaultAsync(r => r.IdRecibo == idRecibo, ct);
+                .FirstOrDefaultAsync(r => r.IdRecibo == idRecibo && r.Status == StatusEnum.Active, ct);
 
             if (recibo == null)
                 throw new InvalidOperationException($"No se encontró el recibo con ID {idRecibo}");
@@ -663,9 +712,17 @@ namespace WebApplication2.Services
             if (tienePagos)
                 throw new InvalidOperationException("No se puede eliminar un recibo que tiene pagos aplicados");
 
-            _db.ReciboDetalle.RemoveRange(recibo.Detalles);
+            var ahora = DateTime.UtcNow;
 
-            _db.Recibo.Remove(recibo);
+            foreach (var detalle in recibo.Detalles)
+            {
+                detalle.Status = StatusEnum.Deleted;
+                detalle.UpdatedAt = ahora;
+            }
+
+            recibo.Status = StatusEnum.Deleted;
+            recibo.Estatus = EstatusRecibo.CANCELADO;
+            recibo.UpdatedAt = ahora;
 
             await _db.SaveChangesAsync(ct);
             return true;
@@ -1452,6 +1509,66 @@ namespace WebApplication2.Services
             await _db.SaveChangesAsync(ct);
 
             Console.WriteLine($"[ReciboService] Recibo {recibo.Folio} cancelado por {usuario}. Motivo: {motivo}");
+
+            return _mapper.Map<ReciboDto>(recibo);
+        }
+
+        public async Task<ReciboDto> AplicarDescuentoAsync(long idRecibo, decimal? porcentaje, decimal? monto, string? motivo, string usuario, CancellationToken ct)
+        {
+            if (!porcentaje.HasValue && !monto.HasValue)
+                throw new InvalidOperationException("Debe especificar 'porcentaje' o 'monto' para aplicar el descuento.");
+            if (porcentaje.HasValue && (porcentaje.Value < 0 || porcentaje.Value > 100))
+                throw new InvalidOperationException("El porcentaje debe estar entre 0 y 100.");
+            if (monto.HasValue && monto.Value < 0)
+                throw new InvalidOperationException("El monto del descuento no puede ser negativo.");
+
+            var recibo = await _db.Recibo
+                .Include(r => r.Detalles)
+                    .ThenInclude(d => d.Aplicaciones)
+                .FirstOrDefaultAsync(r => r.IdRecibo == idRecibo, ct)
+                ?? throw new InvalidOperationException($"No se encontró el recibo con ID {idRecibo}");
+
+            if (recibo.Estatus == EstatusRecibo.CANCELADO)
+                throw new InvalidOperationException("No se puede aplicar descuento a un recibo cancelado.");
+            if (recibo.Estatus == EstatusRecibo.PAGADO)
+                throw new InvalidOperationException("No se puede aplicar descuento a un recibo ya pagado.");
+
+            var tienePagos = recibo.Detalles.Any(d => d.Aplicaciones.Any(a => a.Status != StatusEnum.Deleted));
+            if (tienePagos)
+                throw new InvalidOperationException("No se puede aplicar descuento a un recibo con pagos aplicados. Reverse los pagos primero.");
+
+            var subtotal = recibo.Subtotal;
+            var nuevoDescuento = porcentaje.HasValue
+                ? Math.Round(subtotal * (porcentaje.Value / 100m), 2)
+                : monto!.Value;
+
+            if (nuevoDescuento > subtotal)
+                nuevoDescuento = subtotal;
+
+            var descuentoAnterior = recibo.Descuento;
+            recibo.Descuento = nuevoDescuento;
+            recibo.Saldo = subtotal - nuevoDescuento + recibo.Recargos;
+            recibo.UpdatedAt = DateTime.UtcNow;
+            recibo.UpdatedBy = usuario;
+
+            var detalleDesc = porcentaje.HasValue
+                ? $"{porcentaje.Value}% (={nuevoDescuento:F2})"
+                : $"${nuevoDescuento:F2}";
+            var bitacora = new BitacoraRecibo
+            {
+                IdRecibo = recibo.IdRecibo,
+                TipoRecibo = recibo.IdAspirante.HasValue ? "Aspirante" : "Estudiante",
+                Usuario = usuario,
+                FechaUtc = DateTime.UtcNow,
+                Accion = "APLICAR_DESCUENTO",
+                Origen = "Sistema",
+                Notas = $"Descuento aplicado: {detalleDesc}. Anterior: ${descuentoAnterior:F2}. Motivo: {motivo ?? "No especificado"}"
+            };
+            _db.BitacoraRecibo.Add(bitacora);
+
+            await _db.SaveChangesAsync(ct);
+
+            Console.WriteLine($"[ReciboService] Descuento aplicado a recibo {recibo.Folio}: {detalleDesc} por {usuario}");
 
             return _mapper.Map<ReciboDto>(recibo);
         }

@@ -23,7 +23,8 @@ namespace WebApplication2.Configuration.Mapping.Profiles
                 .ForMember(dto => dto.EstadoId, map => map.MapFrom(model => model.IdPersonaNavigation!.IdDireccionNavigation!.CodigoPostal!.Municipio.EstadoId))
                 .ForMember(dto => dto.CreatedBy, map => map.MapFrom(model => model.CreatedBy))
                 .ForMember(dto => dto.IdEmpresa, map => map.MapFrom(model => model.IdEmpresa))
-                .ForMember(dto => dto.UsuarioRegistroNombre, map => map.Ignore()); 
+                .ForMember(dto => dto.Notas, map => map.MapFrom(model => model.Observaciones))
+                .ForMember(dto => dto.UsuarioRegistroNombre, map => map.Ignore());
         }
     }
 }

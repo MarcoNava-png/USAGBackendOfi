@@ -45,5 +45,7 @@
         public int? CuatrimestreInteres { get; set; }
 
         public int? IdEmpresa { get; set; }
+
+        public string? Notas { get; set; }
     }
 }
