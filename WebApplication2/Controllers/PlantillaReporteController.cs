@@ -235,6 +235,14 @@ namespace WebApplication2.Controllers
                 { "rvoe", "20231946" },
                 { "ciclo_ingreso", "Enero 2025" }
             },
+            "boleta_calificaciones" => new()
+            {
+                { "CARRERA", "LICENCIATURA EN RADIOLOGÍA E IMAGEN" },
+                { "PERIODO", "ENERO-ABRIL 2026" },
+                { "NOMBRE_ALUMNO", "JUAN CARLOS PÉREZ LÓPEZ" },
+                { "MATRICULA", "L00001" },
+                { "GRUPO", "8A Sabatino" }
+            },
             _ => new()
         };
 
@@ -249,6 +257,18 @@ namespace WebApplication2.Controllers
                         new() { { "matricula", "L00503" }, { "estatus", "Inscrito" }, { "nombre", "LÓPEZ MARTÍNEZ JOSÉ ANTONIO" } },
                         new() { { "matricula", "L00504" }, { "estatus", "Inscrito" }, { "nombre", "RAMÍREZ SILVA KAREN LIZBETH" } },
                         new() { { "matricula", "L00505" }, { "estatus", "Inscrito" }, { "nombre", "TORRES GARCÍA HÉCTOR GAEL" } },
+                    }
+                }
+            },
+            "boleta_calificaciones" => new()
+            {
+                { "tabla_materias", new List<Dictionary<string, string>>
+                    {
+                        new() { { "clave", "ENFE101" }, { "nombre_materia", "Anatomía Humana I" }, { "calificacion", "8.5" } },
+                        new() { { "clave", "ENFE102" }, { "nombre_materia", "Enfermería y Salud" }, { "calificacion", "9.0" } },
+                        new() { { "clave", "ENFE103" }, { "nombre_materia", "Psicología" }, { "calificacion", "7.8" } },
+                        new() { { "clave", "ENFE104" }, { "nombre_materia", "Bioquímica" }, { "calificacion", "8.2" } },
+                        new() { { "clave", "ENFE105" }, { "nombre_materia", "Inglés Técnico I" }, { "calificacion", "9.5" } },
                     }
                 }
             },

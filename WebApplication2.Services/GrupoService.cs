@@ -1007,7 +1007,7 @@ namespace WebApplication2.Services
             return resultado;
         }
 
-        public async Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, CancellationToken ct = default)
+        public async Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, bool forzar = false, CancellationToken ct = default)
         {
             var grupoMateria = await _dbContext.GrupoMateria
                 .FirstOrDefaultAsync(gm => gm.IdGrupoMateria == idGrupoMateria && gm.Status == StatusEnum.Active, ct);
@@ -1015,14 +1015,56 @@ namespace WebApplication2.Services
             if (grupoMateria == null)
                 return false;
 
-            var tieneEstudiantes = await _dbContext.Inscripcion
-                .AnyAsync(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active, ct);
+            var inscripciones = await _dbContext.Inscripcion
+                .Where(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active)
+                .ToListAsync(ct);
 
-            if (tieneEstudiantes)
-                throw new InvalidOperationException("No se puede quitar la materia porque tiene estudiantes inscritos");
+            if (inscripciones.Any() && !forzar)
+                throw new InvalidOperationException($"No se puede quitar la materia porque tiene {inscripciones.Count} estudiante(s) inscrito(s). Use 'forzar' para cancelar las inscripciones automáticamente.");
+
+            var ahora = DateTime.UtcNow;
+
+            if (inscripciones.Any())
+            {
+                var inscripcionIds = inscripciones.Select(i => i.IdInscripcion).ToList();
+
+                var calificacionesParciales = await _dbContext.CalificacionesParciales
+                    .Where(cp => inscripcionIds.Contains(cp.InscripcionId) && cp.Status == StatusEnum.Active)
+                    .ToListAsync(ct);
+                foreach (var cp in calificacionesParciales)
+                {
+                    cp.Status = StatusEnum.Deleted;
+                    cp.UpdatedAt = ahora;
+                }
+
+                var parcialIds = calificacionesParciales.Select(cp => cp.Id).ToList();
+                var detalles = await _dbContext.CalificacionDetalle
+                    .Where(cd => parcialIds.Contains(cd.CalificacionParcialId) && cd.Status == StatusEnum.Active)
+                    .ToListAsync(ct);
+                foreach (var d in detalles)
+                {
+                    d.Status = StatusEnum.Deleted;
+                    d.UpdatedAt = ahora;
+                }
+
+                foreach (var i in inscripciones)
+                {
+                    i.Status = StatusEnum.Deleted;
+                    i.UpdatedAt = ahora;
+                }
+            }
+
+            var horarios = await _dbContext.Horario
+                .Where(h => h.IdGrupoMateria == idGrupoMateria && h.Status == StatusEnum.Active)
+                .ToListAsync(ct);
+            foreach (var h in horarios)
+            {
+                h.Status = StatusEnum.Deleted;
+                h.UpdatedAt = ahora;
+            }
 
             grupoMateria.Status = StatusEnum.Deleted;
-            grupoMateria.UpdatedAt = DateTime.UtcNow;
+            grupoMateria.UpdatedAt = ahora;
             await _dbContext.SaveChangesAsync(ct);
 
             return true;

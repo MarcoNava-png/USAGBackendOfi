@@ -354,11 +354,11 @@ namespace WebApplication2.Controllers
         }
 
         [HttpDelete("materias/{idGrupoMateria:int}")]
-        public async Task<ActionResult> QuitarMateriaDelGrupo(int idGrupoMateria, CancellationToken ct = default)
+        public async Task<ActionResult> QuitarMateriaDelGrupo(int idGrupoMateria, [FromQuery] bool forzar = false, CancellationToken ct = default)
         {
             try
             {
-                var resultado = await _grupoService.QuitarMateriaDelGrupoAsync(idGrupoMateria, ct);
+                var resultado = await _grupoService.QuitarMateriaDelGrupoAsync(idGrupoMateria, forzar, ct);
 
                 if (!resultado)
                     return NotFound(new { mensaje = "Materia no encontrada en el grupo" });

@@ -380,8 +380,10 @@ public class PdfService : IPdfService
 
                 var notaTexto = costo.Nota ?? "";
                 var notaColor = "#666666";
-                if (notaTexto == "Pagado") notaColor = "#16a34a";
-                else if (notaTexto == "Pendiente") notaColor = "#d97706";
+                if (notaTexto.StartsWith("Pagado")) notaColor = "#16a34a";
+                else if (notaTexto.StartsWith("Pendiente")) notaColor = "#d97706";
+                else if (notaTexto.StartsWith("Vencido")) notaColor = "#dc2626";
+                else if (notaTexto.StartsWith("Cancelado")) notaColor = "#9ca3af";
                 else if (notaTexto.Contains("Descuento")) notaColor = "#2563eb";
 
                 item.MinHeight(13).Row(r =>
@@ -1526,6 +1528,7 @@ public class PdfService : IPdfService
     {
         var tienePromociones = cotizacion.Conceptos.Any(c => c.NombrePromocion != null);
         var tieneTotales = cotizacion.TotalOriginal > 0;
+        var tieneNotas = !tienePromociones && cotizacion.Conceptos.Any(c => !string.IsNullOrWhiteSpace(c.Notas));
 
         container.PaddingTop(15).Column(column =>
         {
@@ -1564,6 +1567,25 @@ public class PdfService : IPdfService
                             .Text("CONVENIO").FontColor(Colors.White).Bold().FontSize(9);
                         header.Cell().Background(ColorAzulOscuro).Padding(8)
                             .Text("MONTO FINAL").FontColor(Colors.White).Bold().FontSize(9).AlignRight();
+                    });
+                }
+                else if (tieneNotas)
+                {
+                    table.ColumnsDefinition(columns =>
+                    {
+                        columns.RelativeColumn(3);
+                        columns.RelativeColumn(1.5f);
+                        columns.RelativeColumn(3);
+                    });
+
+                    table.Header(header =>
+                    {
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("CONCEPTO").FontColor(Colors.White).Bold().FontSize(9);
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("MONTO").FontColor(Colors.White).Bold().FontSize(9).AlignRight();
+                        header.Cell().Background(ColorAzulOscuro).Padding(8)
+                            .Text("NOTAS").FontColor(Colors.White).Bold().FontSize(9);
                     });
                 }
                 else
@@ -1622,9 +1644,15 @@ public class PdfService : IPdfService
                             .Text(concepto.Incluido ? $"${concepto.MontoFinal:N2}" : "—")
                             .FontSize(9).Bold().FontColor(concepto.MontoDescuento > 0 ? "#16A34A" : textColor);
                     }
+                    else if (tieneNotas)
+                    {
+                        table.Cell().Background(bgColor).Padding(8).AlignRight()
+                            .Text(concepto.Valor).FontSize(9).FontColor(textColor);
+                        table.Cell().Background(bgColor).Padding(8)
+                            .Text(concepto.Notas ?? "").FontSize(9).FontColor(textColor);
+                    }
                     else
                     {
-                        // Columna: Valor simple
                         table.Cell().Background(bgColor).Padding(8).AlignRight()
                             .Text(concepto.Valor).FontSize(9).FontColor(textColor);
                     }

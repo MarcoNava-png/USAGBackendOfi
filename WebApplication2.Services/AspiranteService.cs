@@ -670,7 +670,9 @@ namespace WebApplication2.Services
             var recibos = await _dbContext.Recibo
                 .Include(r => r.Detalles)
                     .ThenInclude(d => d.ConceptoPago)
-                .Where(r => r.IdAspirante == aspiranteId)
+                .Where(r => r.IdAspirante == aspiranteId
+                    && r.Estatus != Core.Enums.EstatusRecibo.CANCELADO
+                    && r.Status != Core.Enums.StatusEnum.Deleted)
                 .OrderBy(r => r.FechaEmision)
                 .ToListAsync();
 
@@ -706,64 +708,67 @@ namespace WebApplication2.Services
                 await _dbContext.AspiranteConvenio
                     .AnyAsync(ac => ac.IdAspirante == aspirante.IdAspirante && ac.Status == Core.Enums.StatusEnum.Active);
 
-            var tarifaDetalles = await _dbContext.TarifasAdmisionDetalles
-                .Include(td => td.IdTarifaAdmisionNavigation)
-                .Include(td => td.IdConceptoPagoNavigation)
-                .Where(td => td.IdTarifaAdmisionNavigation.IdPlanEstudios == aspirante.IdPlan
-                    && td.IdTarifaAdmisionNavigation.Activo
-                    && td.IdTarifaAdmisionNavigation.Status != Core.Enums.StatusEnum.Deleted
-                    && td.IdTarifaAdmisionNavigation.EsConvenioEmpresarial == esConvenio
-                    && td.EsAplicable)
-                .OrderBy(td => td.Orden)
-                .ToListAsync();
+            var idTarifaAplicable = await _dbContext.TarifasAdmision
+                .Where(t => t.IdPlanEstudios == aspirante.IdPlan
+                    && t.Activo
+                    && t.Status != Core.Enums.StatusEnum.Deleted
+                    && t.EsConvenioEmpresarial == esConvenio)
+                .OrderByDescending(t => t.IdTarifaAdmision)
+                .Select(t => (int?)t.IdTarifaAdmision)
+                .FirstOrDefaultAsync();
+
+            var tarifaDetalles = idTarifaAplicable.HasValue
+                ? await _dbContext.TarifasAdmisionDetalles
+                    .Include(td => td.IdConceptoPagoNavigation)
+                    .Where(td => td.IdTarifaAdmision == idTarifaAplicable.Value && td.EsAplicable)
+                    .OrderBy(td => td.Orden)
+                    .ToListAsync()
+                : new List<Core.Models.TarifaAdmisionDetalle>();
 
             var reciboPorConcepto = recibos
-                .SelectMany(r => r.Detalles.Select(d => new { d.IdConceptoPago, r.Total, r.Descuento, r.Subtotal, r.Notas, r.Estatus }))
+                .SelectMany(r => r.Detalles.Select(d => new { d.IdConceptoPago, r.Total, r.Descuento, r.Subtotal, r.Notas, r.Estatus, r.IdRecibo }))
                 .GroupBy(x => x.IdConceptoPago)
-                .ToDictionary(g => g.Key, g => g.First());
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.Descuento > 0 ? 1 : 0)
+                          .ThenByDescending(x => x.IdRecibo)
+                          .First());
 
             List<CostoDesglosePdfDto> costosDesglose;
 
             if (tarifaDetalles.Count > 0)
             {
-                var idsConceptoReciboPagado = recibos
-                    .Where(r => r.Estatus == Core.Enums.EstatusRecibo.PAGADO)
-                    .SelectMany(r => r.Detalles.Select(d => d.IdConceptoPago))
-                    .ToHashSet();
-
                 costosDesglose = tarifaDetalles
                     .Select(td =>
                     {
                         reciboPorConcepto.TryGetValue(td.IdConceptoPago, out var recibo);
 
                         string? nota = null;
-                        decimal descuentoMonto = 0;
-                        decimal subtotalRecibo = 0;
-                        bool tieneReciboConcepto = false;
 
-                        if (recibo != null)
+                        if (recibo == null)
                         {
-                            descuentoMonto = recibo.Descuento;
-                            subtotalRecibo = recibo.Subtotal;
-                            tieneReciboConcepto = true;
+                            if (td.Monto > 0) nota = "Pendiente";
                         }
-                        else if (idsConceptoReciboPagado.Contains(td.IdConceptoPago))
+                        else
                         {
-                            tieneReciboConcepto = true;
-                        }
+                            var estado = recibo.Estatus switch
+                            {
+                                Core.Enums.EstatusRecibo.PAGADO => "Pagado",
+                                Core.Enums.EstatusRecibo.VENCIDO => "Vencido",
+                                _ => "Pendiente"
+                            };
 
-                        if (tieneReciboConcepto && descuentoMonto > 0)
-                        {
-                            var porcentaje = subtotalRecibo > 0 ? Math.Round((descuentoMonto / subtotalRecibo) * 100, 0) : 0;
-                            nota = $"Descuento {porcentaje}% - ${descuentoMonto:N2}";
-                        }
-                        else if (tieneReciboConcepto && recibo?.Estatus == Core.Enums.EstatusRecibo.PAGADO)
-                        {
-                            nota = "Pagado";
-                        }
-                        else if (!tieneReciboConcepto && td.Monto > 0)
-                        {
-                            nota = "Pendiente";
+                            if (recibo.Descuento > 0)
+                            {
+                                var porcentaje = recibo.Subtotal > 0
+                                    ? Math.Round((recibo.Descuento / recibo.Subtotal) * 100, 0)
+                                    : 0;
+                                nota = $"{estado} · Descuento {porcentaje}% - ${recibo.Descuento:N2}";
+                            }
+                            else
+                            {
+                                nota = estado;
+                            }
                         }
 
                         return new CostoDesglosePdfDto

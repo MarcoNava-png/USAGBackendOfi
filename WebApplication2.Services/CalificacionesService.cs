@@ -74,7 +74,7 @@ namespace WebApplication2.Services
             decimal calificacionFinal = 0;
             if (detalles.Any())
             {
-                calificacionFinal = detalles.Sum(cd => (cd.Puntos / cd.MaxPuntos) * cd.PesoEvaluacion);
+                calificacionFinal = detalles.Sum(cd => (cd.Puntos / cd.MaxPuntos) * cd.PesoEvaluacion) / 10m;
             }
 
             return (detalles, calificacionFinal);
@@ -103,7 +103,7 @@ namespace WebApplication2.Services
                 decimal aporteParcial = 0;
                 if (detalles.Any())
                 {
-                    aporteParcial = detalles.Sum(cd => (cd.Puntos / cd.MaxPuntos) * cd.PesoEvaluacion);
+                    aporteParcial = detalles.Sum(cd => (cd.Puntos / cd.MaxPuntos) * cd.PesoEvaluacion) / 10m;
                 }
 
                 resultado.Add((parcial.InscripcionId, aporteParcial));

@@ -156,7 +156,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
             PlanEstudios = estudiante.IdPlanActualNavigation?.NombrePlanEstudios ?? "N/A",
             PeriodoAcademico = periodo.Nombre,
             Campus = estudiante.IdPlanActualNavigation?.IdCampusNavigation?.Nombre,
-            Grupo = grupo?.NombreGrupo ?? grupo?.CodigoGrupo,
+            Grupo = grupo?.CodigoGrupo ?? grupo?.NombreGrupo,
             Materias = materias,
             PromedioGeneral = Math.Round(promedioGeneral, 2)
         };

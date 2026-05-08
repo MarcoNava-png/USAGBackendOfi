@@ -422,6 +422,11 @@ namespace WebApplication2.Services
                 .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante, ct)
                 ?? throw new InvalidOperationException($"No se encontró el aspirante con ID {idAspirante}");
 
+            var recibosAspirante = await _db.Recibo
+                .Include(r => r.Detalles)
+                .Where(r => r.IdAspirante == idAspirante && r.Estatus != Core.Enums.EstatusRecibo.CANCELADO && r.Status != StatusEnum.Deleted)
+                .ToListAsync(ct);
+
             var persona = aspirante.IdPersonaNavigation;
             var nombreAspirante = persona != null
                 ? $"{persona.ApellidoPaterno} {persona.ApellidoMaterno} {persona.Nombre}".Trim()
@@ -436,7 +441,6 @@ namespace WebApplication2.Services
                 return r.ToString();
             }
 
-            // Busca el primer detalle cuyo nombre o clave normalizado contiene alguna de las palabras clave
             string ObtenerValor(Func<TarifaAdmisionDetalle, bool> predicado, string valorDefecto = "N/A")
             {
                 var detalle = tarifa.Detalles.FirstOrDefault(predicado);
@@ -451,46 +455,57 @@ namespace WebApplication2.Services
                 return texto.Contains(keyword);
             }
 
+            string ObtenerNotas(Func<TarifaAdmisionDetalle, bool> predicado)
+            {
+                var detalle = tarifa.Detalles.FirstOrDefault(predicado);
+                if (detalle == null || !detalle.EsAplicable) return "";
+
+                var recibo = recibosAspirante.FirstOrDefault(r =>
+                    r.Detalles.Any(d => d.IdConceptoPago == detalle.IdConceptoPago));
+
+                if (recibo == null) return "Pendiente";
+
+                if (recibo.Descuento > 0)
+                {
+                    var pct = recibo.Subtotal > 0 ? (recibo.Descuento / recibo.Subtotal) * 100m : 0;
+                    var pctTxt = pct == 100 ? "100%" : $"{pct:F0}%";
+                    var estado = recibo.Estatus switch
+                    {
+                        Core.Enums.EstatusRecibo.PAGADO => "Pagado",
+                        Core.Enums.EstatusRecibo.VENCIDO => "Vencido",
+                        _ => "Pendiente"
+                    };
+                    return $"{estado} · Descuento {pctTxt} - ${recibo.Descuento:N2}";
+                }
+
+                return recibo.Estatus switch
+                {
+                    Core.Enums.EstatusRecibo.PAGADO => "Pagado",
+                    Core.Enums.EstatusRecibo.VENCIDO => "Vencido",
+                    _ => "Pendiente"
+                };
+            }
+
+            bool predFicha(TarifaAdmisionDetalle d) => Contiene(d, "FICHA");
+            bool predInsc(TarifaAdmisionDetalle d) => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.INSCRIPCION && !Contiene(d, "REINSC");
+            bool predReinsc(TarifaAdmisionDetalle d) => Contiene(d, "REINSC");
+            bool predExamen(TarifaAdmisionDetalle d) => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.EXAMEN;
+            bool predProp(TarifaAdmisionDetalle d) => Contiene(d, "PROP");
+            bool predColeg(TarifaAdmisionDetalle d) => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.COLEGIATURA;
+            bool predSeguro(TarifaAdmisionDetalle d) => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.SEGURO;
+            bool predCred(TarifaAdmisionDetalle d) => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.CREDENCIAL;
+
             var conceptos = new List<CotizacionConceptoDto>
             {
-                new() {
-                    Nombre = "FICHA DE ADMISIÓN",
-                    Valor  = ObtenerValor(d => Contiene(d, "FICHA"))
-                },
-                new() {
-                    Nombre = "INSCRIPCIÓN",
-                    Valor  = ObtenerValor(d =>
-                        d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.INSCRIPCION
-                        && !Contiene(d, "REINSC"))
-                },
-                new() {
-                    Nombre = "REINSCRIPCIÓN",
-                    Valor  = ObtenerValor(d => Contiene(d, "REINSC"))
-                },
-                new() {
-                    Nombre = "EXAMEN DE ADMISIÓN",
-                    Valor  = ObtenerValor(d => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.EXAMEN)
-                },
-                new() {
-                    Nombre = "PROPEDÉUTICO",
-                    Valor  = ObtenerValor(d => Contiene(d, "PROP"))
-                },
-                new() {
-                    Nombre = "MENSUALIDADES",
-                    Valor  = ObtenerValor(d => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.COLEGIATURA)
-                },
-                new() {
-                    Nombre = "SEGURO ESTUDIANTIL",
-                    Valor  = ObtenerValor(d => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.SEGURO)
-                },
-                new() {
-                    Nombre = "CREDENCIAL ESTUDIANTIL",
-                    Valor  = ObtenerValor(d => d.IdConceptoPagoNavigation?.Tipo == Core.Enums.ConceptoTipoEnum.CREDENCIAL, "No")
-                },
-                new() {
-                    Nombre = "PROMOCIÓN",
-                    Valor  = tarifa.AplicaConvenioMensualidad ? "SÍ" : "NO"
-                },
+                new() { Nombre = "FICHA DE ADMISIÓN", Valor = ObtenerValor(predFicha), Notas = ObtenerNotas(predFicha) },
+                new() { Nombre = "INSCRIPCIÓN", Valor = ObtenerValor(predInsc), Notas = ObtenerNotas(predInsc) },
+                new() { Nombre = "REINSCRIPCIÓN", Valor = ObtenerValor(predReinsc), Notas = ObtenerNotas(predReinsc) },
+                new() { Nombre = "EXAMEN DE ADMISIÓN", Valor = ObtenerValor(predExamen), Notas = ObtenerNotas(predExamen) },
+                new() { Nombre = "PROPEDÉUTICO", Valor = ObtenerValor(predProp), Notas = ObtenerNotas(predProp) },
+                new() { Nombre = "MENSUALIDADES", Valor = ObtenerValor(predColeg), Notas = ObtenerNotas(predColeg) },
+                new() { Nombre = "SEGURO ESTUDIANTIL", Valor = ObtenerValor(predSeguro), Notas = ObtenerNotas(predSeguro) },
+                new() { Nombre = "CREDENCIAL ESTUDIANTIL", Valor = ObtenerValor(predCred, "No"), Notas = ObtenerNotas(predCred) },
+                new() { Nombre = "PROMOCIÓN", Valor = tarifa.AplicaConvenioMensualidad ? "SÍ" : "NO" },
             };
 
             return new CotizacionAdmisionPdfDto

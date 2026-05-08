@@ -28,6 +28,7 @@ namespace WebApplication2.Core.DTOs.TarifaAdmision
         public decimal MontoDescuento { get; set; }
         public decimal MontoFinal { get; set; }
         public bool Incluido { get; set; } = true;
+        public string? Notas { get; set; }
     }
 
     public class CotizacionAdmisionRequestDto

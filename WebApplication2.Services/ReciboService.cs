@@ -1554,6 +1554,8 @@ namespace WebApplication2.Services
             var detalleDesc = porcentaje.HasValue
                 ? $"{porcentaje.Value}% (={nuevoDescuento:F2})"
                 : $"${nuevoDescuento:F2}";
+
+            recibo.Notas = $"Descuento aplicado: {detalleDesc}" + (string.IsNullOrWhiteSpace(motivo) ? "" : $". Motivo: {motivo}");
             var bitacora = new BitacoraRecibo
             {
                 IdRecibo = recibo.IdRecibo,

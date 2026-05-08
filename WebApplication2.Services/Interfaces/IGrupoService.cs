@@ -41,7 +41,7 @@ namespace WebApplication2.Services.Interfaces
 
         Task<GrupoMateria> AgregarMateriaAlGrupoAsync(int idGrupo, int idMateriaPlan, int? idProfesor = null, string? aula = null, short? cupo = null, CancellationToken ct = default);
 
-        Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, CancellationToken ct = default);
+        Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, bool forzar = false, CancellationToken ct = default);
 
         Task<Core.DTOs.Grupo.SincronizacionInscripcionesResultDto> SincronizarInscripcionesGrupoAsync(int idGrupo, CancellationToken ct = default);
 
