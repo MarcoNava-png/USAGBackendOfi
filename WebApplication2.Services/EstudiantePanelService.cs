@@ -659,7 +659,7 @@ namespace WebApplication2.Services
                 return new AccionPanelResponse
                 {
                     Exitoso = false,
-                    Mensaje = "Formato de matrícula inválido. Debe ser 1-3 letras mayúsculas seguidas de 6 dígitos."
+                    Mensaje = "Formato de matrícula inválido. Debe ser 1-3 letras mayúsculas seguidas de 5 dígitos."
                 };
             }
 

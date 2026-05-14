@@ -17,30 +17,35 @@ namespace WebApplication2.Services
         public async Task<string> GenerarMatriculaAsync(string nombrePlanEstudios)
         {
             var prefijo = ObtenerPrefijo(nombrePlanEstudios);
+            var prefijoEscapado = Regex.Escape(prefijo);
 
-            var ultimaMatricula = await _dbContext.Estudiante
+            var matriculas = await _dbContext.Estudiante
                 .Where(e => e.Matricula.StartsWith(prefijo))
-                .OrderByDescending(e => e.Matricula)
                 .Select(e => e.Matricula)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
 
             int siguienteNumero = 1;
 
-            if (ultimaMatricula != null)
-            {
-                var numeroStr = ultimaMatricula.Substring(prefijo.Length);
-                if (int.TryParse(numeroStr, out int numero))
+            var numerosUsados = matriculas
+                .Select(m =>
                 {
-                    siguienteNumero = numero + 1;
-                }
+                    var match = Regex.Match(m, $"^{prefijoEscapado}(\\d{{5,6}})$");
+                    return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : -1;
+                })
+                .Where(n => n > 0)
+                .ToList();
+
+            if (numerosUsados.Count > 0)
+            {
+                siguienteNumero = numerosUsados.Max() + 1;
             }
 
-            var nuevaMatricula = $"{prefijo}{siguienteNumero:D6}";
+            var nuevaMatricula = $"{prefijo}{siguienteNumero:D5}";
 
             while (await ExisteMatriculaAsync(nuevaMatricula))
             {
                 siguienteNumero++;
-                nuevaMatricula = $"{prefijo}{siguienteNumero:D6}";
+                nuevaMatricula = $"{prefijo}{siguienteNumero:D5}";
             }
 
             return nuevaMatricula;
@@ -54,7 +59,11 @@ namespace WebApplication2.Services
             var nombre = nombrePlanEstudios.ToUpperInvariant().Trim();
 
             if (nombre.Contains("BACHILLERATO"))
+            {
+                if (nombre.Contains("TECNOL") || nombre.Contains("TÉCNICA") || nombre.Contains("TECNICA"))
+                    return "LBT";
                 return "B";
+            }
 
             if (nombre.Contains("AUXILIAR"))
                 return "LA";
@@ -73,10 +82,9 @@ namespace WebApplication2.Services
             if (nombre.Contains("TÉCNICO SUPERIOR UNIVERSITARIO") || nombre.Contains("TSU"))
                 return "T";
 
-            if (nombre.Contains("ESPECIALIDAD"))
-                return "E";
-
-            if (nombre.Contains("LICENCIATURA") || nombre.Contains("LIC."))
+            if (nombre.Contains("ESPECIALIDAD") ||
+                nombre.Contains("LICENCIATURA") ||
+                nombre.Contains("LIC."))
                 return "L";
 
             return "L";
@@ -87,15 +95,22 @@ namespace WebApplication2.Services
             if (string.IsNullOrWhiteSpace(matricula))
                 return false;
 
-            var regex = new Regex(@"^[A-Z]{1,3}\d{6}$");
+            var regex = new Regex(@"^[A-Z]{1,3}\d{5}$");
             return regex.IsMatch(matricula);
         }
 
-        public async Task<bool> ExisteMatriculaAsync(string matricula, int? excluirEstudianteId = null)
+        public async Task<bool> ExisteMatriculaAsync(
+            string matricula,
+            int? excluirEstudianteId = null)
         {
-            var query = _dbContext.Estudiante.Where(e => e.Matricula == matricula);
+            var query = _dbContext.Estudiante
+                .Where(e => e.Matricula == matricula);
+
             if (excluirEstudianteId.HasValue)
+            {
                 query = query.Where(e => e.IdEstudiante != excluirEstudianteId.Value);
+            }
+
             return await query.AnyAsync();
         }
     }
