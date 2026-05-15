@@ -1000,16 +1000,17 @@ namespace WebApplication2.Services
                 var validaciones = new ValidacionesInscripcionDto();
                 var advertencias = new List<string>();
 
-                var estatusValido = aspirante.IdAspiranteEstatusNavigation?.DescEstatus == "En Proceso";
+                var descEstatus = aspirante.IdAspiranteEstatusNavigation?.DescEstatus;
+                var estatusValido = descEstatus == "En Proceso" || descEstatus == "Pagado";
                 validaciones.EstatusAspiranteValido = estatusValido;
                 if (!estatusValido && !request.ForzarInscripcion)
                 {
                     throw new InvalidOperationException(
-                        $"El aspirante debe estar en estatus 'En Proceso' para ser inscrito. " +
-                        $"Estatus actual: {aspirante.IdAspiranteEstatusNavigation?.DescEstatus}");
+                        $"El aspirante debe estar en estatus 'En Proceso' o 'Pagado' para ser inscrito. " +
+                        $"Estatus actual: {descEstatus}");
                 }
                 if (!estatusValido)
-                    advertencias.Add($"Estatus del aspirante: {aspirante.IdAspiranteEstatusNavigation?.DescEstatus} (se forzo la inscripcion)");
+                    advertencias.Add($"Estatus del aspirante: {descEstatus} (se forzo la inscripcion)");
 
                 var documentosObligatorios = aspirante.Documentos
                     .Where(d => d.Requisito != null && d.Requisito.EsObligatorio)
