@@ -255,27 +255,37 @@ public class MicrosoftGraphService : IMicrosoftGraphService
     {
         try
         {
-            var users = await _graphClient.Users
+            var result = new List<UserInfoDto>();
+
+            var page = await _graphClient.Users
                 .GetAsync(config =>
                 {
-                    config.QueryParameters.Top = top;
+                    config.QueryParameters.Top = 999;
                     config.QueryParameters.Select = new[]
                     {
                         "id", "displayName", "mail", "userPrincipalName", "jobTitle", "department"
                     };
                 }, ct);
 
-            if (users?.Value == null)
-                return new List<UserInfoDto>();
+            if (page?.Value == null)
+                return result;
 
-            return users.Value.Select(u => new UserInfoDto
-            {
-                Id = u.Id ?? "",
-                DisplayName = u.DisplayName,
-                Email = u.Mail ?? u.UserPrincipalName,
-                JobTitle = u.JobTitle,
-                Department = u.Department
-            }).ToList();
+            var iterator = PageIterator<User, UserCollectionResponse>
+                .CreatePageIterator(_graphClient.RequestAdapter, page, u =>
+                {
+                    result.Add(new UserInfoDto
+                    {
+                        Id = u.Id ?? "",
+                        DisplayName = u.DisplayName,
+                        Email = u.Mail ?? u.UserPrincipalName,
+                        JobTitle = u.JobTitle,
+                        Department = u.Department
+                    });
+                    return result.Count < top;
+                });
+
+            await iterator.IterateAsync(ct);
+            return result;
         }
         catch (Exception ex)
         {

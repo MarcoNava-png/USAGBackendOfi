@@ -78,7 +78,22 @@ namespace WebApplication2.Services
             _graphService = graphService;
         }
 
-        public async Task<PagedResult<Aspirante>> GetAspirantes(int page, int pageSize, string filter, string? createdBy = null)
+        public async Task<PagedResult<Aspirante>> GetAspirantes(
+            int page,
+            int pageSize,
+            string filter,
+            string? createdBy = null,
+            int? idPeriodoAcademico = null,
+            bool soloSinPeriodo = false,
+            List<string>? estatusList = null,
+            DateOnly? fechaRegistroDesde = null,
+            DateOnly? fechaRegistroHasta = null,
+            List<string>? estatusPagoList = null,
+            List<string>? estatusDocumentosList = null,
+            List<int>? idsPlan = null,
+            string? accionTipo = null,
+            int? idCampusRestringido = null,
+            bool soloOcultos = false)
         {
             var baseQuery = _dbContext.Aspirante
                 .Include(a => a.IdPlanNavigation)
@@ -95,6 +110,15 @@ namespace WebApplication2.Services
                 baseQuery = baseQuery.Where(a => a.CreatedBy == createdBy);
             }
 
+            if (soloSinPeriodo)
+            {
+                baseQuery = baseQuery.Where(a => a.IdPeriodoAcademico == null);
+            }
+            else if (idPeriodoAcademico.HasValue)
+            {
+                baseQuery = baseQuery.Where(a => a.IdPeriodoAcademico == idPeriodoAcademico.Value);
+            }
+
             if (!string.IsNullOrWhiteSpace(filter))
             {
                 var filterLower = filter.ToLower();
@@ -108,17 +132,105 @@ namespace WebApplication2.Services
                     (a.IdPersonaNavigation.Nombre + " " + a.IdPersonaNavigation.ApellidoPaterno + " " + (a.IdPersonaNavigation.ApellidoMaterno ?? "")).ToLower().Contains(filterLower));
             }
 
-            baseQuery = baseQuery.Where(a => a.Status != Core.Enums.StatusEnum.Deleted);
+            baseQuery = soloOcultos
+                ? baseQuery.Where(a => a.Status == Core.Enums.StatusEnum.Deleted)
+                : baseQuery.Where(a => a.Status != Core.Enums.StatusEnum.Deleted);
+
+            baseQuery = baseQuery.Where(a => !a.EsAlumnoAutoCreado);
+
+            if (idCampusRestringido.HasValue)
+                baseQuery = baseQuery.Where(a => a.IdPlanNavigation.IdCampus == idCampusRestringido.Value);
 
             baseQuery = baseQuery.Where(a =>
                 a.IdAspiranteEstatusNavigation == null ||
                 a.IdAspiranteEstatusNavigation.DescEstatus != "Cancelado");
 
-            baseQuery = baseQuery.Where(a =>
-                a.IdPersona == null ||
-                !_dbContext.Estudiante.Any(e =>
-                    e.Activo && e.IdPersona == a.IdPersona.Value && e.IdPlanActual == a.IdPlan) ||
-                (a.IdAspiranteEstatusNavigation != null && a.IdAspiranteEstatusNavigation.DescEstatus == "Inscrito"));
+            if (estatusList != null && estatusList.Count > 0)
+            {
+                baseQuery = baseQuery.Where(a =>
+                    a.IdAspiranteEstatusNavigation != null &&
+                    estatusList.Contains(a.IdAspiranteEstatusNavigation.DescEstatus));
+            }
+
+            if (idsPlan != null && idsPlan.Count > 0)
+            {
+                baseQuery = baseQuery.Where(a => idsPlan.Contains(a.IdPlan));
+            }
+
+            if (!string.IsNullOrWhiteSpace(accionTipo))
+            {
+                if (accionTipo == "inscritos")
+                {
+                    baseQuery = baseQuery.Where(a =>
+                        a.IdAspiranteEstatusNavigation != null &&
+                        a.IdAspiranteEstatusNavigation.DescEstatus == "Inscrito");
+                }
+                else if (accionTipo == "pendientes")
+                {
+                    baseQuery = baseQuery.Where(a =>
+                        a.IdAspiranteEstatusNavigation == null ||
+                        a.IdAspiranteEstatusNavigation.DescEstatus != "Inscrito");
+                }
+            }
+
+            if (fechaRegistroDesde.HasValue)
+            {
+                var desde = fechaRegistroDesde.Value.ToDateTime(TimeOnly.MinValue);
+                baseQuery = baseQuery.Where(a => a.FechaRegistro >= desde);
+            }
+            if (fechaRegistroHasta.HasValue)
+            {
+                var hasta = fechaRegistroHasta.Value.ToDateTime(TimeOnly.MaxValue);
+                baseQuery = baseQuery.Where(a => a.FechaRegistro <= hasta);
+            }
+
+            if (estatusDocumentosList != null && estatusDocumentosList.Count > 0)
+            {
+                var docsQuery = _dbContext.AspiranteDocumento.AsQueryable();
+                var quiereValidado = estatusDocumentosList.Contains("VALIDADO");
+                var quiereCompleto = estatusDocumentosList.Contains("COMPLETO");
+                var quiereIncompleto = estatusDocumentosList.Contains("INCOMPLETO");
+
+                baseQuery = baseQuery.Where(a =>
+                    (quiereValidado &&
+                        docsQuery.Any(d => d.IdAspirante == a.IdAspirante) &&
+                        docsQuery.Where(d => d.IdAspirante == a.IdAspirante).All(d => d.Estatus == Core.Enums.EstatusDocumentoEnum.VALIDADO))
+                    ||
+                    (quiereCompleto &&
+                        docsQuery.Any(d => d.IdAspirante == a.IdAspirante) &&
+                        docsQuery.Where(d => d.IdAspirante == a.IdAspirante).All(d => d.Estatus == Core.Enums.EstatusDocumentoEnum.SUBIDO || d.Estatus == Core.Enums.EstatusDocumentoEnum.VALIDADO) &&
+                        docsQuery.Where(d => d.IdAspirante == a.IdAspirante).Any(d => d.Estatus != Core.Enums.EstatusDocumentoEnum.VALIDADO))
+                    ||
+                    (quiereIncompleto &&
+                        (!docsQuery.Any(d => d.IdAspirante == a.IdAspirante) ||
+                         docsQuery.Where(d => d.IdAspirante == a.IdAspirante).Any(d => d.Estatus != Core.Enums.EstatusDocumentoEnum.SUBIDO && d.Estatus != Core.Enums.EstatusDocumentoEnum.VALIDADO))));
+            }
+
+            if (estatusPagoList != null && estatusPagoList.Count > 0)
+            {
+                var recibosQuery = _dbContext.Recibo.Where(r => r.Status == Core.Enums.StatusEnum.Active && r.IdAspirante != null).AsQueryable();
+                var quierePagado = estatusPagoList.Contains("PAGADO");
+                var quiereParcial = estatusPagoList.Contains("PARCIAL");
+                var quierePendiente = estatusPagoList.Contains("PENDIENTE");
+                var quiereSinRecibo = estatusPagoList.Contains("SIN_RECIBO");
+
+                baseQuery = baseQuery.Where(a =>
+                    (quierePagado &&
+                        recibosQuery.Any(r => r.IdAspirante == a.IdAspirante) &&
+                        recibosQuery.Where(r => r.IdAspirante == a.IdAspirante).Sum(r => r.Saldo) == 0)
+                    ||
+                    (quiereParcial &&
+                        recibosQuery.Any(r => r.IdAspirante == a.IdAspirante) &&
+                        recibosQuery.Where(r => r.IdAspirante == a.IdAspirante).Sum(r => r.Saldo) > 0 &&
+                        recibosQuery.Where(r => r.IdAspirante == a.IdAspirante).Sum(r => r.Saldo) < recibosQuery.Where(r => r.IdAspirante == a.IdAspirante).Sum(r => r.Total))
+                    ||
+                    (quierePendiente &&
+                        recibosQuery.Any(r => r.IdAspirante == a.IdAspirante) &&
+                        recibosQuery.Where(r => r.IdAspirante == a.IdAspirante).Sum(r => r.Saldo) >= recibosQuery.Where(r => r.IdAspirante == a.IdAspirante).Sum(r => r.Total))
+                    ||
+                    (quiereSinRecibo &&
+                        !recibosQuery.Any(r => r.IdAspirante == a.IdAspirante)));
+            }
 
             var totalItems = await baseQuery.CountAsync();
 
@@ -126,6 +238,8 @@ namespace WebApplication2.Services
                 .OrderByDescending(a => a.IdAspirante)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .AsSplitQuery()
+                .AsNoTracking()
                 .ToListAsync();
 
             return new PagedResult<Aspirante>
@@ -142,12 +256,8 @@ namespace WebApplication2.Services
             var query = _dbContext.Aspirante
                 .Include(a => a.IdAspiranteEstatusNavigation)
                 .Where(a => a.Status != Core.Enums.StatusEnum.Deleted)
-                .Where(a => a.IdAspiranteEstatusNavigation == null || a.IdAspiranteEstatusNavigation.DescEstatus != "Cancelado")
-                .Where(a =>
-                    a.IdPersona == null ||
-                    !_dbContext.Estudiante.Any(e =>
-                        e.Activo && e.IdPersona == a.IdPersona.Value && e.IdPlanActual == a.IdPlan) ||
-                    (a.IdAspiranteEstatusNavigation != null && a.IdAspiranteEstatusNavigation.DescEstatus == "Inscrito"));
+                .Where(a => !a.EsAlumnoAutoCreado)
+                .Where(a => a.IdAspiranteEstatusNavigation == null || a.IdAspiranteEstatusNavigation.DescEstatus != "Cancelado");
 
             var grupos = await query
                 .GroupBy(a => a.IdAspiranteEstatusNavigation != null ? a.IdAspiranteEstatusNavigation.DescEstatus : "Sin estatus")
@@ -210,7 +320,7 @@ namespace WebApplication2.Services
             if (!string.IsNullOrWhiteSpace(curp))
             {
                 personaExistente = await _dbContext.Persona
-                    .FirstOrDefaultAsync(p => p.Curp == curp);
+                    .FirstOrDefaultAsync(p => p.Curp!.ToUpper() == curp.ToUpper());
 
                 if (personaExistente != null)
                 {
@@ -232,26 +342,6 @@ namespace WebApplication2.Services
                         infoExtra = $" Nota: Esta persona tiene un registro de estudiante activo en '{estudianteActivo.IdPlanActualNavigation?.NombrePlanEstudios ?? "N/A"}' con matrícula {estudianteActivo.Matricula}.";
 
                     aspirante.IdPersona = personaExistente.IdPersona;
-                    aspirante.IdPersonaNavigation = null;
-                }
-            }
-
-            if (personaExistente == null && !string.IsNullOrWhiteSpace(correo))
-            {
-                var personaPorCorreo = await _dbContext.Persona
-                    .FirstOrDefaultAsync(p => p.Correo == correo);
-
-                if (personaPorCorreo != null)
-                {
-                    var aspiranteExistenteMismoPlan = await _dbContext.Aspirante
-                        .FirstOrDefaultAsync(a => a.IdPersona == personaPorCorreo.IdPersona
-                            && a.IdPlan == aspirante.IdPlan
-                            && a.Status == Core.Enums.StatusEnum.Active);
-
-                    if (aspiranteExistenteMismoPlan != null)
-                        throw new Exception($"Ya existe un aspirante activo con este correo en el mismo plan de estudios.");
-
-                    aspirante.IdPersona = personaPorCorreo.IdPersona;
                     aspirante.IdPersonaNavigation = null;
                 }
             }
@@ -519,15 +609,10 @@ namespace WebApplication2.Services
             if (aspirante == null)
                 return false;
 
-            var estatusRechazado = await _dbContext.AspiranteEstatus
-                .FirstOrDefaultAsync(e => e.DescEstatus == "Rechazado");
+            var estatusAnterior = aspirante.IdAspiranteEstatusNavigation?.DescEstatus ?? "N/A";
 
-            if (estatusRechazado == null)
-                throw new InvalidOperationException("No se encontro el estatus 'Rechazado' en el catalogo");
-
-            var estatusAnterior = aspirante.IdAspiranteEstatusNavigation.DescEstatus;
-
-            aspirante.IdAspiranteEstatus = estatusRechazado.IdAspiranteEstatus;
+            aspirante.Status = Core.Enums.StatusEnum.Deleted;
+            aspirante.UpdatedAt = DateTime.UtcNow;
             _dbContext.Aspirante.Update(aspirante);
 
             var seguimiento = new AspiranteBitacoraSeguimiento
@@ -1047,20 +1132,25 @@ namespace WebApplication2.Services
                     advertencias.Add($"Documentos incompletos: {documentosValidados}/{documentosObligatorios.Count} (se forzo la inscripcion)");
 
                 var recibos = await _dbContext.Recibo
-                    .Where(r => r.IdAspirante == aspiranteId)
+                    .Where(r => r.IdAspirante == aspiranteId
+                        && r.Status != Core.Enums.StatusEnum.Deleted
+                        && r.Estatus != EstatusRecibo.CANCELADO)
                     .ToListAsync();
 
                 var todosPagados = recibos.All(r => r.Estatus == EstatusRecibo.PAGADO);
-                validaciones.PagoInscripcionRealizado = todosPagados || !recibos.Any();
+                validaciones.PagoInscripcionRealizado = recibos.Any() && todosPagados;
 
-                if (!validaciones.PagoInscripcionRealizado && !request.ForzarInscripcion)
+                if (!recibos.Any())
                 {
-                    var recibosPendientes = recibos.Where(r => r.Estatus != EstatusRecibo.PAGADO).Count();
                     throw new InvalidOperationException(
-                        $"El aspirante tiene {recibosPendientes} recibo(s) pendiente(s) de pago");
+                        "El aspirante no tiene recibos generados. Aplique una tarifa de admisión y registre el pago antes de inscribirlo. Esta validación NO se puede forzar.");
                 }
-                if (!validaciones.PagoInscripcionRealizado)
-                    advertencias.Add("Existen recibos pendientes de pago (se forzo la inscripcion)");
+                if (!todosPagados)
+                {
+                    var recibosPendientes = recibos.Count(r => r.Estatus != EstatusRecibo.PAGADO);
+                    throw new InvalidOperationException(
+                        $"El aspirante tiene {recibosPendientes} recibo(s) pendiente(s) de pago. Esta validación NO se puede forzar.");
+                }
 
                 validaciones.Advertencias = advertencias;
 
@@ -1482,6 +1572,33 @@ namespace WebApplication2.Services
             return true;
         }
 
+        public async Task<bool> MostrarAspiranteAsync(int idAspirante, string usuarioId)
+        {
+            var aspirante = await _dbContext.Aspirante
+                .FirstOrDefaultAsync(a => a.IdAspirante == idAspirante);
+
+            if (aspirante == null)
+                return false;
+
+            aspirante.Status = Core.Enums.StatusEnum.Active;
+            _dbContext.Aspirante.Update(aspirante);
+
+            var seguimiento = new AspiranteBitacoraSeguimiento
+            {
+                AspiranteId = idAspirante,
+                UsuarioAtiendeId = usuarioId,
+                Fecha = DateTime.UtcNow,
+                MedioContacto = "Sistema",
+                Resumen = "Aspirante restaurado al listado",
+                ProximaAccion = "N/A"
+            };
+
+            await _dbContext.AspiranteBitacoraSeguimiento.AddAsync(seguimiento);
+            await _dbContext.SaveChangesAsync();
+
+            return true;
+        }
+
         public async Task<ComisionReporteDto> CalcularComisionesAsync(
             DateTime fechaDesde, DateTime fechaHasta, decimal comisionPorRegistro, decimal porcentajePorPago, string? filtrarPorUsuarioId = null)
         {
@@ -1636,6 +1753,7 @@ namespace WebApplication2.Services
             var aspirante = await _dbContext.Aspirante
                 .Include(a => a.IdPersonaNavigation)
                 .Include(a => a.IdPlanNavigation)
+                    .ThenInclude(p => p.IdCampusNavigation)
                 .Include(a => a.IdPeriodoAcademicoNavigation)
                 .Include(a => a.Turno)
                 .FirstOrDefaultAsync(a => a.IdAspirante == aspiranteId, ct);
@@ -1658,6 +1776,7 @@ namespace WebApplication2.Services
                 IdPlanEstudios = plan.IdPlanEstudios,
                 NombrePlanEstudios = plan.NombrePlanEstudios,
                 ClavePlanEstudios = plan.ClavePlanEstudios,
+                Campus = plan.IdCampusNavigation?.Nombre,
                 IdPeriodoAcademico = aspirante.IdPeriodoAcademico,
                 NombrePeriodoAcademico = aspirante.IdPeriodoAcademicoNavigation?.Nombre,
                 IdTurnoAspirante = aspirante.TurnoId,

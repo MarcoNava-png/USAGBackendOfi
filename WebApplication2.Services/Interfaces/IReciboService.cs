@@ -29,6 +29,8 @@ namespace WebApplication2.Services.Interfaces
 
         Task<ReciboBusquedaResultadoDto> BuscarRecibosAsync(ReciboBusquedaFiltrosDto filtros, CancellationToken ct);
 
+        Task<PeriodosConRecibosDto> GetPeriodosConRecibosAsync(CancellationToken ct);
+
         Task<ReciboEstadisticasDto> ObtenerEstadisticasAsync(int? idPeriodoAcademico, CancellationToken ct);
 
         Task<ReciboBusquedaResultadoDto> BuscarPorMatriculaAsync(string matricula, CancellationToken ct);

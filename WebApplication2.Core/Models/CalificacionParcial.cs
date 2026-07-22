@@ -17,8 +17,8 @@ namespace WebApplication2.Core.Models
         public int ParcialId { get;set; }
         public Inscripcion Inscripcion { get; set; }
         public int InscripcionId { get; set; }
-        public Profesor Profesor { get; set; }  
-        public int ProfesorId { get; set;}
+        public Profesor? Profesor { get; set; }
+        public int? ProfesorId { get; set;}
         public StatusParcialEnum StatusParcial { get; set; }
         public DateTime FechaApertura { get; set; }
         public DateTime FechaCierre { get; set; }

@@ -141,7 +141,7 @@ namespace WebApplication2.Services
                 var estudiante = await db.Estudiante.FirstOrDefaultAsync(e => e.IdEstudiante == estudianteId, ct);
                 if (estudiante == null || string.IsNullOrEmpty(estudiante.Email)) continue;
 
-                var user = await db.Users.FirstOrDefaultAsync(u => u.Email == estudiante.Email, ct);
+                var user = await db.Users.FirstOrDefaultAsync(u => u.Email!.ToLower() == estudiante.Email!.ToLower(), ct);
                 if (user == null) continue;
 
                 var folio = recibo.Folio ?? $"REC-{recibo.IdRecibo}";

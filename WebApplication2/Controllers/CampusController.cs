@@ -18,12 +18,14 @@ namespace WebApplication2.Controllers
         private readonly ICampusService _campusService;
         private readonly IAuthService _authService;
         private readonly IMapper _mapper;
+        private readonly WebApplication2.Services.IPlanLimiteService _planLimiteService;
 
-        public CampusController(ICampusService CampusService, IAuthService authService, IMapper mapper)
+        public CampusController(ICampusService CampusService, IAuthService authService, IMapper mapper, WebApplication2.Services.IPlanLimiteService planLimiteService)
         {
             _campusService = CampusService;
             _authService = authService;
             _mapper = mapper;
+            _planLimiteService = planLimiteService;
         }
 
         [HttpGet]
@@ -32,12 +34,24 @@ namespace WebApplication2.Controllers
         {
             var pagination = await _campusService.GetCampuses(page, pageSize);
 
-            var CampusesDto = _mapper.Map<IEnumerable<CampusDto>>(pagination.Items);
+            var campusesDto = _mapper.Map<IEnumerable<CampusDto>>(pagination.Items).ToList();
+            var totalItems = pagination.TotalItems;
+
+            var userId = User.FindFirst("userId")?.Value;
+            if ((User.IsInRole(Rol.DIRECTOR) || User.IsInRole(Rol.COORDINADOR)) && !string.IsNullOrEmpty(userId))
+            {
+                var currentUser = await _authService.GetUserById(userId);
+                if (currentUser?.IdCampusAsignado != null)
+                {
+                    campusesDto = campusesDto.Where(c => c.IdCampus == currentUser.IdCampusAsignado.Value).ToList();
+                    totalItems = campusesDto.Count;
+                }
+            }
 
             var response = new PagedResult<CampusDto>
             {
-                TotalItems = pagination.TotalItems,
-                Items = [.. CampusesDto],
+                TotalItems = totalItems,
+                Items = campusesDto,
                 PageNumber = pagination.PageNumber,
                 PageSize = pagination.PageSize
             };
@@ -66,6 +80,10 @@ namespace WebApplication2.Controllers
         {
             try
             {
+                var limiteError = await _planLimiteService.ValidarPuedeCrearCampusAsync();
+                if (limiteError != null)
+                    return BadRequest(new { message = limiteError });
+
                 var newCampus = _mapper.Map<Campus>(request);
 
                 var campus = await _campusService.CrearCampus(newCampus);

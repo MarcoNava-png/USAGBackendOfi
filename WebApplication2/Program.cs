@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,11 @@ using WebApplication2.Data.DbContexts;
 using WebApplication2.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// PostgreSQL: aceptar DateTime con Kind=Unspecified en columnas 'timestamp with time zone'.
+// Necesario porque el código construye fechas con new DateTime(...)/.Date (Kind=Unspecified)
+// para filtrar por columnas FechaXxx. SQL Server no distingue Kind; Npgsql sí lo exige.
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var questPdfTempPath = Environment.GetEnvironmentVariable("QUESTPDF_TEMP_PATH") ?? "/app/tmp";
 Directory.CreateDirectory(questPdfTempPath);
@@ -125,15 +131,24 @@ if (string.IsNullOrWhiteSpace(conn))
 
 var dbProvider = builder.Configuration["DatabaseProvider"] ?? "SqlServer";
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
 {
+    var tenantContext = sp.GetService<ITenantContextAccessor>()?.TenantContext;
+    var effectiveConn = !string.IsNullOrWhiteSpace(tenantContext?.ConnectionString)
+        ? tenantContext!.ConnectionString
+        : conn;
+
     if (dbProvider == "PostgreSQL")
-        options.UseNpgsql(conn);
+        options.UseNpgsql(effectiveConn, npgsql => npgsql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
     else
-        options.UseSqlServer(conn);
+        options.UseSqlServer(effectiveConn, sql => sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
 
     options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 });
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/app/dpkeys"))
+    .SetApplicationName("usag-saci");
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -188,10 +203,13 @@ builder.Services.AddAuthentication(x =>
 
 
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IEstudioSocioeconomicoService, EstudioSocioeconomicoService>();
+builder.Services.AddScoped<IDiagnosticoInscripcionService, DiagnosticoInscripcionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAccesoAlumnoDocenteService, AccesoAlumnoDocenteService>();
 builder.Services.AddScoped<IComprobanteInscripcionService, ComprobanteInscripcionService>();
 builder.Services.AddScoped<IProfesorService, ProfesorService>();
+builder.Services.AddScoped<IVentanaCapturaService, VentanaCapturaService>();
 builder.Services.AddScoped<IDirectorService, DirectorService>();
 builder.Services.AddScoped<ICoordinadorService, CoordinadorService>();
 builder.Services.AddScoped<IUbicacionService, UbicacionService>();
@@ -215,6 +233,7 @@ builder.Services.AddScoped<IEstudiantePanelService, EstudiantePanelService>();
 builder.Services.AddScoped<IPlanEstudioService, PlanEstudiosService>();
 builder.Services.AddScoped<IDepartamentoService, DepartamentoService>();
 builder.Services.AddScoped<IInscripcionService, InscripcionService>();
+builder.Services.AddScoped<IPreInscripcionService, PreInscripcionService>();
 builder.Services.AddScoped<IPeriodoAcademicoService, PeriodoAcademicoService>();
 
 builder.Services.AddScoped<IGrupoService, GrupoService>(sp =>
@@ -224,7 +243,9 @@ builder.Services.AddScoped<IGrupoService, GrupoService>(sp =>
     var estudianteService = sp.GetRequiredService<IEstudianteService>();
     var periodoAcademicoService = sp.GetRequiredService<IPeriodoAcademicoService>();
     var matriculaService = sp.GetRequiredService<IMatriculaService>();
-    return new GrupoService(dbContext, inscripcionService, estudianteService, periodoAcademicoService, matriculaService);
+    var accesoService = sp.GetRequiredService<IAccesoAlumnoDocenteService>();
+    var graphService = sp.GetRequiredService<IMicrosoftGraphService>();
+    return new GrupoService(dbContext, inscripcionService, estudianteService, periodoAcademicoService, matriculaService, accesoService, graphService);
 });
 
 builder.Services.AddScoped<ICampusService, CampusService>();
@@ -236,6 +257,10 @@ builder.Services.AddScoped<ICalificacionesService, CalificacionesService>();
 builder.Services.AddScoped<IAsistenciaService, AsistenciaService>();
 builder.Services.AddScoped<ICatalogoService, CatalogoService>();
 builder.Services.AddScoped<IReciboService, ReciboService>();
+builder.Services.AddScoped<IInstitucionProvider, InstitucionProvider>();
+builder.Services.AddScoped<IPlanLimiteService, PlanLimiteService>();
+builder.Services.AddScoped<IReporteBuilderService, ReporteBuilderService>();
+builder.Services.AddScoped<IConfiguracionCalificacionesService, ConfiguracionCalificacionesService>();
 builder.Services.AddScoped<IAspiranteDocumentoService, AspiranteDocumentoService>();
 builder.Services.AddScoped<IConceptoService, ConceptoService>();
 builder.Services.AddScoped<IPagoService, PagoService>();
@@ -262,8 +287,12 @@ builder.Services.AddScoped<ITicketSoporteService, TicketSoporteService>();
 builder.Services.AddScoped<IConfiguracionTitulacionService, ConfiguracionTitulacionService>();
 builder.Services.AddScoped<ICertificadoElectronicoService, CertificadoElectronicoService>();
 builder.Services.AddScoped<ICertificadoXmlService, CertificadoXmlService>();
+builder.Services.AddScoped<ITituloElectronicoXmlService, TituloElectronicoXmlService>();
+builder.Services.AddScoped<ITitulosElectronicosSepService, TitulosElectronicosSepService>();
 builder.Services.AddScoped<IPlantillaReporteService, PlantillaReporteService>();
+builder.Services.AddScoped<IFormatoDatosService, FormatoDatosService>();
 builder.Services.AddHostedService<TareasAutomaticasService>();
+builder.Services.AddHostedService<WebApplication2.Services.MultiTenant.SuscripcionTenantMonitor>();
 
 
 var masterConn = builder.Configuration.GetConnectionString("MasterConnection") ?? conn;
@@ -338,6 +367,32 @@ app.UseRateLimiter();
 app.UseTenantMiddleware();
 
 app.UseAuthentication();
+
+app.Use(async (context, next) =>
+{
+    if (context.User?.Identity?.IsAuthenticated == true)
+    {
+        var tokenTenant = context.User.FindFirst("tenant")?.Value;
+        var currentTenant = context.RequestServices
+            .GetService<WebApplication2.Services.MultiTenant.ITenantContextAccessor>()?.TenantContext;
+
+        if (!string.IsNullOrEmpty(tokenTenant) && currentTenant != null &&
+            !string.Equals(tokenTenant, currentTenant.Codigo, StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Sesión de otra institución",
+                message = "Tu sesión pertenece a otra institución. Vuelve a iniciar sesión.",
+                code = "TENANT_MISMATCH"
+            });
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.UseAuthorization();
 
 app.MapControllers();

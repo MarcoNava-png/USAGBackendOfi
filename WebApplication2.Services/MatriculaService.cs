@@ -65,6 +65,9 @@ namespace WebApplication2.Services
                 return "B";
             }
 
+            if (nombre.Contains("PREPARATORIA") || nombre.Contains("PREPA"))
+                return "B";
+
             if (nombre.Contains("AUXILIAR"))
                 return "LA";
 
@@ -75,12 +78,11 @@ namespace WebApplication2.Services
                 nombre.Contains("INGENIERÍA INDUSTRIAL") ||
                 nombre.Contains("PEDAGOGÍA") ||
                 nombre.Contains("PSICOLOGÍA") ||
-                nombre.Contains("DERECHO") ||
-                nombre.Contains("TRABAJO SOCIAL"))
+                nombre.Contains("DERECHO"))
                 return "LC";
 
             if (nombre.Contains("TÉCNICO SUPERIOR UNIVERSITARIO") || nombre.Contains("TSU"))
-                return "T";
+                return "L";
 
             if (nombre.Contains("ESPECIALIDAD") ||
                 nombre.Contains("LICENCIATURA") ||

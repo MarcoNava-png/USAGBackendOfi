@@ -202,13 +202,26 @@ public class SuperAdminAuthController : ControllerBase
     }
 
     [HttpPost("reset-password")]
-    [AllowAnonymous]
+    [Authorize(Roles = "SuperAdmin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> ResetPassword(
         [FromBody] ResetPasswordRequest request,
         CancellationToken ct)
     {
+        var currentIdClaim = User.FindFirst("superAdminId")?.Value;
+        if (string.IsNullOrEmpty(currentIdClaim) || !int.TryParse(currentIdClaim, out int currentId))
+        {
+            return Unauthorized();
+        }
+
+        var currentAdmin = await _masterDb.SuperAdmins.FindAsync(new object[] { currentId }, ct);
+        if (currentAdmin == null || !currentAdmin.Activo || !currentAdmin.AccesoTotal)
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.NewPassword))
         {
             return BadRequest(new { error = "Email y nueva contraseña son requeridos" });

@@ -27,7 +27,7 @@ namespace WebApplication2.Services.Interfaces
         Task<InscripcionGrupoResultDto> InscribirEstudianteGrupoAsync(int idGrupo, int idEstudiante, bool forzarInscripcion = false, string? observaciones = null);
 
         Task<EstudiantesGrupoDto> GetEstudiantesDelGrupoAsync(int idGrupo);
-        Task<List<Grupo>> BuscarGruposPorCriteriosAsync(int? numeroCuatrimestre = null, int? idTurno = null, int? numeroGrupo = null, int? idPlanEstudios = null);
+        Task<List<Grupo>> BuscarGruposPorCriteriosAsync(int? numeroCuatrimestre = null, int? idTurno = null, int? numeroGrupo = null, int? idPlanEstudios = null, int? idPeriodoAcademico = null);
 
         string GenerarCodigoGrupo(byte numeroCuatrimestre, int idTurno, byte numeroGrupo);
 
@@ -41,7 +41,7 @@ namespace WebApplication2.Services.Interfaces
 
         Task<GrupoMateria> AgregarMateriaAlGrupoAsync(int idGrupo, int idMateriaPlan, int? idProfesor = null, string? aula = null, short? cupo = null, CancellationToken ct = default);
 
-        Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, bool forzar = false, CancellationToken ct = default);
+        Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, bool forzar = false, bool conservarHistorial = false, CancellationToken ct = default);
 
         Task<Core.DTOs.Grupo.SincronizacionInscripcionesResultDto> SincronizarInscripcionesGrupoAsync(int idGrupo, CancellationToken ct = default);
 
@@ -56,6 +56,12 @@ namespace WebApplication2.Services.Interfaces
         Task<(bool PuedePromover, string Motivo)> ValidarPromocionEstudianteAsync(int idEstudiante, int cuatrimestreActual, decimal promedioMinimo, CancellationToken ct = default);
 
         Task<Grupo?> ObtenerOCrearGrupoSiguienteAsync(int idGrupoActual, int idPeriodoAcademicoDestino, bool crearSiNoExiste = true, CancellationToken ct = default);
+
+        Task<List<PeriodoConEstudiantesDto>> ObtenerPeriodosConEstudiantesAsync(CancellationToken ct = default);
+
+        Task<PromocionMasivaPreviewDto> PromocionMasivaPreviewAsync(int idPeriodoOrigen, int idPeriodoDestino, CancellationToken ct = default);
+
+        Task<PromocionMasivaResultDto> PromocionMasivaAsync(PromocionMasivaRequest request, CancellationToken ct = default);
 
         Task ActualizarHorariosGrupoMateriaAsync(int idGrupoMateria, List<HorarioDto> horarios, CancellationToken ct = default);
 
@@ -80,5 +86,13 @@ namespace WebApplication2.Services.Interfaces
             CancellationToken ct = default);
 
         Task<CambioGrupoResultDto> CambiarEstudianteDeGrupoAsync(CambioGrupoRequestDto request, CancellationToken ct = default);
+
+        Task<CuatrimestresAnterioresPreviewDto> ObtenerPreviewCuatrimestresAnterioresAsync(int idGrupoOrigen, CancellationToken ct = default);
+
+        Task<GenerarCuatrimestresAnterioresResultado> GenerarCuatrimestresAnterioresAsync(GenerarCuatrimestresAnterioresRequest request, CancellationToken ct = default);
+
+        Task<AgregarEstudianteIrregularResponse> AgregarEstudianteIrregularAGrupoAsync(
+            AgregarEstudianteIrregularRequest request,
+            CancellationToken ct = default);
     }
 }

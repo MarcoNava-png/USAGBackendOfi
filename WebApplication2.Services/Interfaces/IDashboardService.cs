@@ -9,7 +9,7 @@ namespace WebApplication2.Services.Interfaces
 
         Task<AdminDashboardDto> GetAdminDashboardAsync();
 
-        Task<DirectorDashboardDto> GetDirectorDashboardAsync();
+        Task<DirectorDashboardDto> GetDirectorDashboardAsync(string? userId = null);
 
         Task<FinanzasDashboardDto> GetFinanzasDashboardAsync();
 

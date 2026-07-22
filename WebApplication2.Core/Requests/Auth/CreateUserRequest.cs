@@ -22,6 +22,8 @@ namespace WebApplication2.Core.Requests.Auth
 
         public List<string> Roles { get; set; } = new();
 
+        public int? IdCampusAsignado { get; set; }
+
         public bool CrearCorreoAzure { get; set; } = true;
     }
 }

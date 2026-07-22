@@ -37,9 +37,9 @@ namespace WebApplication2.Controllers
 
             if (!string.IsNullOrWhiteSpace(busqueda))
             {
-                var term = busqueda.Trim();
-                query = query.Where(s => EF.Functions.Collate(s.NombreCompleto, "SQL_Latin1_General_CP1_CI_AI").Contains(term)
-                    || (s.Matricula != null && s.Matricula.Contains(term)));
+                var term = busqueda.Trim().ToLower();
+                query = query.Where(s => s.NombreCompleto.ToLower().Contains(term)
+                    || (s.Matricula != null && s.Matricula.ToLower().Contains(term)));
             }
 
             var total = await query.CountAsync(ct);

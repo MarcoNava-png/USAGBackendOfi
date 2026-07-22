@@ -20,12 +20,14 @@ namespace WebApplication2.Services
         private readonly IDocumentoEstudianteService? _documentoService;
         private readonly IBitacoraAccionService? _bitacora;
         private readonly ILogger<PagoService> _logger;
+        private readonly IInstitucionProvider _institucionProvider;
 
-        public PagoService(ApplicationDbContext db, IMapper mapper, ILogger<PagoService> logger, IDocumentoEstudianteService? documentoService = null, IBitacoraAccionService? bitacora = null)
+        public PagoService(ApplicationDbContext db, IMapper mapper, ILogger<PagoService> logger, IInstitucionProvider institucionProvider, IDocumentoEstudianteService? documentoService = null, IBitacoraAccionService? bitacora = null)
         {
             _db = db;
             _mapper = mapper;
             _logger = logger;
+            _institucionProvider = institucionProvider;
             _documentoService = documentoService;
             _bitacora = bitacora;
         }
@@ -526,19 +528,8 @@ namespace WebApplication2.Services
             {
                 var estatusPagado = await _db.AspiranteEstatus
                     .Where(e => e.Status == Core.Enums.StatusEnum.Active)
-                    .Where(e => e.DescEstatus == "Pagado" ||
-                                e.DescEstatus.ToUpper().Contains("PAGADO") ||
-                                e.DescEstatus.ToUpper().Contains("PAGO COMPLETO"))
+                    .Where(e => e.DescEstatus == "En Proceso")
                     .FirstOrDefaultAsync(ct);
-
-                if (estatusPagado == null)
-                {
-                    _logger.LogDebug("No se encontró estatus 'Pagado', buscando 'Admitido'...");
-                    estatusPagado = await _db.AspiranteEstatus
-                        .Where(e => e.Status == Core.Enums.StatusEnum.Active)
-                        .Where(e => e.DescEstatus == "Admitido")
-                        .FirstOrDefaultAsync(ct);
-                }
 
                 if (estatusPagado != null)
                 {
@@ -1061,12 +1052,7 @@ namespace WebApplication2.Services
                 },
                 Estudiante = estudianteInfo,
                 RecibosPagados = recibosPagados,
-                Institucion = new InstitucionInfo
-                {
-                    Nombre = "UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO",
-                    NombreCorto = "USAG",
-                    RFC = "CSA000000XX0"
-                },
+                Institucion = _institucionProvider.ObtenerInfo(),
                 Cajero = cajeroInfo
             };
         }

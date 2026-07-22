@@ -6,6 +6,7 @@ using WebApplication2.Configuration.CustomExceptions;
 using WebApplication2.Core.DTOs;
 using WebApplication2.Core.Models;
 using WebApplication2.Services.Interfaces;
+using WebApplication2.Services.MultiTenant;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -18,14 +19,16 @@ namespace WebApplication2.Services
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
+        private readonly ITenantContextAccessor _tenantContextAccessor;
 
         public AuthService(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
-            IConfiguration configuration, IEmailService emailService)
+            IConfiguration configuration, IEmailService emailService, ITenantContextAccessor tenantContextAccessor)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _configuration = configuration;
             _emailService = emailService;
+            _tenantContextAccessor = tenantContextAccessor;
         }
 
         public async Task<ApplicationUser> Signup(ApplicationUser user, string password, List<string> roles)
@@ -181,6 +184,7 @@ namespace WebApplication2.Services
             user.Apellidos = newUser.Apellidos;
             user.Telefono = newUser.Telefono;
             user.Biografia = newUser.Biografia;
+            user.IdCampusAsignado = newUser.IdCampusAsignado;
 
             if (!string.IsNullOrEmpty(newUser.PhotoUrl))
             {
@@ -323,13 +327,19 @@ namespace WebApplication2.Services
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             };
 
+            var tenantCode = _tenantContextAccessor.TenantContext?.Codigo;
+            if (!string.IsNullOrEmpty(tenantCode))
+            {
+                claims.Add(new Claim("tenant", tenantCode));
+            }
+
             // Agregar TODOS los roles al JWT
             foreach (var r in allRoles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, r));
             }
 
-            var expiration = DateTime.UtcNow.AddMinutes(15);
+            var expiration = DateTime.UtcNow.AddHours(2);
 
             var token = BuildToken(claims, expiration);
 

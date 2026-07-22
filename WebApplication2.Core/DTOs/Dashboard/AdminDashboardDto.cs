@@ -24,5 +24,7 @@ namespace WebApplication2.Core.DTOs.Dashboard
 
         public List<AlertaDto> Alertas { get; set; } = new();
         public List<AccionRapidaDto> AccionesRapidas { get; set; } = new();
+
+        public CarteraVencidaDto CarteraVencida { get; set; } = new();
     }
 }

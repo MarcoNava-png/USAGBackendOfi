@@ -20,6 +20,12 @@ namespace WebApplication2.Core.Models
         [MaxLength(500)]
         public string? Notas { get; set; }
 
+        // Entrega física (admisiones marca que el alumno entregó el documento)
+        public bool Entregado { get; set; }
+        public DateTime? FechaEntrega { get; set; }
+        [MaxLength(450)]
+        public string? UsuarioEntrega { get; set; }
+
         // Validación
         public DateTime? FechaValidacion { get; set; }
         [MaxLength(450)]

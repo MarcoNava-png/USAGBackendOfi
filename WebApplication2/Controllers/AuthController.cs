@@ -24,8 +24,9 @@ namespace WebApplication2
         private readonly IMapper _mapper;
         private readonly IMicrosoftGraphService _graphService;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IPlanLimiteService _planLimiteService;
 
-        public AuthController(IAuthService authService, IBlobStorageService blobStorageService, IConfiguration configuration, IMapper mapper, IMicrosoftGraphService graphService, UserManager<ApplicationUser> userManager)
+        public AuthController(IAuthService authService, IBlobStorageService blobStorageService, IConfiguration configuration, IMapper mapper, IMicrosoftGraphService graphService, UserManager<ApplicationUser> userManager, IPlanLimiteService planLimiteService)
         {
             _authService = authService;
             _blobStorageService = blobStorageService;
@@ -33,6 +34,7 @@ namespace WebApplication2
             _mapper = mapper;
             _graphService = graphService;
             _userManager = userManager;
+            _planLimiteService = planLimiteService;
         }
 
         [HttpPost("login")]
@@ -117,6 +119,12 @@ namespace WebApplication2
         [Authorize(Roles = Rol.ADMIN)]
         public async Task<IActionResult> CreateUser(CreateUserRequest request)
         {
+            var limiteError = await _planLimiteService.ValidarPuedeCrearUsuarioAsync();
+            if (limiteError != null)
+            {
+                return BadRequest(new { message = limiteError });
+            }
+
             // 1. Crear correo en Azure AD si se solicita
             string? azureUserId = null;
             if (request.CrearCorreoAzure)
@@ -139,11 +147,22 @@ namespace WebApplication2
                 };
 
                 var graphResult = await _graphService.CreateUserAsync(graphRequest);
-                if (!graphResult.Success)
+                if (graphResult.Success)
+                {
+                    azureUserId = graphResult.UserId;
+                }
+                else if ((graphResult.Message ?? "").Contains("already exists", StringComparison.OrdinalIgnoreCase))
+                {
+                    var existente = await _graphService.GetUserByIdAsync(request.Email);
+                    if (existente != null)
+                        azureUserId = existente.Id;
+                    else
+                        return BadRequest(new { message = $"El correo ya existe en Microsoft 365 pero no se pudo vincular: {graphResult.Message}" });
+                }
+                else
                 {
                     return BadRequest(new { message = $"Error al crear correo en Microsoft 365: {graphResult.Message}" });
                 }
-                azureUserId = graphResult.UserId;
             }
 
             try
@@ -158,6 +177,7 @@ namespace WebApplication2
                     Telefono = request.Telefono,
                     Biografia = request.Biografia,
                     PhotoUrl = request.PhotoUrl,
+                    IdCampusAsignado = request.IdCampusAsignado,
                     MustChangePassword = true
                 };
 
@@ -387,6 +407,7 @@ namespace WebApplication2
                 existingUser.Apellidos = request.Apellidos;
                 existingUser.Telefono = request.Telefono;
                 existingUser.Biografia = request.Biografia;
+                existingUser.IdCampusAsignado = request.IdCampusAsignado;
 
                 // Actualizar email si cambió
                 if (!string.IsNullOrEmpty(request.Email) && request.Email != existingUser.Email)

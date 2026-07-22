@@ -5,6 +5,7 @@ namespace WebApplication2.Core.Requests.Recibo
         public int IdPlantillaCobro { get; set; }
         public int IdPeriodoAcademico { get; set; }
         public bool SoloSimular { get; set; } = false;
+        public bool ActualizarExistentes { get; set; } = false;
         public List<int>? IdEstudiantes { get; set; }
     }
 }

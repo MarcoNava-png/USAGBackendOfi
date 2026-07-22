@@ -7,6 +7,7 @@ namespace WebApplication2.Core.DTOs.Recibo
         public string? Folio { get; set; }
         public string? Matricula { get; set; }
         public int? IdPeriodoAcademico { get; set; }
+        public bool SoloSinPeriodo { get; set; } = false;
         public EstatusRecibo? Estatus { get; set; }
         public bool SoloVencidos { get; set; } = false;
         public bool SoloPagados { get; set; } = false;

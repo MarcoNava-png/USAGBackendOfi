@@ -11,6 +11,7 @@ namespace WebApplication2.Controllers;
 
 [ApiController]
 [Route("api/admin/tenants")]
+[Authorize(Roles = "SuperAdmin")]
 public class TenantAdminController : ControllerBase
 {
     private readonly ITenantService _tenantService;
@@ -220,18 +221,17 @@ public class TenantAdminController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> ChangeStatus(
         int id,
-        [FromQuery] TenantStatus status,
-        [FromQuery] string? motivo,
+        [FromBody] CambiarStatusRequest request,
         CancellationToken ct)
     {
-        var result = await _tenantService.CambiarStatusTenantAsync(id, status, motivo, ct);
+        var result = await _tenantService.CambiarStatusTenantAsync(id, request.NuevoStatus, request.Motivo, ct);
         if (!result)
         {
             return NotFound(new { error = "Escuela no encontrada" });
         }
 
-        _logger.LogInformation("Status de tenant {Id} cambiado a {Status}", id, status);
-        return Ok(new { mensaje = $"Status actualizado a {status}" });
+        _logger.LogInformation("Status de tenant {Id} cambiado a {Status}", id, request.NuevoStatus);
+        return Ok(new { mensaje = $"Status actualizado a {request.NuevoStatus}" });
     }
 
     [HttpGet("{id:int}/stats")]
@@ -312,17 +312,25 @@ public class TenantAdminController : ControllerBase
             using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
             var worksheet = workbook.Worksheet(1);
 
-            var rows = worksheet.RowsUsed().Skip(1);
-
-            int rowNum = 2;
-            foreach (var row in rows)
+            foreach (var row in worksheet.RowsUsed())
             {
                 var codigo = row.Cell(1).GetString()?.Trim();
                 if (string.IsNullOrWhiteSpace(codigo)) continue;
 
+                if (codigo.Equals("Codigo", StringComparison.OrdinalIgnoreCase)) continue;
+                if (codigo.StartsWith("(") || codigo.StartsWith("←") || codigo.StartsWith("→")) continue;
+                if (codigo.StartsWith("AGREMIADOS", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var planCell = row.Cell(8);
+                int idPlan = 0;
+                if (planCell.TryGetValue<double>(out var planDouble))
+                    idPlan = (int)planDouble;
+                else
+                    int.TryParse(planCell.GetString()?.Trim(), out idPlan);
+
                 filas.Add(new ImportarTenantFila
                 {
-                    Fila = rowNum,
+                    Fila = row.RowNumber(),
                     Codigo = codigo,
                     Nombre = row.Cell(2).GetString()?.Trim() ?? "",
                     NombreCorto = row.Cell(3).GetString()?.Trim() ?? "",
@@ -330,12 +338,10 @@ public class TenantAdminController : ControllerBase
                     ColorPrimario = row.Cell(5).GetString()?.Trim(),
                     EmailContacto = row.Cell(6).GetString()?.Trim(),
                     TelefonoContacto = row.Cell(7).GetString()?.Trim(),
-                    IdPlanLicencia = (int)(row.Cell(8).GetDouble()),
+                    IdPlanLicencia = idPlan,
                     AdminEmail = row.Cell(9).GetString()?.Trim() ?? "",
                     AdminNombre = row.Cell(10).GetString()?.Trim() ?? ""
                 });
-
-                rowNum++;
             }
 
             if (filas.Count == 0)
@@ -362,19 +368,55 @@ public class TenantAdminController : ControllerBase
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public ActionResult ExportResults([FromBody] ImportarTenantsResultado resultados)
     {
+        var indigo = ClosedXML.Excel.XLColor.FromHtml("#4F46E5");
+        var purple = ClosedXML.Excel.XLColor.FromHtml("#7C3AED");
+        var indigoLight = ClosedXML.Excel.XLColor.FromHtml("#EEF2FF");
+        var indigoLighter = ClosedXML.Excel.XLColor.FromHtml("#F5F3FF");
+        var redBg = ClosedXML.Excel.XLColor.FromHtml("#FEE2E2");
+        var redText = ClosedXML.Excel.XLColor.FromHtml("#991B1B");
+        var white = ClosedXML.Excel.XLColor.White;
+
         using var workbook = new ClosedXML.Excel.XLWorkbook();
         var worksheet = workbook.Worksheets.Add("Resultados");
+
+        const int lastCol = 8;
+        const int headerRow = 4;
+
+        worksheet.Row(1).Height = 26;
+        worksheet.Row(2).Height = 18;
+
+        var titulo = worksheet.Range(1, 3, 1, lastCol).Merge();
+        titulo.Value = "AGREMIADOS";
+        titulo.Style.Font.Bold = true;
+        titulo.Style.Font.FontSize = 18;
+        titulo.Style.Font.FontColor = indigo;
+        titulo.Style.Alignment.Vertical = ClosedXML.Excel.XLAlignmentVerticalValues.Center;
+
+        var sub = worksheet.Range(2, 3, 2, lastCol).Merge();
+        sub.Value = "Resultados de Importación · Credenciales de Acceso";
+        sub.Style.Font.FontSize = 10;
+        sub.Style.Font.FontColor = purple;
+        sub.Style.Alignment.Vertical = ClosedXML.Excel.XLAlignmentVerticalValues.Center;
+
+        var logoPath = Path.Combine(AppContext.BaseDirectory, "CaasaG.png");
+        if (System.IO.File.Exists(logoPath))
+        {
+            worksheet.AddPicture(logoPath).MoveTo(worksheet.Cell(1, 1), 4, 2).Scale(0.20);
+        }
 
         var headers = new[] { "Fila", "Código", "Nombre", "Exitoso", "Mensaje", "URL", "Email Admin", "Contraseña" };
         for (int i = 0; i < headers.Length; i++)
         {
-            var cell = worksheet.Cell(1, i + 1);
+            var cell = worksheet.Cell(headerRow, i + 1);
             cell.Value = headers[i];
             cell.Style.Font.Bold = true;
-            cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightBlue;
+            cell.Style.Font.FontColor = white;
+            cell.Style.Fill.BackgroundColor = indigo;
+            cell.Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
         }
+        worksheet.Row(headerRow).Height = 20;
 
-        int row = 2;
+        int row = headerRow + 1;
         foreach (var r in resultados.Resultados)
         {
             worksheet.Cell(row, 1).Value = r.Fila;
@@ -388,20 +430,37 @@ public class TenantAdminController : ControllerBase
 
             if (!r.Exitoso)
             {
-                worksheet.Row(row).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightCoral;
+                worksheet.Row(row).Style.Fill.BackgroundColor = redBg;
+                worksheet.Row(row).Style.Font.FontColor = redText;
             }
             else
             {
-                worksheet.Row(row).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGreen;
+                worksheet.Row(row).Style.Fill.BackgroundColor = (row % 2 == 0) ? indigoLight : indigoLighter;
+                worksheet.Cell(row, 8).Style.Font.Bold = true;
             }
 
             row++;
         }
 
-        worksheet.Columns().AdjustToContents();
+        worksheet.Columns(1, lastCol).AdjustToContents();
+        if (worksheet.Column(1).Width < 12) worksheet.Column(1).Width = 12;
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "resultados_importacion.xlsx");
     }
+
+    [HttpPost("migrar-todos")]
+    [ProducesResponseType(typeof(MigrarTodosResultado), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MigrarTodosResultado>> MigrarTodos(CancellationToken ct)
+    {
+        var resultado = await _tenantService.MigrarTodosLosTenantsAsync(ct);
+        return Ok(resultado);
+    }
+}
+
+public class CambiarStatusRequest
+{
+    public TenantStatus NuevoStatus { get; set; }
+    public string? Motivo { get; set; }
 }

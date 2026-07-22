@@ -129,6 +129,21 @@ namespace WebApplication2.Services
             return profesor;
         }
 
+        public async Task<bool> EliminarProfesorAsync(int idProfesor)
+        {
+            var profesor = await _dbContext.Profesor
+                .FirstOrDefaultAsync(p => p.IdProfesor == idProfesor && p.Status == Core.Enums.StatusEnum.Active);
+
+            if (profesor == null)
+                return false;
+
+            profesor.Status = Core.Enums.StatusEnum.Deleted;
+            profesor.UpdatedAt = DateTime.UtcNow;
+            _dbContext.Profesor.Update(profesor);
+            await _dbContext.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<ValidarHorarioProfesorResponse> ValidarConflictosHorarioAsync(
             int idProfesor,
             List<HorarioValidacionDto> horariosNuevos,
@@ -143,6 +158,17 @@ namespace WebApplication2.Services
 
             var conflictos = new List<ConflictoHorario>();
 
+            int? idPeriodoObjetivo = null;
+            if (idGrupoMateriaActual != null)
+            {
+                idPeriodoObjetivo = await _dbContext.GrupoMateria
+                    .Where(gm => gm.IdGrupoMateria == idGrupoMateriaActual)
+                    .Select(gm => (int?)gm.IdGrupoNavigation.IdPeriodoAcademico)
+                    .FirstOrDefaultAsync(ct);
+            }
+
+            var hoy = DateOnly.FromDateTime(DateTime.Now);
+
             var materiasProfesor = await _dbContext.GrupoMateria
                 .Include(gm => gm.IdMateriaPlanNavigation)
                     .ThenInclude(mp => mp.IdMateriaNavigation)
@@ -150,6 +176,10 @@ namespace WebApplication2.Services
                 .Include(gm => gm.Horario)
                     .ThenInclude(h => h.IdDiaSemanaNavigation)
                 .Where(gm => gm.IdProfesor == idProfesor && gm.Status == Core.Enums.StatusEnum.Active)
+                .Where(gm => gm.IdGrupoNavigation.Status == Core.Enums.StatusEnum.Active)
+                .Where(gm => idPeriodoObjetivo != null
+                    ? gm.IdGrupoNavigation.IdPeriodoAcademico == idPeriodoObjetivo
+                    : gm.IdGrupoNavigation.IdPeriodoAcademicoNavigation.FechaFin >= hoy)
                 .Where(gm => idGrupoMateriaActual == null || gm.IdGrupoMateria != idGrupoMateriaActual)
                 .ToListAsync(ct);
 
@@ -157,7 +187,7 @@ namespace WebApplication2.Services
             {
                 foreach (var materiaExistente in materiasProfesor)
                 {
-                    foreach (var horarioExistente in materiaExistente.Horario)
+                    foreach (var horarioExistente in materiaExistente.Horario.Where(h => h.Status == Core.Enums.StatusEnum.Active))
                     {
                         if (horarioPropuesto.Dia == horarioExistente.IdDiaSemanaNavigation.Nombre)
                         {

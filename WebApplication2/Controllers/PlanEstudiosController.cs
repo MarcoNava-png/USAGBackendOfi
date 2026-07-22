@@ -181,7 +181,7 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPut]
-        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR}")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR},{Rol.COORDINADOR},{Rol.ACADEMICO},{Rol.CONTROL_ESCOLAR}")]
         public async Task<IActionResult> Update([FromBody] PlanEstudiosUpdateRequest request)
         {
             try

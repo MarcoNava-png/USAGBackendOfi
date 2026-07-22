@@ -14,5 +14,7 @@ namespace WebApplication2.Core.DTOs.EstudiantePanel
         public bool TieneBeca { get; set; }
         public bool Activo { get; set; }
         public string? Fotografia { get; set; }
+        public int EstatusAcademico { get; set; }
+        public string? EstatusAcademicoTexto { get; set; }
     }
 }

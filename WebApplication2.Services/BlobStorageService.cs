@@ -57,5 +57,7 @@ namespace WebApplication2.Services
                 Console.WriteLine("El blob no existe.");
             }
         }
+
+        public string? ResolverRutaLocal(string? url) => null;
     }
 }

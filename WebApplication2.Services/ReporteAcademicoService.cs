@@ -16,6 +16,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
 {
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _env;
+    private readonly IInstitucionProvider _institucionProvider;
 
     private static readonly string ColorAzulOscuro = "#003366";
     private static readonly string ColorAzulClaro = "#0088CC";
@@ -26,10 +27,11 @@ public class ReporteAcademicoService : IReporteAcademicoService
     private static readonly string ColorInstitucionalAzulClaro = "#D9E2F3";
     private static readonly string ColorInstitucionalAzulOscuro = "#2E74B5";
 
-    public ReporteAcademicoService(ApplicationDbContext context, IWebHostEnvironment env)
+    public ReporteAcademicoService(ApplicationDbContext context, IWebHostEnvironment env, IInstitucionProvider institucionProvider)
     {
         _context = context;
         _env = env;
+        _institucionProvider = institucionProvider;
     }
 
     // ──────────────── DATA QUERIES ────────────────
@@ -46,24 +48,56 @@ public class ReporteAcademicoService : IReporteAcademicoService
             .FirstOrDefaultAsync(g => g.IdGrupo == idGrupo, ct)
             ?? throw new InvalidOperationException("Grupo no encontrado");
 
-        var estudiantes = grupo.EstudianteGrupo
-            .Where(eg => eg.Status == Core.Enums.StatusEnum.Active)
-            .OrderBy(eg => eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno)
-            .ThenBy(eg => eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoMaterno)
-            .ThenBy(eg => eg.IdEstudianteNavigation.IdPersonaNavigation?.Nombre)
-            .Select(eg =>
+        var itemsPorEstudiante = new Dictionary<int, EstudianteGrupoItemDto>();
+
+        foreach (var eg in grupo.EstudianteGrupo.Where(eg => eg.Status == Core.Enums.StatusEnum.Active))
+        {
+            var p = eg.IdEstudianteNavigation.IdPersonaNavigation;
+            itemsPorEstudiante[eg.IdEstudiante] = new EstudianteGrupoItemDto
             {
-                var p = eg.IdEstudianteNavigation.IdPersonaNavigation;
-                return new EstudianteGrupoItemDto
+                IdEstudiante = eg.IdEstudiante,
+                Matricula = eg.IdEstudianteNavigation.Matricula,
+                NombreCompleto = $"{p?.ApellidoPaterno} {p?.ApellidoMaterno} {p?.Nombre}".Trim(),
+                Email = eg.IdEstudianteNavigation.Email ?? p?.Correo,
+                Telefono = p?.Celular ?? p?.Telefono,
+                Estado = eg.Estado ?? "Inscrito"
+            };
+        }
+
+        var conMaterias = await _context.GrupoMateria
+            .Where(gm => gm.IdGrupo == idGrupo)
+            .SelectMany(gm => gm.Inscripcion.Where(i => i.Status == Core.Enums.StatusEnum.Active))
+            .Select(i => i.IdEstudiante)
+            .Distinct()
+            .ToListAsync(ct);
+
+        var faltantesIds = conMaterias.Where(id => !itemsPorEstudiante.ContainsKey(id)).ToList();
+        if (faltantesIds.Count > 0)
+        {
+            var faltantes = await _context.Estudiante
+                .Include(e => e.IdPersonaNavigation)
+                .Where(e => faltantesIds.Contains(e.IdEstudiante))
+                .AsNoTracking()
+                .ToListAsync(ct);
+
+            foreach (var e in faltantes)
+            {
+                var p = e.IdPersonaNavigation;
+                itemsPorEstudiante[e.IdEstudiante] = new EstudianteGrupoItemDto
                 {
-                    IdEstudiante = eg.IdEstudiante,
-                    Matricula = eg.IdEstudianteNavigation.Matricula,
+                    IdEstudiante = e.IdEstudiante,
+                    Matricula = e.Matricula,
                     NombreCompleto = $"{p?.ApellidoPaterno} {p?.ApellidoMaterno} {p?.Nombre}".Trim(),
-                    Email = eg.IdEstudianteNavigation.Email ?? p?.Correo,
+                    Email = e.Email ?? p?.Correo,
                     Telefono = p?.Celular ?? p?.Telefono,
-                    Estado = eg.Estado ?? "Inscrito"
+                    Estado = "Inscrito"
                 };
-            }).ToList();
+            }
+        }
+
+        var estudiantes = itemsPorEstudiante.Values
+            .OrderBy(x => x.NombreCompleto)
+            .ToList();
 
         return new ReporteEstudiantesGrupoDto
         {
@@ -180,7 +214,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
         }
 
         var alumnos = new List<AlumnoActaDto>();
-        foreach (var insc in gm.Inscripcion.OrderBy(i => i.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno))
+        foreach (var insc in gm.Inscripcion.Where(i => i.Status == Core.Enums.StatusEnum.Active).OrderBy(i => i.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno))
         {
             decimal? calificacion = null;
 
@@ -329,6 +363,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
 
         var profPersona = gm.IdProfesorNavigation?.IdPersonaNavigation;
         var alumnos = gm.Inscripcion
+            .Where(i => i.Status == Core.Enums.StatusEnum.Active)
             .OrderBy(i => i.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno)
             .ThenBy(i => i.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoMaterno)
             .Select(i =>
@@ -1021,9 +1056,13 @@ public class ReporteAcademicoService : IReporteAcademicoService
         {
             col.Item().Row(row =>
             {
-                var logoPath = Path.Combine(_env.ContentRootPath, "logo_usag.png");
-                if (!File.Exists(logoPath))
-                    logoPath = Path.Combine(Directory.GetCurrentDirectory(), "logo_usag.png");
+                var logoPath = _institucionProvider.ResolverLogoTenant();
+                if (logoPath == null)
+                {
+                    logoPath = Path.Combine(_env.ContentRootPath, "logo_usag.png");
+                    if (!File.Exists(logoPath))
+                        logoPath = Path.Combine(Directory.GetCurrentDirectory(), "logo_usag.png");
+                }
 
                 if (File.Exists(logoPath))
                 {
@@ -1233,7 +1272,7 @@ public class ReporteAcademicoService : IReporteAcademicoService
 
     public byte[] GenerarReporteBajasPdf(ReporteBajasDto data)
     {
-        var headerLogoPath = ResolveFilePath("header_logo.png");
+        var headerLogoPath = _institucionProvider.ResolverLogoTenant() ?? ResolveFilePath("header_logo.png");
 
         QuestPDF.Settings.License = LicenseType.Community;
 

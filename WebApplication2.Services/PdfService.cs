@@ -15,6 +15,7 @@ namespace WebApplication2.Services;
 public class PdfService : IPdfService
 {
     private readonly string _logoPath;
+    private readonly string _firmaPath;
     private static readonly string FontePrincipal = DetectarFuenteDisponible();
     private static readonly string ColorAzulOscuro = "#003366";
     private static readonly string ColorAzulClaro = "#0088CC";
@@ -30,6 +31,12 @@ public class PdfService : IPdfService
         if (!File.Exists(_logoPath))
         {
             _logoPath = Path.Combine(env.ContentRootPath, "Logousag.png");
+        }
+
+        _firmaPath = Path.Combine(env.ContentRootPath, "uploads", "firma_directora.png");
+        if (!File.Exists(_firmaPath))
+        {
+            _firmaPath = Path.Combine(env.ContentRootPath, "firma_directora.png");
         }
 
         // Configurar fuente de respaldo para evitar errores cuando una fuente no está disponible
@@ -634,7 +641,7 @@ public class PdfService : IPdfService
 
                 page.Header().Element(c => ComposeConstanciaHeader(c));
                 page.Content().Element(c => ComposeConstanciaContent(c, constancia));
-                page.Footer().Element(c => ComposeDocumentoFooter(c, constancia.CodigoVerificacion, constancia.UrlVerificacion));
+                page.Footer().Element(c => ComposeConstanciaQrFooter(c, constancia));
             });
         });
 
@@ -659,12 +666,10 @@ public class PdfService : IPdfService
 
                 row.RelativeItem().Column(col =>
                 {
-                    col.Item().AlignCenter().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO")
+                    col.Item().AlignCenter().Text("COLEGIO SAN ANDRÉS DE GUANAJUATO")
                         .FontSize(16).Bold().FontColor(ColorAzulOscuro);
                     col.Item().AlignCenter().Text("CONSTANCIA DE ESTUDIOS")
                         .FontSize(14).SemiBold().FontColor(ColorAzulClaro);
-                    col.Item().AlignCenter().PaddingTop(3).Text("\"Veni Vidi Vici\"")
-                        .FontSize(9).Italic().FontColor(ColorGris);
                 });
 
                 row.ConstantItem(120);
@@ -678,18 +683,17 @@ public class PdfService : IPdfService
     {
         container.PaddingTop(30).Column(column =>
         {
-            column.Item().Row(row =>
-            {
-                row.RelativeItem().Text(t => { t.Span("Folio: ").Bold(); t.Span(constancia.FolioDocumento); });
-                row.RelativeItem().AlignRight().Text(t => { t.Span("Guanajuato, Gto. a ").FontColor(ColorGris); t.Span(DateTime.Now.ToString("dd 'de' MMMM 'de' yyyy")); });
-            });
+            column.Item().Text(t => { t.Span("ASUNTO: ").Bold(); t.Span("Constancia de estudios"); });
+            column.Item().Text(t => { t.Span("FOLIO: ").Bold(); t.Span(constancia.FolioDocumento); });
 
             column.Item().PaddingTop(30).Text("A QUIEN CORRESPONDA:").Bold().FontSize(12);
 
             column.Item().PaddingTop(20).Text(text =>
             {
-                text.Span("Por medio de la presente la que suscribe, en mi carácter de Directora de Servicios Escolares de la ");
-                text.Span("Universidad San Andrés de Guanajuato").Bold();
+                text.Span("Por medio de la presente la que suscribe ");
+                text.Span("Lic. Margarita Anda Valdez").Bold();
+                text.Span(" en mi carácter de directora de Servicios Escolares del ");
+                text.Span("Colegio San Andrés de Guanajuato").Bold();
                 text.Span(", con clave de centro de trabajo C.C.T: ");
                 text.Span("11PSU0329U").Bold();
                 text.Span(".");
@@ -699,18 +703,18 @@ public class PdfService : IPdfService
 
             column.Item().PaddingTop(20).Text(text =>
             {
-                text.Span("Según Historial Académico que obra en el departamento de Dirección de Servicios Escolares, que el (la) Alumno(a) C. ");
+                text.Span("Según Historial Académico que obra en el departamento de Dirección de Servicios Escolares, que el (la) Alumno (a) C. ");
                 text.Span(constancia.NombreCompleto.ToUpper()).Bold();
                 if (!string.IsNullOrEmpty(constancia.Curp))
                 {
-                    text.Span(", CURP: ");
+                    text.Span(" CURP ");
                     text.Span(constancia.Curp.ToUpper()).Bold();
                 }
-                text.Span(", se encuentra inscrito(a) en la ");
+                text.Span(" se encuentra inscrito (a) en la ");
                 text.Span(constancia.Carrera).Bold();
                 if (!string.IsNullOrEmpty(constancia.RVOE))
                 {
-                    text.Span(", RVOE: ");
+                    text.Span(" RVOE: ");
                     text.Span(constancia.RVOE).Bold();
                 }
                 text.Span(", ");
@@ -720,60 +724,69 @@ public class PdfService : IPdfService
                 text.Span(".");
             });
 
-            if (constancia.IncluyeMaterias && constancia.Materias.Count > 0)
-            {
-                column.Item().PaddingTop(20).Text("Materias que cursa actualmente:").Bold();
-                column.Item().PaddingTop(10).Table(table =>
-                {
-                    table.ColumnsDefinition(columns =>
-                    {
-                        columns.ConstantColumn(60);
-                        columns.RelativeColumn(2);
-                        columns.RelativeColumn(2);
-                    });
-
-                    table.Header(header =>
-                    {
-                        header.Cell().Background(ColorAzulOscuro).Padding(5).Text("Clave").FontColor(Colors.White).Bold().FontSize(9);
-                        header.Cell().Background(ColorAzulOscuro).Padding(5).Text("Materia").FontColor(Colors.White).Bold().FontSize(9);
-                        header.Cell().Background(ColorAzulOscuro).Padding(5).Text("Profesor").FontColor(Colors.White).Bold().FontSize(9);
-                    });
-
-                    foreach (var materia in constancia.Materias)
-                    {
-                        table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).Text(materia.ClaveMateria).FontSize(9);
-                        table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).Text(materia.NombreMateria).FontSize(9);
-                        table.Cell().BorderBottom(1).BorderColor(ColorGrisClaro).Padding(4).Text(materia.Profesor).FontSize(9);
-                    }
-                });
-            }
-
             column.Item().PaddingTop(25).Text(text =>
             {
-                text.Span("Se extiende la presente constancia para los fines legales que al interesado convengan, en la ciudad de Guanajuato, Gto., a los ");
-                text.Span(DateTime.Now.ToString("dd")).Bold();
-                text.Span(" días del mes de ");
-                text.Span(DateTime.Now.ToString("MMMM")).Bold();
-                text.Span(" del año ");
-                text.Span(DateTime.Now.ToString("yyyy")).Bold();
+                var cultura = new System.Globalization.CultureInfo("es-MX");
+                text.Span("Se expide la presente para los usos y fines legales que haya lugar, en la ciudad de ");
+                text.Span("León, Guanajuato").Bold();
+                text.Span(", como Colegio San Andrés de Guanajuato a los ");
+                text.Span(DateTime.Now.ToString("dd", cultura)).Bold();
+                text.Span(" días de ");
+                text.Span(DateTime.Now.ToString("MMMM", cultura)).Bold();
+                text.Span(" de ");
+                text.Span(DateTime.Now.ToString("yyyy", cultura)).Bold();
                 text.Span(".");
             });
 
-            column.Item().PaddingTop(15).Background("#FFF8E1").Padding(10).Text(text =>
-            {
-                text.Span("Vigencia del documento: ").Bold().FontColor("#F57C00");
-                text.Span($"Esta constancia tiene validez hasta el {constancia.FechaVencimiento:dd/MM/yyyy}").FontColor("#F57C00");
-            });
-
-            column.Item().PaddingTop(50).AlignCenter().Column(col =>
+            column.Item().PaddingTop(45).AlignCenter().Column(col =>
             {
                 col.Item().AlignCenter().Text("Atentamente").Bold();
-                col.Item().PaddingTop(40).AlignCenter().LineHorizontal(1).LineColor(Colors.Black);
-                col.Item().PaddingTop(5).AlignCenter().Text("Lic. Margarita Anda Valdez").Bold().FontSize(10);
+                if (File.Exists(_firmaPath))
+                {
+                    col.Item().PaddingTop(8).AlignCenter().Width(200).Image(_firmaPath).FitWidth();
+                }
+                else
+                {
+                    col.Item().PaddingTop(45);
+                }
+                col.Item().AlignCenter().Text("Lic. Margarita Anda Valdez").Bold().FontSize(11);
                 col.Item().AlignCenter().Text("Directora de Servicios Escolares").FontSize(10);
-                col.Item().AlignCenter().Text("Universidad San Andrés de Guanajuato").FontSize(9).FontColor(ColorGris);
             });
         });
+    }
+
+    private void ComposeConstanciaQrFooter(IContainer container, ConstanciaEstudiosDto constancia)
+    {
+        container.Column(column =>
+        {
+            column.Item().LineHorizontal(1).LineColor(ColorGrisClaro);
+            column.Item().PaddingTop(6).Row(row =>
+            {
+                row.ConstantItem(64).Height(64).Image(GenerarQrPng(constancia.UrlVerificacion));
+                row.ConstantItem(10);
+                row.RelativeItem().AlignMiddle().Column(col =>
+                {
+                    col.Item().Text("Verifica la autenticidad de este documento").FontSize(8).Bold().FontColor(ColorAzulOscuro);
+                    col.Item().Text("Escanea el código QR o ingresa a:").FontSize(8).FontColor(ColorGris);
+                    col.Item().Text(constancia.UrlVerificacion).FontSize(8).FontColor(ColorAzulClaro);
+                    col.Item().PaddingTop(2).Text(t =>
+                    {
+                        t.Span("Folio: ").FontSize(7).FontColor(ColorGris);
+                        t.Span(constancia.FolioDocumento).FontSize(7).FontColor(ColorGris);
+                        t.Span("   ·   Código de verificación: ").FontSize(7).FontColor(ColorGris);
+                        t.Span(constancia.CodigoVerificacion.ToString()).FontSize(7).FontColor(ColorGris);
+                    });
+                });
+            });
+        });
+    }
+
+    private static byte[] GenerarQrPng(string contenido)
+    {
+        using var generador = new QRCoder.QRCodeGenerator();
+        var datos = generador.CreateQrCode(contenido ?? "", QRCoder.QRCodeGenerator.ECCLevel.Q);
+        var qr = new QRCoder.PngByteQRCode(datos);
+        return qr.GetGraphic(20);
     }
 
     #endregion
@@ -1754,6 +1767,24 @@ public class PdfService : IPdfService
 
     #region Comprobante de Inscripción
 
+    private const string CompNavy = "#14356F";
+    private const string CompGold = "#C9A227";
+    private const string CompNavyLight = "#EEF2FA";
+
+    private static void ComprobanteSeccion(QuestPDF.Fluent.ColumnDescriptor col, string titulo, Action<QuestPDF.Fluent.ColumnDescriptor> contenido)
+    {
+        col.Item().Column(sec =>
+        {
+            sec.Item().Background(CompNavy).PaddingVertical(5).PaddingHorizontal(10)
+                .Text(titulo).FontColor(Colors.White).Bold().FontSize(10);
+            sec.Item().Border(1).BorderColor("#DDDDDD").BorderTop(0).Padding(12).Column(b =>
+            {
+                b.Spacing(5);
+                contenido(b);
+            });
+        });
+    }
+
     public byte[] GenerarComprobanteInscripcion(ComprobanteInscripcionDto c)
     {
         var document = Document.Create(container =>
@@ -1761,91 +1792,130 @@ public class PdfService : IPdfService
             container.Page(page =>
             {
                 page.Size(PageSizes.Letter);
-                page.Margin(40);
-                page.DefaultTextStyle(t => t.FontFamily(FontePrincipal).FontSize(10));
+                page.Margin(36);
+                page.DefaultTextStyle(t => t.FontFamily(FontePrincipal).FontSize(10).FontColor("#222222"));
 
                 page.Header().Column(col =>
                 {
-                    col.Item().AlignCenter().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO").Bold().FontSize(14);
-                    col.Item().AlignCenter().Text("Comprobante de Inscripción").FontSize(12).FontColor(ColorGris);
-                    col.Item().PaddingTop(4).LineHorizontal(1).LineColor(ColorGris);
+                    col.Item().Row(row =>
+                    {
+                        if (File.Exists(_logoPath))
+                            row.ConstantItem(110).Height(58).Image(_logoPath).FitArea();
+                        else
+                            row.ConstantItem(110);
+
+                        row.RelativeItem().PaddingLeft(12).AlignMiddle().Column(t =>
+                        {
+                            t.Item().Text("UNIVERSIDAD SAN ANDRÉS DE GUANAJUATO").Bold().FontSize(15).FontColor(CompNavy);
+                            t.Item().Text("COMPROBANTE DE INSCRIPCIÓN").SemiBold().FontSize(12).FontColor(CompGold);
+                            if (!string.IsNullOrEmpty(c.PeriodoAcademico))
+                                t.Item().Text($"Periodo: {c.PeriodoAcademico}").FontSize(9).FontColor(ColorGris);
+                        });
+                    });
+                    col.Item().PaddingTop(8).Height(3).Background(CompNavy);
+                    col.Item().Height(2).Background(CompGold);
                 });
 
-                page.Content().PaddingVertical(12).Column(col =>
+                page.Content().PaddingVertical(14).Column(col =>
                 {
-                    col.Spacing(10);
+                    col.Spacing(12);
 
-                    col.Item().Background(Colors.Grey.Lighten4).Padding(10).Column(b =>
+                    col.Item().Background(CompNavyLight).BorderLeft(4).BorderColor(CompNavy).Padding(12).Column(b =>
                     {
-                        b.Spacing(4);
-                        b.Item().Text("Datos del Estudiante").Bold().FontSize(11);
-                        b.Item().Row(r =>
-                        {
-                            r.RelativeItem().Text(t => { t.Span("Matrícula: ").SemiBold(); t.Span(c.Matricula); });
-                            r.RelativeItem().Text(t => { t.Span("Fecha de ingreso: ").SemiBold(); t.Span(c.FechaIngreso.ToString("dd/MM/yyyy")); });
-                        });
-                        b.Item().Text(t => { t.Span("Nombre: ").SemiBold(); t.Span(c.NombreCompleto); });
-                        if (!string.IsNullOrEmpty(c.Curp))
-                            b.Item().Text(t => { t.Span("CURP: ").SemiBold(); t.Span(c.Curp); });
+                        b.Item().Text("¡Bienvenido(a) a la USAG!").Bold().FontSize(12).FontColor(CompNavy);
+                        b.Item().Text("Este documento confirma oficialmente tu inscripción para el periodo indicado. Consérvalo para cualquier trámite.")
+                            .FontSize(9).FontColor("#444444");
                     });
 
-                    col.Item().Background(Colors.Grey.Lighten4).Padding(10).Column(b =>
+                    ComprobanteSeccion(col, "DATOS DEL ESTUDIANTE", b =>
                     {
-                        b.Spacing(4);
-                        b.Item().Text("Información Académica").Bold().FontSize(11);
-                        b.Item().Text(t => { t.Span("Plan de estudios: ").SemiBold(); t.Span(c.PlanEstudios); });
+                        b.Item().Row(r =>
+                        {
+                            r.RelativeItem().Text(t => { t.Span("Matrícula: ").SemiBold().FontColor(CompNavy); t.Span(c.Matricula); });
+                            r.RelativeItem().Text(t => { t.Span("Fecha de ingreso: ").SemiBold().FontColor(CompNavy); t.Span(c.FechaIngreso.ToString("dd/MM/yyyy")); });
+                        });
+                        b.Item().Text(t => { t.Span("Nombre: ").SemiBold().FontColor(CompNavy); t.Span(c.NombreCompleto); });
+                        if (!string.IsNullOrEmpty(c.Curp))
+                            b.Item().Text(t => { t.Span("CURP: ").SemiBold().FontColor(CompNavy); t.Span(c.Curp); });
+                    });
+
+                    ComprobanteSeccion(col, "INFORMACIÓN ACADÉMICA", b =>
+                    {
+                        b.Item().Text(t => { t.Span("Plan de estudios: ").SemiBold().FontColor(CompNavy); t.Span(c.PlanEstudios); });
                         if (!string.IsNullOrEmpty(c.ClavePlanEstudios))
-                            b.Item().Text(t => { t.Span("Clave del plan: ").SemiBold(); t.Span(c.ClavePlanEstudios); });
-                        if (!string.IsNullOrEmpty(c.Campus))
-                            b.Item().Text(t => { t.Span("Campus: ").SemiBold(); t.Span(c.Campus); });
-                        if (!string.IsNullOrEmpty(c.Turno))
-                            b.Item().Text(t => { t.Span("Turno: ").SemiBold(); t.Span(c.Turno); });
-                        if (!string.IsNullOrEmpty(c.PeriodoAcademico))
-                            b.Item().Text(t => { t.Span("Periodo académico: ").SemiBold(); t.Span(c.PeriodoAcademico); });
+                            b.Item().Text(t => { t.Span("Clave del plan: ").SemiBold().FontColor(CompNavy); t.Span(c.ClavePlanEstudios); });
+                        b.Item().Row(r =>
+                        {
+                            if (!string.IsNullOrEmpty(c.Campus))
+                                r.RelativeItem().Text(t => { t.Span("Campus: ").SemiBold().FontColor(CompNavy); t.Span(c.Campus); });
+                            if (!string.IsNullOrEmpty(c.Turno))
+                                r.RelativeItem().Text(t => { t.Span("Turno: ").SemiBold().FontColor(CompNavy); t.Span(c.Turno); });
+                        });
                         if (!string.IsNullOrEmpty(c.GrupoCodigo))
                             b.Item().Text(t =>
                             {
-                                t.Span("Grupo: ").SemiBold();
+                                t.Span("Grupo: ").SemiBold().FontColor(CompNavy);
                                 t.Span($"{c.GrupoCodigo}");
                                 if (!string.IsNullOrEmpty(c.GrupoNombre)) t.Span($" — {c.GrupoNombre}");
                                 if (c.NumeroCuatrimestre.HasValue) t.Span($" · Cuatrimestre {c.NumeroCuatrimestre}");
                             });
                     });
 
-                    col.Item().Background("#EEF7FF").Border(1).BorderColor("#4A90E2").Padding(10).Column(b =>
+                    col.Item().Column(sec =>
                     {
-                        b.Spacing(4);
-                        b.Item().Text("Credenciales de Acceso").Bold().FontSize(11).FontColor("#2760A0");
-                        b.Item().Text(t => { t.Span("Correo institucional: ").SemiBold(); t.Span(c.CorreoInstitucional); });
-                        if (c.IncluyeCredenciales && !string.IsNullOrEmpty(c.PasswordTemporal))
+                        sec.Item().Background(CompGold).PaddingVertical(5).PaddingHorizontal(10)
+                            .Text("CREDENCIALES DE ACCESO").FontColor(CompNavy).Bold().FontSize(10);
+                        sec.Item().Background("#FFFBEF").Border(1).BorderColor(CompGold).BorderTop(0).Padding(12).Column(b =>
                         {
-                            b.Item().Text(t => { t.Span("Contraseña temporal: ").SemiBold(); t.Span(c.PasswordTemporal).FontFamily(FontePrincipal); });
-                            b.Item().Text("Importante: el estudiante debe cambiar la contraseña en su primer inicio de sesión.")
-                                .FontSize(8).FontColor(ColorGris).Italic();
-                        }
-                        else
-                        {
-                            b.Item().Text("La contraseña no se muestra en reimpresiones. Si el estudiante la olvidó, solicite un restablecimiento desde Accesos de Alumnos y Docentes.")
-                                .FontSize(8).FontColor(ColorGris).Italic();
-                        }
-                        if (!string.IsNullOrEmpty(c.UrlPortal))
-                            b.Item().Text(t => { t.Span("Portal: ").SemiBold(); t.Span(c.UrlPortal); });
+                            b.Spacing(5);
+                            b.Item().Text(t => { t.Span("Correo institucional: ").SemiBold().FontColor(CompNavy); t.Span(c.CorreoInstitucional); });
+                            if (c.IncluyeCredenciales && !string.IsNullOrEmpty(c.PasswordTemporal))
+                            {
+                                b.Item().Text(t => { t.Span("Contraseña temporal: ").SemiBold().FontColor(CompNavy); t.Span(c.PasswordTemporal); });
+                                b.Item().Text("Importante: el estudiante debe cambiar la contraseña en su primer inicio de sesión.")
+                                    .FontSize(8).FontColor(ColorGris).Italic();
+                            }
+                            else
+                            {
+                                b.Item().Text("La contraseña no se muestra en reimpresiones. Si el estudiante la olvidó, solicite un restablecimiento desde Accesos de Alumnos y Docentes.")
+                                    .FontSize(8).FontColor(ColorGris).Italic();
+                            }
+                            if (!string.IsNullOrEmpty(c.UrlPortal))
+                                b.Item().Text(t => { t.Span("Portal: ").SemiBold().FontColor(CompNavy); t.Span(c.UrlPortal); });
+                        });
                     });
 
-                    col.Item().PaddingTop(20).Column(f =>
+                    col.Item().PaddingTop(30).Row(r =>
                     {
-                        f.Item().LineHorizontal(0.5f).LineColor(ColorGris);
-                        f.Item().PaddingTop(30).AlignCenter().Text("_____________________________________").FontColor(ColorGris);
-                        f.Item().AlignCenter().Text("Firma del Estudiante").FontSize(9);
+                        r.RelativeItem();
+                        r.ConstantItem(240).Column(f =>
+                        {
+                            f.Item().LineHorizontal(0.8f).LineColor(CompNavy);
+                            f.Item().PaddingTop(4).AlignCenter().Text("Firma del Estudiante").FontSize(9).FontColor(ColorGris);
+                        });
+                        r.RelativeItem();
                     });
                 });
 
                 page.Footer().Column(f =>
                 {
-                    f.Item().LineHorizontal(0.5f).LineColor(ColorGris);
-                    f.Item().PaddingTop(4).Row(r =>
+                    f.Item().Height(2).Background(CompNavy);
+                    f.Item().PaddingTop(4).Text(t =>
                     {
-                        r.RelativeItem().Text(t => { t.Span("Generado: ").FontSize(7).FontColor(ColorGris); t.Span(c.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")).FontSize(7).FontColor(ColorGris); });
+                        t.Justify();
+                        t.Span("Aviso de Privacidad: ").SemiBold().FontSize(6.5f).FontColor(ColorGris);
+                        t.Span("Tus datos personales se utilizan únicamente con fines académicos y para la expedición de credenciales escolares, conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares. Consulta el aviso integral en ")
+                            .FontSize(6.5f).FontColor(ColorGris);
+                        t.Span("https://usaguanajuato.edu.mx/docs/AVISO DE PRIVACIDAD.pdf").FontSize(6.5f).FontColor(CompNavy);
+                    });
+                    f.Item().PaddingTop(3).Row(r =>
+                    {
+                        r.RelativeItem().Text(t =>
+                        {
+                            t.Span("Universidad San Andrés de Guanajuato · ").FontSize(7).FontColor(ColorGris);
+                            t.Span("Generado: ").FontSize(7).FontColor(ColorGris);
+                            t.Span(c.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")).FontSize(7).FontColor(ColorGris);
+                        });
                         r.RelativeItem().AlignRight().Text(t => { t.CurrentPageNumber().FontSize(7).FontColor(ColorGris); t.Span(" de ").FontSize(7).FontColor(ColorGris); t.TotalPages().FontSize(7).FontColor(ColorGris); });
                     });
                 });

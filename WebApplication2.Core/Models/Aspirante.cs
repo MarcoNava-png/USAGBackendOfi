@@ -18,6 +18,8 @@ public partial class Aspirante : BaseEntity
 
     public string? Observaciones { get; set; }
 
+    public bool EsAlumnoAutoCreado { get; set; }
+
     public int? TurnoId { get; set; }
 
     public int? CuatrimestreInteres { get; set; }

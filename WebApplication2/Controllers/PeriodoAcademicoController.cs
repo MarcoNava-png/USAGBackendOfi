@@ -17,11 +17,23 @@ namespace WebApplication2.Controllers
     {
         private readonly IPeriodoAcademicoService _periodoAcademicoervice;
         private readonly IMapper _mapper;
+        private readonly IVentanaCapturaService _ventanaCapturaService;
 
-        public PeriodoAcademicoController(IPeriodoAcademicoService periodoAcademicoService, IMapper mapper)
+        public PeriodoAcademicoController(IPeriodoAcademicoService periodoAcademicoService, IMapper mapper, IVentanaCapturaService ventanaCapturaService)
         {
             _periodoAcademicoervice = periodoAcademicoService;
             _mapper = mapper;
+            _ventanaCapturaService = ventanaCapturaService;
+        }
+
+        private async Task SincronizarVentanasCapturaAsync(int idPeriodo, PeriodoAcademicoRequest request)
+        {
+            if (request.FechaLimiteParcial1.HasValue)
+                await _ventanaCapturaService.AbrirAsync(idPeriodo, 1, request.FechaLimiteParcial1);
+            if (request.FechaLimiteParcial2.HasValue)
+                await _ventanaCapturaService.AbrirAsync(idPeriodo, 2, request.FechaLimiteParcial2);
+            if (request.FechaLimiteParcial3.HasValue)
+                await _ventanaCapturaService.AbrirAsync(idPeriodo, 3, request.FechaLimiteParcial3);
         }
 
         [HttpGet]
@@ -45,9 +57,22 @@ namespace WebApplication2.Controllers
         [HttpPost]
         public async Task<ActionResult<PeriodoAcademicoDto>> Post([FromBody] PeriodoAcademicoRequest request)
         {
+            var existente = await _periodoAcademicoervice.GetPeriodoPorClaveAsync(request.Clave);
+            if (existente != null)
+            {
+                var estado = existente.Status == WebApplication2.Core.Enums.StatusEnum.Active ? "activo" : "inactivo";
+                return BadRequest(new
+                {
+                    isSuccess = false,
+                    messageError = $"Ya existe un periodo con la clave '{request.Clave}' (actualmente {estado}). Búscalo en la lista en vez de crear uno nuevo."
+                });
+            }
+
             var periodoAcademico = _mapper.Map<PeriodoAcademico>(request);
 
             await _periodoAcademicoervice.CrearPeriodoAcademico(periodoAcademico);
+
+            await SincronizarVentanasCapturaAsync(periodoAcademico.IdPeriodoAcademico, request);
 
             var periodoAcademicoDto = _mapper.Map<PeriodoAcademicoDto>(periodoAcademico);
 
@@ -62,6 +87,8 @@ namespace WebApplication2.Controllers
                 var newPeriodoAcademico = _mapper.Map<PeriodoAcademico>(request);
 
                 var periodoAcademico = await _periodoAcademicoervice.ActualizarPeriodoAcademico(newPeriodoAcademico);
+
+                await SincronizarVentanasCapturaAsync(request.IdPeriodoAcademico, request);
 
                 var periodoAcademicoDto = _mapper.Map<PeriodoAcademicoDto>(periodoAcademico);
 

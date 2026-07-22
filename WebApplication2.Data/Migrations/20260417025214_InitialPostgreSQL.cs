@@ -3007,7 +3007,8 @@ namespace WebApplication2.Data.Migrations
                 name: "IX_AspiranteDocumento_IdAspirante_IdDocumentoRequisito",
                 table: "AspiranteDocumento",
                 columns: new[] { "IdAspirante", "IdDocumentoRequisito" },
-                unique: true);
+                unique: true,
+                filter: "\"Status\" <> 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AspiranteDocumento_IdDocumentoRequisito",
@@ -3294,7 +3295,8 @@ namespace WebApplication2.Data.Migrations
                 name: "IX_EstudianteGrupo_IdEstudiante_IdGrupo",
                 table: "EstudianteGrupo",
                 columns: new[] { "IdEstudiante", "IdGrupo" },
-                unique: true);
+                unique: true,
+                filter: "\"Status\" <> 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EstudianteGrupo_IdGrupo",
@@ -3552,7 +3554,8 @@ namespace WebApplication2.Data.Migrations
                 name: "IX_PlanDocumentoRequisito_IdPlanEstudios_IdDocumentoRequisito",
                 table: "PlanDocumentoRequisito",
                 columns: new[] { "IdPlanEstudios", "IdDocumentoRequisito" },
-                unique: true);
+                unique: true,
+                filter: "\"Status\" <> 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_PlaneacionDocente_IdGrupoMateria",

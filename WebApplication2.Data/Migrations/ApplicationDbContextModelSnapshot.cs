@@ -179,6 +179,9 @@ namespace WebApplication2.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<int?>("IdCampusAsignado")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -245,7 +248,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdAsistencia"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -255,11 +258,11 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaRegistro")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<DateTime>("FechaSesion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("GrupoMateriaId")
                         .HasColumnType("integer");
@@ -278,7 +281,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -305,7 +308,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdAspirante"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -317,9 +320,12 @@ namespace WebApplication2.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<bool>("EsAlumnoAutoCreado")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("FechaRegistro")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<int?>("GrupoDiasImparticion")
@@ -382,7 +388,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -406,6 +412,10 @@ namespace WebApplication2.Data.Migrations
 
                     b.HasIndex("TurnoId");
 
+                    b.HasIndex(new[] { "CreatedBy" }, "IX_Aspirante_CreatedBy");
+
+                    b.HasIndex(new[] { "Status" }, "IX_Aspirante_Status");
+
                     b.ToTable("Aspirante");
                 });
 
@@ -421,13 +431,13 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("Fecha")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("MedioContacto")
                         .HasColumnType("text");
@@ -442,7 +452,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -468,7 +478,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdAspiranteConvenio"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -485,7 +495,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaAsignacion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<int>("IdAspirante")
@@ -498,7 +508,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -526,25 +536,31 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdAspiranteDocumento"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
+                    b.Property<bool>("Entregado")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("Estatus")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("FechaEntrega")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<DateTime?>("FechaProrroga")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaProrrogaAsignada")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaSubidoUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaValidacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdAspirante")
                         .HasColumnType("integer");
@@ -564,7 +580,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -572,6 +588,10 @@ namespace WebApplication2.Data.Migrations
                     b.Property<string>("UrlArchivo")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UsuarioEntrega")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
 
                     b.Property<string>("UsuarioProrroga")
                         .HasMaxLength(450)
@@ -586,7 +606,8 @@ namespace WebApplication2.Data.Migrations
                     b.HasIndex("IdDocumentoRequisito");
 
                     b.HasIndex("IdAspirante", "IdDocumentoRequisito")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 0");
 
                     b.ToTable("AspiranteDocumento");
                 });
@@ -600,7 +621,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdAspiranteEstatus"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -613,7 +634,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -646,7 +667,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -677,7 +698,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("numeric(12,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -786,7 +807,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaUtc")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<string>("IpAddress")
@@ -831,7 +852,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("FechaUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<long>("IdRecibo")
                         .HasColumnType("bigint");
@@ -875,16 +896,16 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("FechaAplicacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaCaptura")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("GrupoMateriaId")
                         .HasColumnType("integer");
@@ -911,7 +932,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -932,16 +953,16 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("FechaApertura")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaCierre")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("GrupoMateriaId")
                         .HasColumnType("integer");
@@ -952,7 +973,7 @@ namespace WebApplication2.Data.Migrations
                     b.Property<int>("ParcialId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("ProfesorId")
+                    b.Property<int?>("ProfesorId")
                         .HasColumnType("integer");
 
                     b.Property<int>("Status")
@@ -962,7 +983,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -998,7 +1019,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1017,7 +1038,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1034,6 +1055,150 @@ namespace WebApplication2.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Campus");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatParentescoVivienda", b =>
+                {
+                    b.Property<int>("IdParentescoVivienda")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdParentescoVivienda"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdParentescoVivienda");
+
+                    b.ToTable("CatParentescoVivienda");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatRecursoTecnologico", b =>
+                {
+                    b.Property<int>("IdRecursoTecnologico")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdRecursoTecnologico"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdRecursoTecnologico");
+
+                    b.ToTable("CatRecursoTecnologico");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatServicioMedico", b =>
+                {
+                    b.Property<int>("IdServicioMedico")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdServicioMedico"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdServicioMedico");
+
+                    b.ToTable("CatServicioMedico");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatServicioVivienda", b =>
+                {
+                    b.Property<int>("IdServicioVivienda")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdServicioVivienda"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdServicioVivienda");
+
+                    b.ToTable("CatServicioVivienda");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.CodigoPostal", b =>
@@ -1079,7 +1244,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1106,7 +1271,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1128,7 +1293,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1153,7 +1318,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1169,6 +1334,48 @@ namespace WebApplication2.Data.Migrations
                     b.HasIndex("IdConceptoPago");
 
                     b.ToTable("ConceptoPrecio");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.ConfiguracionCalificaciones", b =>
+                {
+                    b.Property<int>("IdConfiguracionCalificaciones")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdConfiguracionCalificaciones"));
+
+                    b.Property<decimal>("CalificacionMinimaAprobatoria")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Decimales")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("EscalaMaxima")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<bool>("RedondearAlEntero")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdConfiguracionCalificaciones");
+
+                    b.ToTable("ConfiguracionCalificaciones", (string)null);
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Convenio", b =>
@@ -1192,7 +1399,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1218,7 +1425,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1247,7 +1454,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdConvenioAlcance"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1265,7 +1472,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1304,19 +1511,19 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(450)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("FechaCierre")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaFin")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaInicio")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("FolioCorteCaja")
                         .IsRequired()
@@ -1359,7 +1566,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1407,7 +1614,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1424,7 +1631,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1454,7 +1661,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1474,7 +1681,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1501,7 +1708,7 @@ namespace WebApplication2.Data.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1515,7 +1722,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1540,16 +1747,16 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("numeric(10,2)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("FechaEntrega")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaRevision")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdEstudiante")
                         .HasColumnType("integer");
@@ -1580,7 +1787,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1650,7 +1857,7 @@ namespace WebApplication2.Data.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1666,7 +1873,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("FechaBaja")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateOnly>("FechaIngreso")
                         .ValueGeneratedOnAdd()
@@ -1693,7 +1900,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1725,7 +1932,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdEstudianteGrupo"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1738,7 +1945,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaInscripcion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<int>("IdEstudiante")
@@ -1755,7 +1962,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1765,7 +1972,8 @@ namespace WebApplication2.Data.Migrations
                     b.HasIndex("IdGrupo");
 
                     b.HasIndex("IdEstudiante", "IdGrupo")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 0");
 
                     b.ToTable("EstudianteGrupo");
                 });
@@ -1779,7 +1987,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdEstudiantePlan"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1802,7 +2010,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1816,6 +2024,148 @@ namespace WebApplication2.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("EstudiantePlan");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioRecursoTecnologico", b =>
+                {
+                    b.Property<int>("IdEstudioSocioeconomico")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdRecursoTecnologico")
+                        .HasColumnType("integer");
+
+                    b.HasKey("IdEstudioSocioeconomico", "IdRecursoTecnologico");
+
+                    b.HasIndex("IdRecursoTecnologico");
+
+                    b.ToTable("EstudioRecursoTecnologico");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioServicioVivienda", b =>
+                {
+                    b.Property<int>("IdEstudioSocioeconomico")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdServicioVivienda")
+                        .HasColumnType("integer");
+
+                    b.HasKey("IdEstudioSocioeconomico", "IdServicioVivienda");
+
+                    b.HasIndex("IdServicioVivienda");
+
+                    b.ToTable("EstudioServicioVivienda");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioSocioeconomico", b =>
+                {
+                    b.Property<int>("IdEstudioSocioeconomico")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdEstudioSocioeconomico"));
+
+                    b.Property<string>("AnalistaId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ConQuienViveOtro")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<bool?>("DificultadesEconomicas")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("EmpresaActividad")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EscuelaProcedencia")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("FechaLlenado")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("HorarioLaboral")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("IdAspirante")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("IdParentescoVivienda")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("IdServicioMedico")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("LlenadoPorAspirante")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("NumeroPersonasHogar")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("PadeceEnfermedad")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PadeceEnfermedadDetalle")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int?>("PersonasAportanIngresos")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PrincipalSostenEconomico")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("PromedioNivelAnterior")
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("QuienCubreGastos")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("TieneDiscapacidad")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TieneDiscapacidadDetalle")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Token")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool?>("Trabaja")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdEstudioSocioeconomico");
+
+                    b.HasIndex("IdParentescoVivienda");
+
+                    b.HasIndex("IdServicioMedico");
+
+                    b.HasIndex(new[] { "Token" }, "IX_EstudioSocioeconomico_Token");
+
+                    b.HasIndex(new[] { "IdAspirante" }, "UQ_EstudioSocioeconomico_Aspirante")
+                        .IsUnique();
+
+                    b.ToTable("EstudioSocioeconomico");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Genero", b =>
@@ -1856,7 +2206,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1883,7 +2233,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1914,7 +2264,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1940,7 +2290,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -1971,7 +2321,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -1994,7 +2344,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2022,7 +2372,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("decimal(4, 1)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2035,7 +2385,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaInscripcion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<int>("IdEstudiante")
@@ -2048,7 +2398,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2073,16 +2423,16 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdLigaPago"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("FechaGeneracionUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaPrimeraVistaUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Folio")
                         .HasColumnType("text");
@@ -2106,7 +2456,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2141,7 +2491,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2163,7 +2513,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2186,7 +2536,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdMateriaPlan"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2207,7 +2557,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2235,7 +2585,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2248,7 +2598,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2389,11 +2739,11 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaCreacion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<DateTime?>("FechaLectura")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("Leida")
                         .ValueGeneratedOnAdd()
@@ -2450,7 +2800,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdPago"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2459,7 +2809,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("FechaPagoUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("FolioPago")
                         .HasColumnType("text");
@@ -2493,7 +2843,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2514,7 +2864,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdPagoAplicacion"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2533,7 +2883,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2556,7 +2906,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdPagoMetodo"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2577,7 +2927,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2600,7 +2950,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2615,7 +2965,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2668,7 +3018,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(30)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2693,7 +3043,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2724,7 +3074,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<string>("Description")
@@ -2781,7 +3131,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2834,7 +3184,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2856,10 +3206,9 @@ namespace WebApplication2.Data.Migrations
 
                     b.HasIndex("Nombre");
 
-                    b.HasIndex(new[] { "Curp" }, "UQ_Persona_CURP")
-                        .IsUnique();
+                    b.HasIndex(new[] { "Correo" }, "IX_Persona_Correo");
 
-                    b.HasIndex(new[] { "Correo" }, "UQ_Persona_Email")
+                    b.HasIndex(new[] { "Curp" }, "UQ_Persona_CURP")
                         .IsUnique();
 
                     b.HasIndex(new[] { "Rfc" }, "UQ_Persona_RFC")
@@ -2877,7 +3226,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdPlanDocumentoRequisito"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2895,7 +3244,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -2905,7 +3254,8 @@ namespace WebApplication2.Data.Migrations
                     b.HasIndex("IdDocumentoRequisito");
 
                     b.HasIndex("IdPlanEstudios", "IdDocumentoRequisito")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 0");
 
                     b.ToTable("PlanDocumentoRequisito");
                 });
@@ -2923,7 +3273,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -2937,7 +3287,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("FechaExpedicionRvoe")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdCampus")
                         .HasColumnType("integer");
@@ -2981,7 +3331,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3051,7 +3401,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3078,7 +3428,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3105,13 +3455,13 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdPlanPagoAsignacion"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("FechaAsignacionUtc")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdEstudiante")
                         .HasColumnType("integer");
@@ -3129,7 +3479,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3156,7 +3506,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("numeric(9,2)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3196,7 +3546,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3219,7 +3569,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3229,7 +3579,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(500)");
 
                     b.Property<DateTime>("FechaSubida")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdGrupoMateria")
                         .HasColumnType("integer");
@@ -3253,7 +3603,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3286,7 +3636,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3308,17 +3658,17 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaCreacion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<DateTime?>("FechaModificacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaVigenciaFin")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaVigenciaInicio")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int?>("IdModalidad")
                         .HasColumnType("integer");
@@ -3353,7 +3703,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3440,7 +3790,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3454,6 +3804,12 @@ namespace WebApplication2.Data.Migrations
                     b.Property<string>("NombreArchivoOriginal")
                         .HasColumnType("text");
 
+                    b.Property<string>("Origen")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RolesGenera")
+                        .HasColumnType("text");
+
                     b.Property<string>("RutaArchivo")
                         .HasColumnType("text");
 
@@ -3461,7 +3817,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3472,6 +3828,69 @@ namespace WebApplication2.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("PlantillaReportes");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.PreInscripcion", b =>
+                {
+                    b.Property<int>("IdPreInscripcion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdPreInscripcion"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Estado")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Pendiente");
+
+                    b.Property<DateTime>("FechaApartado")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
+
+                    b.Property<int>("IdEstudiante")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdPeriodoAcademicoDestino")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdPlanEstudios")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Nota")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<byte>("NumeroCuatrimestreObjetivo")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdPreInscripcion");
+
+                    b.HasIndex("IdPeriodoAcademicoDestino");
+
+                    b.HasIndex("IdPlanEstudios");
+
+                    b.HasIndex("IdEstudiante", "IdPeriodoAcademicoDestino")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 0 AND \"Estado\" = 'Pendiente'");
+
+                    b.ToTable("PreInscripcion");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Profesor", b =>
@@ -3491,7 +3910,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3511,7 +3930,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3601,7 +4020,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("IdRecibo"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3661,12 +4080,20 @@ namespace WebApplication2.Data.Migrations
                         .HasComputedColumnSql("ROUND(\"Subtotal\"-\"Descuento\"+\"Recargos\",2)", true);
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
 
                     b.HasKey("IdRecibo");
+
+                    b.HasIndex(new[] { "IdAspirante" }, "IX_Recibo_IdAspirante");
+
+                    b.HasIndex(new[] { "IdEstudiante" }, "IX_Recibo_IdEstudiante");
+
+                    b.HasIndex(new[] { "IdPeriodoAcademico" }, "IX_Recibo_IdPeriodoAcademico");
+
+                    b.HasIndex(new[] { "Status" }, "IX_Recibo_Status");
 
                     b.ToTable("Recibo");
                 });
@@ -3687,7 +4114,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3721,7 +4148,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3735,6 +4162,58 @@ namespace WebApplication2.Data.Migrations
                     b.ToTable("ReciboDetalle");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.ReporteDefinicion", b =>
+                {
+                    b.Property<int>("IdReporteDefinicion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdReporteDefinicion"));
+
+                    b.Property<string>("AgruparPor")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ColumnasJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FiltrosJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Fuente")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Nombre")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("OrdenCampo")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("OrdenDescendente")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdReporteDefinicion");
+
+                    b.ToTable("ReporteDefinicion", (string)null);
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.RolePermission", b =>
                 {
                     b.Property<int>("IdRolePermission")
@@ -3745,7 +4224,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("AssignedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<string>("AssignedBy")
@@ -3799,7 +4278,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdSeguimientoEgresado"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3820,7 +4299,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("FechaSolicitudTitulacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int?>("IdEstudiante")
                         .HasColumnType("integer");
@@ -3856,7 +4335,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3886,7 +4365,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -3898,10 +4377,10 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("FechaAutorizacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaSolicitud")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdEstudiante")
                         .HasColumnType("integer");
@@ -3934,7 +4413,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -3963,21 +4442,21 @@ namespace WebApplication2.Data.Migrations
                         .HasDefaultValue(0);
 
                     b.Property<DateTime?>("FechaEntrega")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaGeneracion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaModificacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaSolicitud")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<DateTime?>("FechaVencimiento")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("FolioSolicitud")
                         .IsRequired()
@@ -4063,7 +4542,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4072,10 +4551,10 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("FechaResolucion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaSolicitud")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdPlanEstudios")
                         .HasColumnType("integer");
@@ -4093,7 +4572,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4103,6 +4582,68 @@ namespace WebApplication2.Data.Migrations
                     b.HasIndex("IdPlanEstudios");
 
                     b.ToTable("SolicitudesPlanEstudios");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.SolicitudProrrogaCaptura", b =>
+                {
+                    b.Property<int>("IdSolicitudProrroga")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdSolicitudProrroga"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Estado")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("FechaLimiteProrroga")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("FechaResolucion")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime>("FechaSolicitud")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("IdGrupoMateria")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdProfesor")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Motivo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("NotaResolucion")
+                        .HasColumnType("text");
+
+                    b.Property<int>("NumeroParcial")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResueltaPor")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdSolicitudProrroga");
+
+                    b.HasIndex("IdGrupoMateria");
+
+                    b.HasIndex("IdProfesor");
+
+                    b.ToTable("SolicitudesProrrogaCaptura");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.TareaDocente", b =>
@@ -4117,7 +4658,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4127,10 +4668,10 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<DateTime>("FechaCreacion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaLimite")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("IdGrupoMateria")
                         .HasColumnType("integer");
@@ -4151,7 +4692,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4180,7 +4721,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4200,7 +4741,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4223,7 +4764,7 @@ namespace WebApplication2.Data.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdTarifaAdmisionDetalle"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4252,7 +4793,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4284,11 +4825,10 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<string>("Contenido")
                         .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4308,7 +4848,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4350,7 +4890,7 @@ namespace WebApplication2.Data.Migrations
                         .HasDefaultValue(0);
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4366,7 +4906,7 @@ namespace WebApplication2.Data.Migrations
                         .HasDefaultValue(0);
 
                     b.Property<DateTime?>("FechaCierre")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Folio")
                         .IsRequired()
@@ -4396,7 +4936,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4455,7 +4995,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.Property<DateTime>("FechaCreacion")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
                     b.Property<string>("Nombre")
@@ -4751,7 +5291,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4784,7 +5324,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4817,7 +5357,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -4835,19 +5375,19 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("FechaEnvioSEP")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaExpedicion")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaExpedicionRvoe")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime>("FechaNacimiento")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("FechaRespuestaSEP")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("FirmaAutografaHash")
                         .HasColumnType("text");
@@ -4943,7 +5483,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("numeric");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -4979,7 +5519,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -5006,7 +5546,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -5030,7 +5570,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -5051,7 +5591,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
@@ -5081,7 +5621,7 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("CreatedBy")
                         .HasColumnType("text");
@@ -5120,16 +5660,16 @@ namespace WebApplication2.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("VigenciaFin")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("VigenciaInicio")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -5161,6 +5701,51 @@ namespace WebApplication2.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Turno");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.VentanaCaptura", b =>
+                {
+                    b.Property<int>("IdVentanaCaptura")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdVentanaCaptura"));
+
+                    b.Property<bool>("Abierta")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("FechaApertura")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("FechaLimite")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("IdPeriodoAcademico")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("NumeroParcial")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("IdVentanaCaptura");
+
+                    b.HasIndex("IdPeriodoAcademico", "NumeroParcial");
+
+                    b.ToTable("VentanasCaptura");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -5451,9 +6036,7 @@ namespace WebApplication2.Data.Migrations
 
                     b.HasOne("WebApplication2.Core.Models.Profesor", "Profesor")
                         .WithMany()
-                        .HasForeignKey("ProfesorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("ProfesorId");
 
                     b.Navigation("GrupoMateria");
 
@@ -5628,6 +6211,76 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("IdEstudianteNavigation");
 
                     b.Navigation("IdPlanEstudiosNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioRecursoTecnologico", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.EstudioSocioeconomico", "IdEstudioSocioeconomicoNavigation")
+                        .WithMany("EstudioRecursoTecnologico")
+                        .HasForeignKey("IdEstudioSocioeconomico")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_EstudioRecursoTecnologico_Estudio");
+
+                    b.HasOne("WebApplication2.Core.Models.CatRecursoTecnologico", "IdRecursoTecnologicoNavigation")
+                        .WithMany("EstudioRecursoTecnologico")
+                        .HasForeignKey("IdRecursoTecnologico")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_EstudioRecursoTecnologico_Recurso");
+
+                    b.Navigation("IdEstudioSocioeconomicoNavigation");
+
+                    b.Navigation("IdRecursoTecnologicoNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioServicioVivienda", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.EstudioSocioeconomico", "IdEstudioSocioeconomicoNavigation")
+                        .WithMany("EstudioServicioVivienda")
+                        .HasForeignKey("IdEstudioSocioeconomico")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_EstudioServicioVivienda_Estudio");
+
+                    b.HasOne("WebApplication2.Core.Models.CatServicioVivienda", "IdServicioViviendaNavigation")
+                        .WithMany("EstudioServicioVivienda")
+                        .HasForeignKey("IdServicioVivienda")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_EstudioServicioVivienda_Servicio");
+
+                    b.Navigation("IdEstudioSocioeconomicoNavigation");
+
+                    b.Navigation("IdServicioViviendaNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioSocioeconomico", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.Aspirante", "IdAspiranteNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdAspirante")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("FK_EstudioSocioeconomico_Aspirante");
+
+                    b.HasOne("WebApplication2.Core.Models.CatParentescoVivienda", "IdParentescoViviendaNavigation")
+                        .WithMany("EstudiosSocioeconomicos")
+                        .HasForeignKey("IdParentescoVivienda")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("FK_EstudioSocioeconomico_Parentesco");
+
+                    b.HasOne("WebApplication2.Core.Models.CatServicioMedico", "IdServicioMedicoNavigation")
+                        .WithMany("EstudiosSocioeconomicos")
+                        .HasForeignKey("IdServicioMedico")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("FK_EstudioSocioeconomico_ServicioMedico");
+
+                    b.Navigation("IdAspiranteNavigation");
+
+                    b.Navigation("IdParentescoViviendaNavigation");
+
+                    b.Navigation("IdServicioMedicoNavigation");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Grupo", b =>
@@ -6026,6 +6679,33 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("IdPlantillaCobroNavigation");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.PreInscripcion", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.Estudiante", "IdEstudianteNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdEstudiante")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.PeriodoAcademico", "IdPeriodoAcademicoDestinoNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPeriodoAcademicoDestino")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.PlanEstudios", "IdPlanEstudiosNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPlanEstudios")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("IdEstudianteNavigation");
+
+                    b.Navigation("IdPeriodoAcademicoDestinoNavigation");
+
+                    b.Navigation("IdPlanEstudiosNavigation");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.Profesor", b =>
                 {
                     b.HasOne("WebApplication2.Core.Models.Campus", "Campus")
@@ -6150,6 +6830,23 @@ namespace WebApplication2.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("IdPlanEstudiosNavigation");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.SolicitudProrrogaCaptura", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.GrupoMateria", "IdGrupoMateriaNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdGrupoMateria")
+                        .IsRequired();
+
+                    b.HasOne("WebApplication2.Core.Models.Profesor", "IdProfesorNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdProfesor")
+                        .IsRequired();
+
+                    b.Navigation("IdGrupoMateriaNavigation");
+
+                    b.Navigation("IdProfesorNavigation");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.TareaDocente", b =>
@@ -6281,6 +6978,16 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("ConfiguracionIPESNavigation");
                 });
 
+            modelBuilder.Entity("WebApplication2.Core.Models.VentanaCaptura", b =>
+                {
+                    b.HasOne("WebApplication2.Core.Models.PeriodoAcademico", "IdPeriodoAcademicoNavigation")
+                        .WithMany()
+                        .HasForeignKey("IdPeriodoAcademico")
+                        .IsRequired();
+
+                    b.Navigation("IdPeriodoAcademicoNavigation");
+                });
+
             modelBuilder.Entity("WebApplication2.Core.Models.Aspirante", b =>
                 {
                     b.Navigation("AspiranteConvenio");
@@ -6303,6 +7010,26 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("ConvenioAlcance");
 
                     b.Navigation("PlanEstudios");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatParentescoVivienda", b =>
+                {
+                    b.Navigation("EstudiosSocioeconomicos");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatRecursoTecnologico", b =>
+                {
+                    b.Navigation("EstudioRecursoTecnologico");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatServicioMedico", b =>
+                {
+                    b.Navigation("EstudiosSocioeconomicos");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.CatServicioVivienda", b =>
+                {
+                    b.Navigation("EstudioServicioVivienda");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.ConceptoPago", b =>
@@ -6358,6 +7085,13 @@ namespace WebApplication2.Data.Migrations
                     b.Navigation("EstudiantePlan");
 
                     b.Navigation("Inscripcion");
+                });
+
+            modelBuilder.Entity("WebApplication2.Core.Models.EstudioSocioeconomico", b =>
+                {
+                    b.Navigation("EstudioRecursoTecnologico");
+
+                    b.Navigation("EstudioServicioVivienda");
                 });
 
             modelBuilder.Entity("WebApplication2.Core.Models.Genero", b =>

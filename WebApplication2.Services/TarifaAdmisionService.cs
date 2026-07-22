@@ -19,17 +19,20 @@ namespace WebApplication2.Services
         private readonly IReciboService _reciboService;
         private readonly IConvenioService _convenioService;
         private readonly IPlantillaCobroService _plantillaCobroService;
+        private readonly IInstitucionProvider _institucionProvider;
 
         public TarifaAdmisionService(
             ApplicationDbContext db,
             IReciboService reciboService,
             IConvenioService convenioService,
-            IPlantillaCobroService plantillaCobroService)
+            IPlantillaCobroService plantillaCobroService,
+            IInstitucionProvider institucionProvider)
         {
             _db = db;
             _reciboService = reciboService;
             _convenioService = convenioService;
             _plantillaCobroService = plantillaCobroService;
+            _institucionProvider = institucionProvider;
         }
 
         public async Task<IReadOnlyList<TarifaAdmisionDto>> ListarTarifasAsync(bool? soloActivas = null, bool? esConvenioEmpresarial = null, CancellationToken ct = default)
@@ -516,7 +519,7 @@ namespace WebApplication2.Services
                 NombreTarifa    = tarifa.Nombre,
                 Fecha           = DateOnly.FromDateTime(DateTime.UtcNow),
                 Conceptos       = conceptos,
-                Institucion     = new Core.DTOs.Recibo.InstitucionPdfDto()
+                Institucion     = _institucionProvider.ObtenerPdf()
             };
         }
 
@@ -632,7 +635,7 @@ namespace WebApplication2.Services
                 NombreTarifa    = tarifa.Nombre,
                 Fecha           = DateOnly.FromDateTime(DateTime.UtcNow),
                 Conceptos       = conceptos,
-                Institucion     = new Core.DTOs.Recibo.InstitucionPdfDto(),
+                Institucion     = _institucionProvider.ObtenerPdf(),
                 TotalOriginal   = totalOriginal,
                 TotalDescuento  = totalDescuento,
                 TotalFinal      = totalOriginal - totalDescuento,

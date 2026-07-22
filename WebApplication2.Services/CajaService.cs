@@ -209,6 +209,21 @@ namespace WebApplication2.Services
             };
         }
 
+        private async Task<List<int>> ObtenerIdsAspiranteVinculadosCajaAsync(int idEstudiante)
+        {
+            var idPersona = await _context.Estudiante
+                .Where(e => e.IdEstudiante == idEstudiante)
+                .Select(e => (int?)e.IdPersona)
+                .FirstOrDefaultAsync();
+
+            if (idPersona == null) return new List<int>();
+
+            return await _context.Aspirante
+                .Where(a => a.IdPersona == idPersona)
+                .Select(a => a.IdAspirante)
+                .ToListAsync();
+        }
+
         private async Task<RecibosParaCobroDto> ObtenerRecibosDeEstudiante(int idEstudiante)
         {
             var estudiante = await _context.Estudiante
@@ -220,9 +235,12 @@ namespace WebApplication2.Services
                 return new RecibosParaCobroDto { Recibos = new List<ReciboParaCobroDto>() };
             }
 
+            var idsAspiranteCobro = await ObtenerIdsAspiranteVinculadosCajaAsync(idEstudiante);
+
             var recibos = await _context.Recibo
                 .Include(r => r.Detalles)
-                .Where(r => r.IdEstudiante == idEstudiante)
+                .Where(r => r.IdEstudiante == idEstudiante
+                    || (r.IdAspirante != null && idsAspiranteCobro.Contains(r.IdAspirante.Value)))
                 .Where(r => r.Estatus == EstatusRecibo.PENDIENTE || r.Estatus == EstatusRecibo.PARCIAL || r.Estatus == EstatusRecibo.VENCIDO)
                 .OrderBy(r => r.FechaVencimiento)
                 .ToListAsync();
@@ -379,9 +397,12 @@ namespace WebApplication2.Services
                 return new RecibosParaCobroDto { Recibos = new List<ReciboParaCobroDto>() };
             }
 
+            var idsAspiranteTodos = await ObtenerIdsAspiranteVinculadosCajaAsync(idEstudiante);
+
             var recibos = await _context.Recibo
                 .Include(r => r.Detalles)
-                .Where(r => r.IdEstudiante == idEstudiante)
+                .Where(r => r.IdEstudiante == idEstudiante
+                    || (r.IdAspirante != null && idsAspiranteTodos.Contains(r.IdAspirante.Value)))
                 .OrderByDescending(r => r.FechaEmision)
                 .ThenByDescending(r => r.IdRecibo)
                 .ToListAsync();

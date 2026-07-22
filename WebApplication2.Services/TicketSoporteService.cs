@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using WebApplication2.Core.Common;
 using WebApplication2.Core.DTOs.Ticket;
 using WebApplication2.Core.Models;
@@ -19,17 +20,62 @@ namespace WebApplication2.Services
         private readonly IBlobStorageService _blobStorage;
         private readonly INotificacionInternalService _notificaciones;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IEmailService _emailService;
+        private readonly IConfiguration _configuration;
 
         public TicketSoporteService(
             ApplicationDbContext db,
             IBlobStorageService blobStorage,
             INotificacionInternalService notificaciones,
-            UserManager<ApplicationUser> userManager)
+            UserManager<ApplicationUser> userManager,
+            IEmailService emailService,
+            IConfiguration configuration)
         {
             _db = db;
             _blobStorage = blobStorage;
             _notificaciones = notificaciones;
             _userManager = userManager;
+            _emailService = emailService;
+            _configuration = configuration;
+        }
+
+        private string UrlTicket(int idTicket)
+        {
+            var baseUrl = _configuration["FrontendUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl)) baseUrl = "https://saciusag.com.mx";
+            return $"{baseUrl.TrimEnd('/')}/dashboard/tickets?ticketId={idTicket}";
+        }
+
+        private async Task EnviarCorreoTicketAsync(string? email, string asunto, string encabezado, string cuerpo, int idTicket)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return;
+            try
+            {
+                var html = $@"
+<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333'>
+  <div style='background:#14356F;color:#fff;padding:20px 24px;border-radius:10px 10px 0 0'>
+    <h2 style='margin:0;font-size:18px'>{encabezado}</h2>
+  </div>
+  <div style='background:#f8fafc;padding:24px;border:1px solid #e2e8f0;border-top:none'>
+    {cuerpo}
+    <p style='text-align:center;margin:28px 0 8px'>
+      <a href='{UrlTicket(idTicket)}' style='display:inline-block;background:#14356F;color:#fff;padding:12px 26px;text-decoration:none;border-radius:8px;font-weight:bold'>Ver ticket</a>
+    </p>
+  </div>
+  <div style='text-align:center;padding:16px;color:#94a3b8;font-size:12px'>Sistema Escolar USAG · Soporte</div>
+</div>";
+                await _emailService.SendEmailAsync(email, asunto, html);
+            }
+            catch
+            {
+            }
+        }
+
+        private async Task<string?> ObtenerEmailUsuarioAsync(string? userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId)) return null;
+            var user = await _userManager.FindByIdAsync(userId);
+            return user?.Email;
         }
 
         public async Task<TicketResponseDto> CrearAsync(CrearTicketDto dto, IFormFile? archivo, string userId, string nombreUsuario, bool esAdmin)
@@ -77,6 +123,16 @@ namespace WebApplication2.Services
             }
 
             var areaTexto = !string.IsNullOrEmpty(dto.AreaDestino) ? $" para {dto.AreaDestino}" : "";
+            var cuerpoCorreo = $@"
+    <p>Se registró un nuevo ticket de soporte:</p>
+    <p style='background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px'>
+      <strong>Folio:</strong> {folio}<br/>
+      <strong>Título:</strong> {System.Net.WebUtility.HtmlEncode(dto.Titulo)}<br/>
+      <strong>Prioridad:</strong> {ticket.Prioridad}<br/>
+      <strong>Creado por:</strong> {System.Net.WebUtility.HtmlEncode(nombreUsuario)}
+    </p>
+    <p>{System.Net.WebUtility.HtmlEncode(dto.Descripcion)}</p>";
+
             foreach (var dest in destinatarios)
             {
                 await _notificaciones.CrearAsync(
@@ -86,6 +142,14 @@ namespace WebApplication2.Services
                     "ticket",
                     "Soporte",
                     $"/dashboard/tickets?ticketId={ticket.IdTicket}"
+                );
+
+                await EnviarCorreoTicketAsync(
+                    dest.Email,
+                    $"Nuevo ticket {folio}{areaTexto}",
+                    $"Nuevo ticket de soporte{areaTexto}",
+                    cuerpoCorreo,
+                    ticket.IdTicket
                 );
             }
 
@@ -217,6 +281,10 @@ namespace WebApplication2.Services
 
             await _db.SaveChangesAsync();
 
+            var cuerpoComentario = $@"
+    <p><strong>{System.Net.WebUtility.HtmlEncode(nombreUsuario)}</strong> escribió en el ticket <strong>{ticket.Folio}</strong> ({System.Net.WebUtility.HtmlEncode(ticket.Titulo)}):</p>
+    <p style='background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px'>{System.Net.WebUtility.HtmlEncode(comentario.Contenido)}</p>";
+
             // Notificar al otro usuario
             if (esAdmin)
             {
@@ -227,6 +295,14 @@ namespace WebApplication2.Services
                     "ticket",
                     "Soporte",
                     $"/dashboard/tickets?ticketId={ticket.IdTicket}"
+                );
+
+                await EnviarCorreoTicketAsync(
+                    await ObtenerEmailUsuarioAsync(ticket.UsuarioCreadorId),
+                    $"Respuesta en tu ticket {ticket.Folio}",
+                    "Respondieron a tu ticket",
+                    cuerpoComentario,
+                    ticket.IdTicket
                 );
             }
             else
@@ -241,6 +317,14 @@ namespace WebApplication2.Services
                         "ticket",
                         "Soporte",
                         $"/dashboard/tickets?ticketId={ticket.IdTicket}"
+                    );
+
+                    await EnviarCorreoTicketAsync(
+                        admin.Email,
+                        $"Nuevo comentario en ticket {ticket.Folio}",
+                        "Nuevo comentario en un ticket",
+                        cuerpoComentario,
+                        ticket.IdTicket
                     );
                 }
             }
@@ -280,6 +364,14 @@ namespace WebApplication2.Services
                 "ticket",
                 "Soporte",
                 $"/dashboard/tickets?ticketId={ticket.IdTicket}"
+            );
+
+            await EnviarCorreoTicketAsync(
+                await ObtenerEmailUsuarioAsync(ticket.UsuarioCreadorId),
+                $"Tu ticket {ticket.Folio} ahora está {estatusNombre}",
+                $"Ticket {estatusNombre}",
+                $"<p>Tu ticket <strong>{ticket.Folio}</strong> ({System.Net.WebUtility.HtmlEncode(ticket.Titulo)}) ha sido marcado como <strong>{estatusNombre}</strong>.</p>",
+                ticket.IdTicket
             );
         }
 

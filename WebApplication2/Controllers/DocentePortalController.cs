@@ -26,6 +26,8 @@ public class DocentePortalController : ControllerBase
     private readonly IMapper _mapper;
     private readonly ApplicationDbContext _dbContext;
 
+    private readonly IVentanaCapturaService _ventanaService;
+
     public DocentePortalController(
         IProfesorService profesorService,
         IAsistenciaService asistenciaService,
@@ -33,7 +35,8 @@ public class DocentePortalController : ControllerBase
         IPlaneacionDocenteService planeacionService,
         ITareaDocenteService tareaService,
         IMapper mapper,
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IVentanaCapturaService ventanaService)
     {
         _profesorService = profesorService;
         _asistenciaService = asistenciaService;
@@ -42,6 +45,7 @@ public class DocentePortalController : ControllerBase
         _tareaService = tareaService;
         _mapper = mapper;
         _dbContext = dbContext;
+        _ventanaService = ventanaService;
     }
 
     // ──────────────── PERFIL ────────────────
@@ -281,6 +285,9 @@ public class DocentePortalController : ControllerBase
         var ownership = await ValidateOwnership(profesor.IdProfesor, req.GrupoMateriaId, ct);
         if (!ownership) return Forbid();
 
+        var (permitido, motivo) = await _ventanaService.PuedeCapturarAsync(req.GrupoMateriaId, req.ParcialId, profesor.IdProfesor, ct);
+        if (!permitido) return BadRequest(new { message = motivo });
+
         req.ProfesorId = profesor.IdProfesor;
 
         var acta = _mapper.Map<CalificacionParcial>(req);
@@ -326,6 +333,13 @@ public class DocentePortalController : ControllerBase
 
         var ownership = await ValidateOwnership(profesor.IdProfesor, req.GrupoMateriaId, ct);
         if (!ownership) return Forbid();
+
+        var numeroParcial = await _dbContext.CalificacionesParciales
+            .Where(cp => cp.Id == req.CalificacionParcialId)
+            .Select(cp => cp.ParcialId)
+            .FirstOrDefaultAsync(ct);
+        var (permitido, motivo) = await _ventanaService.PuedeCapturarAsync(req.GrupoMateriaId, numeroParcial, profesor.IdProfesor, ct);
+        if (!permitido) return BadRequest(new { message = motivo });
 
         var entity = _mapper.Map<CalificacionDetalle>(req);
         var username = User?.Identity?.Name ?? "sistema";

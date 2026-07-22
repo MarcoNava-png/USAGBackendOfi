@@ -12,5 +12,10 @@ namespace WebApplication2.Core.DTOs.Inscripcion
         public int MateriasInscritas { get; set; }
         public DateTime FechaInscripcion { get; set; }
         public string? Estado { get; set; }
+        public bool Activo { get; set; }
+        public int EstatusAcademico { get; set; }
+        public string? EstatusAcademicoTexto { get; set; }
+        public bool Promovido { get; set; }
+        public string? PromovidoA { get; set; }
     }
 }

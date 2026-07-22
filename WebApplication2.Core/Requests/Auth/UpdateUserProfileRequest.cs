@@ -8,5 +8,6 @@
         public string Telefono { get; set; }
         public string Biografia { get; set; }
         public List<string>? Roles { get; set; }
+        public int? IdCampusAsignado { get; set; }
     }
 }

@@ -48,6 +48,11 @@ namespace WebApplication2.Services
             return periodoAcademico;
         }
 
+        public async Task<PeriodoAcademico?> GetPeriodoPorClaveAsync(string clave)
+        {
+            return await _dbContext.PeriodoAcademico.FirstOrDefaultAsync(p => p.Clave == clave);
+        }
+
         public async Task<PeriodoAcademico> ActualizarPeriodoAcademico(PeriodoAcademico newPeriodoAcademico)
         {
             var periodoAcademico = await _dbContext.PeriodoAcademico
@@ -63,7 +68,6 @@ namespace WebApplication2.Services
             periodoAcademico.IdPeriodicidad = newPeriodoAcademico.IdPeriodicidad;
             periodoAcademico.FechaInicio = newPeriodoAcademico.FechaInicio;
             periodoAcademico.FechaFin = newPeriodoAcademico.FechaFin;
-            periodoAcademico.Status = newPeriodoAcademico.Status;
 
             _dbContext.PeriodoAcademico.Update(periodoAcademico);
 

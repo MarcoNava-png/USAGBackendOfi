@@ -7,6 +7,7 @@ namespace WebApplication2.Services.Interfaces
     {
         Task<PagedResult<PeriodoAcademico>> GetPeriodosAcademicos(int page, int pageSize);
         Task<PeriodoAcademico> CrearPeriodoAcademico(PeriodoAcademico periodoAcademico);
+        Task<PeriodoAcademico?> GetPeriodoPorClaveAsync(string clave);
         Task<PeriodoAcademico> ActualizarPeriodoAcademico(PeriodoAcademico newPeriodoAcademico);
         Task<PeriodoAcademico?> GetPeriodoActualAsync();
         Task<PeriodoAcademico> MarcarComoPeriodoActualAsync(int idPeriodoAcademico);

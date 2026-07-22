@@ -10,5 +10,6 @@ namespace WebApplication2.Core.Models
         public string? Biografia { get; set; }
         public string? PhotoUrl { get; set; }
         public bool MustChangePassword { get; set; }
+        public int? IdCampusAsignado { get; set; }
     }
 }

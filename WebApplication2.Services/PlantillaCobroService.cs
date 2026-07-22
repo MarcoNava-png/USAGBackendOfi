@@ -437,28 +437,53 @@ namespace WebApplication2.Services
             if (request.SoloSimular)
             {
                 int estudiantesConRecibos = 0;
+                int estudiantesAReemplazar = 0;
+                var mesesPlantillaSim = MesesDePlantilla(plantilla, periodo);
 
                 foreach (var estudiante in estudiantes)
                 {
-                    var yaExistenRecibos = await _db.Recibo
-                        .AnyAsync(r => r.IdEstudiante == estudiante.IdEstudiante
+                    var recibosExistentesSim = await _db.Recibo
+                        .Include(r => r.Detalles)
+                            .ThenInclude(d => d.Aplicaciones)
+                        .Where(r => r.IdEstudiante == estudiante.IdEstudiante
                                     && r.IdPeriodoAcademico == request.IdPeriodoAcademico
-                                    && r.Status == StatusEnum.Active, ct);
+                                    && r.Status == StatusEnum.Active)
+                        .ToListAsync(ct);
 
-                    if (yaExistenRecibos)
+                    HashSet<(int, int)> ocupados;
+                    if (request.ActualizarExistentes)
+                    {
+                        ocupados = recibosExistentesSim
+                            .Where(r => r.Detalles.Any(d => d.Aplicaciones.Any()))
+                            .Select(r => (r.FechaVencimiento.Year, r.FechaVencimiento.Month))
+                            .ToHashSet();
+                        if (recibosExistentesSim.Any(r => !r.Detalles.Any(d => d.Aplicaciones.Any())))
+                            estudiantesAReemplazar++;
+                    }
+                    else
+                    {
+                        ocupados = recibosExistentesSim
+                            .Select(r => (r.FechaVencimiento.Year, r.FechaVencimiento.Month))
+                            .ToHashSet();
+                    }
+
+                    var recibosAGenerar = mesesPlantillaSim.Count(m => !ocupados.Contains(m));
+                    if (recibosAGenerar == 0)
                     {
                         estudiantesConRecibos++;
-                        result.Errores.Add($"Estudiante {estudiante.Matricula} ({estudiante.IdPersonaNavigation.Nombre} {estudiante.IdPersonaNavigation.ApellidoPaterno}) ya tiene recibos generados");
+                        result.Errores.Add($"Estudiante {estudiante.Matricula} ({estudiante.IdPersonaNavigation.Nombre} {estudiante.IdPersonaNavigation.ApellidoPaterno}) ya tiene todos los meses generados");
                         continue;
                     }
 
-                    var montoTotal = plantilla.Detalles.Sum(d =>
+                    var montoTotalCompleto = plantilla.Detalles.Sum(d =>
                     {
                         var importe = d.Cantidad * d.PrecioUnitario;
                         if (d.AplicaEnRecibo == null)
                             return importe * plantilla.NumeroRecibos;
                         return importe;
                     });
+                    var factor = plantilla.NumeroRecibos > 0 ? (decimal)recibosAGenerar / plantilla.NumeroRecibos : 1m;
+                    var montoTotal = Math.Round(montoTotalCompleto * factor, 2);
 
                     var descuento = await CalcularDescuentoTotalAsync(estudiante.IdEstudiante, plantilla.Detalles, periodo.FechaInicio, ct);
 
@@ -467,7 +492,7 @@ namespace WebApplication2.Services
                         IdEstudiante = estudiante.IdEstudiante,
                         Matricula = estudiante.Matricula,
                         NombreCompleto = $"{estudiante.IdPersonaNavigation.Nombre} {estudiante.IdPersonaNavigation.ApellidoPaterno}",
-                        RecibosGenerados = plantilla.NumeroRecibos,
+                        RecibosGenerados = recibosAGenerar,
                         MontoTotal = montoTotal,
                         DescuentoBecas = descuento,
                         SaldoFinal = montoTotal - descuento
@@ -475,20 +500,18 @@ namespace WebApplication2.Services
                 }
 
                 result.EstudiantesOmitidos = estudiantesConRecibos;
+                result.RecibosReemplazados = estudiantesAReemplazar;
                 result.Exitoso = true;
                 result.TotalEstudiantes = result.DetalleEstudiantes.Count;
-                result.TotalRecibosGenerados = result.DetalleEstudiantes.Count * plantilla.NumeroRecibos;
+                result.TotalRecibosGenerados = result.DetalleEstudiantes.Sum(d => d.RecibosGenerados);
                 result.MontoTotal = result.DetalleEstudiantes.Sum(d => d.MontoTotal);
                 result.TotalDescuentosBecas = result.DetalleEstudiantes.Sum(d => d.DescuentoBecas);
 
+                result.Mensaje = $"Simulación: Se generarían {result.TotalRecibosGenerados} recibos para {result.TotalEstudiantes} estudiantes";
+                if (estudiantesAReemplazar > 0)
+                    result.Mensaje += $" (se reemplazarán los recibos previos de {estudiantesAReemplazar})";
                 if (estudiantesConRecibos > 0)
-                {
-                    result.Mensaje = $"Simulación: Se generarían {result.TotalRecibosGenerados} recibos para {result.TotalEstudiantes} estudiantes. ({estudiantesConRecibos} estudiantes ya tienen recibos y serán omitidos)";
-                }
-                else
-                {
-                    result.Mensaje = $"Simulación: Se generarían {result.TotalRecibosGenerados} recibos para {result.TotalEstudiantes} estudiantes";
-                }
+                    result.Mensaje += $". {estudiantesConRecibos} omitidos (ya tienen recibos o con pagos)";
 
                 return result;
             }
@@ -500,28 +523,41 @@ namespace WebApplication2.Services
                 {
                     var recibosExistentes = await _db.Recibo
                         .Include(r => r.Detalles)
+                            .ThenInclude(d => d.Aplicaciones)
                         .Where(r => r.IdEstudiante == estudiante.IdEstudiante
                                     && r.IdPeriodoAcademico == request.IdPeriodoAcademico
                                     && r.Status == StatusEnum.Active)
                         .ToListAsync(ct);
 
-                    bool yaExistenRecibosDeEstaPlantilla = recibosExistentes
-                        .Any(r => r.Detalles.Any(d =>
-                            d.RefTabla == "PlantillaCobroDetalle" &&
-                            plantilla.Detalles.Any(pd => pd.IdPlantillaDetalle == d.RefId)));
-
-                    if (yaExistenRecibosDeEstaPlantilla)
-                    {
-                        result.EstudiantesOmitidos++;
-                        result.Errores.Add($"Estudiante {estudiante.Matricula} ya tiene recibos generados de esta plantilla para este periodo");
-                        continue;
-                    }
+                    HashSet<(int anio, int mes)>? mesesOcupados = null;
 
                     if (recibosExistentes.Any())
                     {
-                        result.EstudiantesOmitidos++;
-                        result.Errores.Add($"Estudiante {estudiante.Matricula} ya tiene {recibosExistentes.Count} recibo(s) en este periodo (de otra plantilla)");
-                        continue;
+                        var recibosNoPagados = recibosExistentes
+                            .Where(r => !r.Detalles.Any(d => d.Aplicaciones.Any()))
+                            .ToList();
+
+                        if (request.ActualizarExistentes && recibosNoPagados.Any())
+                        {
+                            foreach (var reciboViejo in recibosNoPagados)
+                            {
+                                reciboViejo.Status = StatusEnum.Deleted;
+                                reciboViejo.UpdatedAt = DateTime.UtcNow;
+                                reciboViejo.UpdatedBy = usuarioCreador;
+                                foreach (var det in reciboViejo.Detalles)
+                                {
+                                    det.Status = StatusEnum.Deleted;
+                                    det.UpdatedAt = DateTime.UtcNow;
+                                }
+                            }
+                            await _db.SaveChangesAsync(ct);
+                            result.RecibosReemplazados += recibosNoPagados.Count;
+                            recibosExistentes = recibosExistentes.Except(recibosNoPagados).ToList();
+                        }
+
+                        mesesOcupados = recibosExistentes
+                            .Select(r => (r.FechaVencimiento.Year, r.FechaVencimiento.Month))
+                            .ToHashSet();
                     }
 
                     var resumenEstudiante = await GenerarRecibosParaEstudianteAsync(
@@ -529,7 +565,14 @@ namespace WebApplication2.Services
                         plantilla,
                         periodo,
                         usuarioCreador,
+                        mesesOcupados,
                         ct);
+
+                    if (resumenEstudiante.RecibosGenerados == 0)
+                    {
+                        result.EstudiantesOmitidos++;
+                        continue;
+                    }
 
                     result.DetalleEstudiantes.Add(resumenEstudiante);
                     result.TotalRecibosGenerados += resumenEstudiante.RecibosGenerados;
@@ -543,8 +586,10 @@ namespace WebApplication2.Services
                 result.TotalEstudiantes = estudiantes.Count;
                 result.Mensaje = $"Se generaron {result.TotalRecibosGenerados} recibos para {result.TotalEstudiantes - result.EstudiantesOmitidos} estudiantes";
 
+                if (result.RecibosReemplazados > 0)
+                    result.Mensaje += $" (se reemplazaron {result.RecibosReemplazados} recibos previos)";
                 if (result.EstudiantesOmitidos > 0)
-                    result.Mensaje += $" ({result.EstudiantesOmitidos} omitidos por ya tener recibos)";
+                    result.Mensaje += $" ({result.EstudiantesOmitidos} omitidos por ya tener recibos o pagos)";
             }
             catch (Exception ex)
             {
@@ -557,11 +602,24 @@ namespace WebApplication2.Services
             return result;
         }
 
+        private List<(int anio, int mes)> MesesDePlantilla(PlantillaCobro plantilla, PeriodoAcademico periodo)
+        {
+            var meses = new List<(int, int)>();
+            int total = plantilla.EstrategiaEmision == 0 ? plantilla.NumeroRecibos : 1;
+            for (int i = 0; i < total; i++)
+            {
+                var fv = CalcularFechaVencimiento(periodo.FechaInicio, i, (byte)plantilla.DiaVencimiento);
+                meses.Add((fv.Year, fv.Month));
+            }
+            return meses;
+        }
+
         private async Task<ReciboEstudianteResumen> GenerarRecibosParaEstudianteAsync(
             Estudiante estudiante,
             PlantillaCobro plantilla,
             PeriodoAcademico periodo,
             string usuarioCreador,
+            HashSet<(int anio, int mes)>? mesesOcupados,
             CancellationToken ct)
         {
             var resumen = new ReciboEstudianteResumen
@@ -594,12 +652,16 @@ namespace WebApplication2.Services
                         (numeroRecibo - 1),
                         (byte)plantilla.DiaVencimiento);
 
+                    if (mesesOcupados != null && mesesOcupados.Contains((fechaVencimiento.Year, fechaVencimiento.Month)))
+                        continue;
+
                     await CrearReciboAsync(
                         estudiante.IdEstudiante,
                         periodo.IdPeriodoAcademico,
                         detallesParaEsteRecibo,
                         fechaVencimiento,
                         usuarioCreador,
+                        plantilla.NumeroRecibos > 1,
                         resumen,
                         ct);
                 }
@@ -615,12 +677,16 @@ namespace WebApplication2.Services
                     0,
                     (byte)plantilla.DiaVencimiento);
 
+                if (mesesOcupados != null && mesesOcupados.Contains((fechaVencimiento.Year, fechaVencimiento.Month)))
+                    return resumen;
+
                 await CrearReciboAsync(
                     estudiante.IdEstudiante,
                     periodo.IdPeriodoAcademico,
                     detallesOrdenados,
                     fechaVencimiento,
                     usuarioCreador,
+                    false,
                     resumen,
                     ct);
             }
@@ -634,6 +700,7 @@ namespace WebApplication2.Services
             List<PlantillaCobroDetalle> detalles,
             DateOnly fechaVencimiento,
             string usuarioCreador,
+            bool esEmisionMensual,
             ReciboEstudianteResumen resumen,
             CancellationToken ct)
         {
@@ -673,8 +740,12 @@ namespace WebApplication2.Services
 
             foreach (var detalle in detalles)
             {
+                var descripcionBase = detalle.Descripcion ?? string.Empty;
+                if (esEmisionMensual && detalle.AplicaEnRecibo == null && !descripcionBase.Contains("{"))
+                    descripcionBase = descripcionBase.TrimEnd() + " {MesAño}";
+
                 var descripcionProcesada = ProcesarDescripcionConPlaceholders(
-                    detalle.Descripcion,
+                    descripcionBase,
                     fechaVencimiento);
 
                 var reciboDetalle = new ReciboDetalle

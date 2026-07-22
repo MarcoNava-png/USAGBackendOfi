@@ -21,13 +21,15 @@ namespace WebApplication2.Services
         private readonly IMapper _mapper;
         private readonly IConvenioService _convenioService;
         private readonly IBecaService _becaService;
+        private readonly IInstitucionProvider _institucionProvider;
 
-        public ReciboService(ApplicationDbContext db, IMapper mapper, IConvenioService convenioService, IBecaService becaService)
+        public ReciboService(ApplicationDbContext db, IMapper mapper, IConvenioService convenioService, IBecaService becaService, IInstitucionProvider institucionProvider)
         {
             _db = db;
             _mapper = mapper;
             _convenioService = convenioService;
             _becaService = becaService;
+            _institucionProvider = institucionProvider;
         }
 
         private async Task<string> GenerarFolioAsync(CancellationToken ct = default)
@@ -218,31 +220,7 @@ namespace WebApplication2.Services
                 .AsNoTracking()
                 .ToListAsync(ct);
 
-            Console.WriteLine($"=== ListarPorAspiranteAsync ===");
-            Console.WriteLine($"Aspirante ID: {idAspirante}");
-            Console.WriteLine($"Total recibos: {list.Count}");
-            foreach (var recibo in list)
-            {
-                Console.WriteLine($"  Recibo {recibo.IdRecibo} - Detalles: {recibo.Detalles?.Count ?? 0}");
-                if (recibo.Detalles != null)
-                {
-                    foreach (var detalle in recibo.Detalles)
-                    {
-                        Console.WriteLine($"    - {detalle.IdReciboDetalle}: {detalle.Descripcion} x{detalle.Cantidad} = {detalle.Importe}");
-                    }
-                }
-            }
-
-            var result = _mapper.Map<IReadOnlyList<ReciboDto>>(list);
-
-            Console.WriteLine($"Después del mapeo:");
-            Console.WriteLine($"Total DTOs: {result.Count}");
-            foreach (var dto in result)
-            {
-                Console.WriteLine($"  DTO Recibo {dto.IdRecibo} - Detalles: {dto.Detalles?.Count ?? 0}");
-            }
-
-            return result;
+            return _mapper.Map<IReadOnlyList<ReciboDto>>(list);
         }
 
         public async Task<int> RecalcularRecargosAsync(int idPeriodoAcademico, DateOnly? fechaCorte, CancellationToken ct)
@@ -835,7 +813,7 @@ namespace WebApplication2.Services
                     PrecioUnitario = d.PrecioUnitario,
                     Importe = d.Importe
                 }).ToList(),
-                Institucion = new InstitucionPdfDto()
+                Institucion = _institucionProvider.ObtenerPdf()
             };
         }
 
@@ -895,7 +873,11 @@ namespace WebApplication2.Services
                 query = query.Where(r => r.Estatus == EstatusRecibo.PENDIENTE || r.Estatus == EstatusRecibo.PARCIAL || r.Estatus == EstatusRecibo.VENCIDO);
             }
 
-            if (filtros.IdPeriodoAcademico.HasValue)
+            if (filtros.SoloSinPeriodo)
+            {
+                query = query.Where(r => r.IdPeriodoAcademico == null);
+            }
+            else if (filtros.IdPeriodoAcademico.HasValue)
             {
                 query = query.Where(r => r.IdPeriodoAcademico == filtros.IdPeriodoAcademico.Value);
             }
@@ -1010,9 +992,30 @@ namespace WebApplication2.Services
                 .Where(a => aspiranteIdsRecibos.Contains(a.IdAspirante))
                 .ToDictionaryAsync(a => a.IdAspirante, ct);
 
+            var reciboIdsRecibos = recibos.Select(r => r.IdRecibo).ToList();
+            var aplicaciones = await _db.PagoAplicacion
+                .Where(pa => pa.Pago.Estatus == EstatusPago.CONFIRMADO
+                    && reciboIdsRecibos.Contains(pa.ReciboDetalle.IdRecibo))
+                .Select(pa => new { IdRecibo = pa.ReciboDetalle.IdRecibo, pa.Pago.FechaPagoUtc, pa.Pago.IdUsuarioCaja })
+                .ToListAsync(ct);
+
+            var pagoPorRecibo = aplicaciones
+                .GroupBy(a => a.IdRecibo)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.FechaPagoUtc).First());
+
+            var cajaIds = pagoPorRecibo.Values
+                .Where(v => !string.IsNullOrEmpty(v.IdUsuarioCaja))
+                .Select(v => v.IdUsuarioCaja!).Distinct().ToList();
+            var usuariosCaja = await _db.Users
+                .Where(u => cajaIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => $"{u.Nombres} {u.Apellidos}".Trim(), ct);
+
             var recibosDto = recibos.Select(r =>
             {
                 var diasVencido = Math.Max(0, hoy.DayNumber - r.FechaVencimiento.DayNumber);
+                pagoPorRecibo.TryGetValue(r.IdRecibo, out var infoPago);
+                string? cobradoPor = infoPago != null && !string.IsNullOrEmpty(infoPago.IdUsuarioCaja)
+                    && usuariosCaja.TryGetValue(infoPago.IdUsuarioCaja, out var nomCaja) ? nomCaja : null;
                 var estaVencido = r.FechaVencimiento < hoy && r.Estatus != EstatusRecibo.PAGADO && r.Estatus != EstatusRecibo.CANCELADO;
 
                 string? matricula = null;
@@ -1092,15 +1095,21 @@ namespace WebApplication2.Services
                     }).ToList(),
                     ConceptoResumen = r.Detalles.Count == 0 ? null
                         : r.Detalles.Count == 1 ? r.Detalles.First().Descripcion
-                        : $"{r.Detalles.First().Descripcion} (+{r.Detalles.Count - 1} más)"
+                        : $"{r.Detalles.First().Descripcion} (+{r.Detalles.Count - 1} más)",
+                    FechaPago = infoPago?.FechaPagoUtc,
+                    CobradoPor = cobradoPor
                 };
             }).ToList();
 
-            var totalSaldoPendiente = recibosDto.Where(r => r.Estatus != "PAGADO" && r.Estatus != "CANCELADO").Sum(r => r.Saldo);
-            var totalRecargos = recibosDto.Sum(r => r.Recargos);
-            var totalVencidos = recibosDto.Count(r => r.EstaVencido);
-            var totalPagados = recibosDto.Count(r => r.Estatus == "PAGADO");
-            var totalPendientes = recibosDto.Count(r => r.Estatus == "PENDIENTE" || r.Estatus == "PARCIAL" || r.Estatus == "VENCIDO");
+            var totalSaldoPendiente = await query
+                .Where(r => r.Estatus != EstatusRecibo.PAGADO && r.Estatus != EstatusRecibo.CANCELADO)
+                .SumAsync(r => (decimal?)r.Saldo, ct) ?? 0;
+            var totalRecargos = await query.SumAsync(r => (decimal?)r.Recargos, ct) ?? 0;
+            var totalVencidos = await query.CountAsync(r =>
+                r.FechaVencimiento < hoy && r.Estatus != EstatusRecibo.PAGADO && r.Estatus != EstatusRecibo.CANCELADO, ct);
+            var totalPagados = await query.CountAsync(r => r.Estatus == EstatusRecibo.PAGADO, ct);
+            var totalPendientes = await query.CountAsync(r =>
+                r.Estatus == EstatusRecibo.PENDIENTE || r.Estatus == EstatusRecibo.PARCIAL || r.Estatus == EstatusRecibo.VENCIDO, ct);
 
             return new ReciboBusquedaResultadoDto
             {
@@ -1115,6 +1124,42 @@ namespace WebApplication2.Services
                 TotalPagados = totalPagados,
                 TotalPendientes = totalPendientes
             };
+        }
+
+        public async Task<PeriodosConRecibosDto> GetPeriodosConRecibosAsync(CancellationToken ct)
+        {
+            var conteos = await _db.Recibo
+                .Where(r => r.Status == StatusEnum.Active && r.IdPeriodoAcademico != null)
+                .GroupBy(r => r.IdPeriodoAcademico!.Value)
+                .Select(g => new { IdPeriodo = g.Key, Total = g.Count() })
+                .ToListAsync(ct);
+
+            var idsPeriodo = conteos.Select(c => c.IdPeriodo).ToList();
+            var periodos = await _db.PeriodoAcademico
+                .Where(p => idsPeriodo.Contains(p.IdPeriodoAcademico))
+                .ToListAsync(ct);
+
+            var lista = conteos
+                .Select(c =>
+                {
+                    var p = periodos.FirstOrDefault(x => x.IdPeriodoAcademico == c.IdPeriodo);
+                    return new PeriodoReciboResumenDto
+                    {
+                        IdPeriodoAcademico = c.IdPeriodo,
+                        Nombre = p?.Nombre ?? $"Periodo {c.IdPeriodo}",
+                        Clave = p?.Clave,
+                        Anio = p?.FechaInicio.Year,
+                        TotalRecibos = c.Total
+                    };
+                })
+                .OrderByDescending(x => x.Anio)
+                .ThenByDescending(x => x.TotalRecibos)
+                .ToList();
+
+            var sinPeriodo = await _db.Recibo
+                .CountAsync(r => r.Status == StatusEnum.Active && r.IdPeriodoAcademico == null, ct);
+
+            return new PeriodosConRecibosDto { Periodos = lista, SinPeriodo = sinPeriodo };
         }
 
         public async Task<ReciboEstadisticasDto> ObtenerEstadisticasAsync(int? idPeriodoAcademico, CancellationToken ct)
@@ -1548,6 +1593,11 @@ namespace WebApplication2.Services
             var descuentoAnterior = recibo.Descuento;
             recibo.Descuento = nuevoDescuento;
             recibo.Saldo = subtotal - nuevoDescuento + recibo.Recargos;
+            if (recibo.Saldo <= 0)
+            {
+                recibo.Saldo = 0;
+                recibo.Estatus = EstatusRecibo.PAGADO;
+            }
             recibo.UpdatedAt = DateTime.UtcNow;
             recibo.UpdatedBy = usuario;
 

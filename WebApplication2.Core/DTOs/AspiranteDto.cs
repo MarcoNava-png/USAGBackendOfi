@@ -47,5 +47,7 @@
         public int? IdEmpresa { get; set; }
 
         public string? Notas { get; set; }
+
+        public int? IdPeriodoAcademico { get; set; }
     }
 }

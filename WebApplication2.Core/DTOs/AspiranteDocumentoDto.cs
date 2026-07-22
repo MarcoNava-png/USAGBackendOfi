@@ -14,6 +14,7 @@ namespace WebApplication2.Core.DTOs
         public string Clave { get; set; } = "";
         public string Descripcion { get; set; } = "";
         public EstatusDocumentoEnum Estatus { get; set; }
+        public bool Entregado { get; set; }
         public string? UrlArchivo { get; set; }
         public string? Notas { get; set; }
         public DateTime? FechaProrroga { get; set; }

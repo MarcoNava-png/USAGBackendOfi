@@ -16,6 +16,10 @@
 
         public string PeriodoAcademico { get; set; }
 
+        public DateOnly? PeriodoInicio { get; set; }
+
+        public DateOnly? PeriodoFin { get; set; }
+
         public byte ConsecutivoPeriodicidad { get; set; }
 
         public byte NumeroGrupo { get; set; }

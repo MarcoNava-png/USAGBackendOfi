@@ -21,6 +21,8 @@ public interface ITenantService
 
     Task<TenantCreadoResponse> CrearTenantAsync(CrearTenantRequest request, string creadoPor, CancellationToken ct = default);
 
+    Task<MigrarTodosResultado> MigrarTodosLosTenantsAsync(CancellationToken ct = default);
+
     Task<bool> ActualizarTenantAsync(int idTenant, ActualizarTenantRequest request, CancellationToken ct = default);
 
     Task<bool> CambiarStatusTenantAsync(int idTenant, TenantStatus nuevoStatus, string? motivo, CancellationToken ct = default);

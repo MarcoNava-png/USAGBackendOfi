@@ -50,6 +50,9 @@ namespace WebApplication2.Controllers
             acta.StatusParcial = StatusParcialEnum.Abierto;
             acta.FechaApertura = req.FechaApertura ?? DateTime.UtcNow;
 
+            if (acta.ProfesorId <= 0)
+                acta.ProfesorId = null;
+
             if (acta.InscripcionId <= 0)
             {
                 var primeraInscripcion = await _dbContext.Inscripcion

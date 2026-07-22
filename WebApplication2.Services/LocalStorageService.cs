@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using WebApplication2.Services.Interfaces;
+using WebApplication2.Services.MultiTenant;
 
 namespace WebApplication2.Services
 {
     public class LocalStorageService : IBlobStorageService
     {
         private readonly IConfiguration _configuration;
+        private readonly ITenantContextAccessor _tenantContextAccessor;
         private readonly string _basePath;
         private readonly string _baseUrl;
 
@@ -19,11 +21,20 @@ namespace WebApplication2.Services
 
         private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
-        public LocalStorageService(IConfiguration configuration)
+        public LocalStorageService(IConfiguration configuration, ITenantContextAccessor tenantContextAccessor)
         {
             _configuration = configuration;
+            _tenantContextAccessor = tenantContextAccessor;
             _basePath = _configuration["LocalStorage:BasePath"] ?? "/app/uploads";
             _baseUrl = _configuration["LocalStorage:BaseUrl"] ?? "/uploads";
+        }
+
+        private string GetTenantPrefix()
+        {
+            var codigo = _tenantContextAccessor?.TenantContext?.Codigo;
+            if (string.IsNullOrWhiteSpace(codigo) || codigo.Equals("USAG", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+            return Path.GetFileName(codigo.ToLowerInvariant());
         }
 
         public async Task<string> UploadFile(IFormFile formFile, string blobName, string containerName)
@@ -44,10 +55,13 @@ namespace WebApplication2.Services
 
             var sanitizedContainer = Path.GetFileName(containerName);
             var sanitizedBlob = Path.GetFileName(blobName);
+            var tenantPrefix = GetTenantPrefix();
 
             try
             {
-                var containerPath = Path.Combine(_basePath, sanitizedContainer);
+                var containerPath = string.IsNullOrEmpty(tenantPrefix)
+                    ? Path.Combine(_basePath, sanitizedContainer)
+                    : Path.Combine(_basePath, tenantPrefix, sanitizedContainer);
                 var filePath = Path.Combine(containerPath, sanitizedBlob);
 
                 // Verify resolved path is within base path
@@ -67,7 +81,9 @@ namespace WebApplication2.Services
                     await formFile.CopyToAsync(stream);
                 }
 
-                var publicUrl = $"{_baseUrl}/{sanitizedContainer}/{sanitizedBlob}";
+                var publicUrl = string.IsNullOrEmpty(tenantPrefix)
+                    ? $"{_baseUrl}/{sanitizedContainer}/{sanitizedBlob}"
+                    : $"{_baseUrl}/{tenantPrefix}/{sanitizedContainer}/{sanitizedBlob}";
                 return publicUrl;
             }
             catch (ArgumentException)
@@ -89,7 +105,10 @@ namespace WebApplication2.Services
 
                 var sanitizedContainer = Path.GetFileName(containerName);
                 var sanitizedBlob = Path.GetFileName(blobName);
-                var filePath = Path.Combine(_basePath, sanitizedContainer, sanitizedBlob);
+                var tenantPrefix = GetTenantPrefix();
+                var filePath = string.IsNullOrEmpty(tenantPrefix)
+                    ? Path.Combine(_basePath, sanitizedContainer, sanitizedBlob)
+                    : Path.Combine(_basePath, tenantPrefix, sanitizedContainer, sanitizedBlob);
 
                 var resolvedPath = Path.GetFullPath(filePath);
                 if (!resolvedPath.StartsWith(Path.GetFullPath(_basePath)))
@@ -106,6 +125,35 @@ namespace WebApplication2.Services
             {
                 Console.WriteLine($"Error al eliminar archivo: {ex.Message}");
             }
+        }
+
+        public string? ResolverRutaLocal(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            string relative;
+            if (url.StartsWith(_baseUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                relative = url.Substring(_baseUrl.Length);
+            }
+            else
+            {
+                var idx = url.IndexOf("/uploads/", StringComparison.OrdinalIgnoreCase);
+                if (idx < 0)
+                    return null;
+                relative = url.Substring(idx + "/uploads".Length);
+            }
+
+            relative = relative.TrimStart('/', '\\');
+            if (string.IsNullOrEmpty(relative) || relative.Contains(".."))
+                return null;
+
+            var fullPath = Path.GetFullPath(Path.Combine(_basePath, relative));
+            if (!fullPath.StartsWith(Path.GetFullPath(_basePath)))
+                return null;
+
+            return File.Exists(fullPath) ? fullPath : null;
         }
     }
 }

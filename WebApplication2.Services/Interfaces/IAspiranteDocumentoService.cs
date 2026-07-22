@@ -22,7 +22,8 @@ namespace WebApplication2.Services.Interfaces
 
         Task<AspiranteDocumentoDto?> ObtenerDocumentoPorIdAsync(long idDocumento);
 
-        Task<bool> ValidarDocumentoAsync(ValidarDocumentoRequestDto req);
+        Task<(bool ok, string? error)> ValidarDocumentoAsync(ValidarDocumentoRequestDto req, string? usuarioId);
+        Task<bool> ToggleEntregadoAsync(long idDocumento, string? usuarioId);
 
         Task<bool> CambiarEstatusDocumentoAsync(long idDocumento, CambiarEstatusDocumentoDto dto);
 

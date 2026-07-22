@@ -11,5 +11,9 @@
         public DateOnly FechaInicio { get; set; }
 
         public DateOnly FechaFin { get; set; }
+
+        public DateTime? FechaLimiteParcial1 { get; set; }
+        public DateTime? FechaLimiteParcial2 { get; set; }
+        public DateTime? FechaLimiteParcial3 { get; set; }
     }
 }

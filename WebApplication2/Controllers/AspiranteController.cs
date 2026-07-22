@@ -28,6 +28,7 @@ namespace WebApplication2.Controllers
         private readonly IAspiranteDocumentoService _docsSvc;
         private readonly IReciboService _recibosSvc;
         private readonly IPdfService _pdfService;
+        private readonly IComprobanteInscripcionService _comprobanteSvc;
         private readonly Data.DbContexts.ApplicationDbContext _dbContext;
 
         public AspiranteController(
@@ -37,6 +38,7 @@ namespace WebApplication2.Controllers
             IAspiranteDocumentoService docsSvc,
             IReciboService recibosSvc,
             IPdfService pdfService,
+            IComprobanteInscripcionService comprobanteSvc,
             Data.DbContexts.ApplicationDbContext dbContext)
         {
             _aspiranteService = aspiranteService;
@@ -46,143 +48,151 @@ namespace WebApplication2.Controllers
             _docsSvc = docsSvc;
             _recibosSvc = recibosSvc;
             _pdfService = pdfService;
+            _comprobanteSvc = comprobanteSvc;
         }
 
         [HttpGet]
-        public async Task<ActionResult<PagedResult<AspiranteDto>>> Get([FromQuery] int page = 1, [FromQuery] int pageSize = 100, [FromQuery] string filter = "", [FromQuery] string? registradoPor = null, CancellationToken ct = default)
+        public async Task<ActionResult<PagedResult<AspiranteDto>>> Get(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 100,
+            [FromQuery] string filter = "",
+            [FromQuery] string? registradoPor = null,
+            [FromQuery] int? idPeriodoAcademico = null,
+            [FromQuery] bool soloSinPeriodo = false,
+            [FromQuery] string? estatus = null,
+            [FromQuery] DateOnly? fechaRegistroDesde = null,
+            [FromQuery] DateOnly? fechaRegistroHasta = null,
+            [FromQuery] string? estatusPago = null,
+            [FromQuery] string? estatusDocumentos = null,
+            [FromQuery] string? idPlan = null,
+            [FromQuery] string? accionTipo = null,
+            [FromQuery] bool soloOcultos = false,
+            CancellationToken ct = default)
         {
-            var pagination = await _aspiranteService.GetAspirantes(page, pageSize, filter, registradoPor);
+            List<string>? Parse(string? s) => string.IsNullOrWhiteSpace(s)
+                ? null
+                : s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-            var aspirantesDtos = _mapper.Map<IEnumerable<AspiranteDto>>(pagination.Items);
+            List<int>? ParseInts(string? s) => string.IsNullOrWhiteSpace(s)
+                ? null
+                : s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(x => int.TryParse(x, out var n) ? n : (int?)null)
+                    .Where(n => n.HasValue).Select(n => n!.Value).ToList();
+
+            int? idCampusRestringido = null;
+            var currentUserId = User.FindFirst("userId")?.Value;
+            if (!string.IsNullOrEmpty(currentUserId) && (User.IsInRole(Rol.DIRECTOR) || User.IsInRole(Rol.COORDINADOR)))
+            {
+                var currentUser = await _authService.GetUserById(currentUserId);
+                idCampusRestringido = currentUser?.IdCampusAsignado;
+            }
+
+            var pagination = await _aspiranteService.GetAspirantes(
+                page, pageSize, filter, registradoPor, idPeriodoAcademico, soloSinPeriodo,
+                Parse(estatus), fechaRegistroDesde, fechaRegistroHasta,
+                Parse(estatusPago), Parse(estatusDocumentos),
+                ParseInts(idPlan), accionTipo, idCampusRestringido, soloOcultos);
+
+            var aspirantesDtos = _mapper.Map<List<AspiranteDto>>(pagination.Items);
+
+            var aspiranteIds = aspirantesDtos.Select(a => a.IdAspirante).ToList();
+            var userIds = aspirantesDtos
+                .SelectMany(a => new[] { a.IdAtendidoPorUsuario, a.CreatedBy })
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id!)
+                .Distinct()
+                .ToList();
+
+            var userCache = new Dictionary<string, string?>();
+            foreach (var uid in userIds)
+            {
+                try
+                {
+                    var u = await _authService.GetUserById(uid);
+                    if (u == null) { userCache[uid] = null; continue; }
+                    var nombre = $"{u.Nombres} {u.Apellidos}".Trim();
+                    userCache[uid] = !string.IsNullOrWhiteSpace(nombre)
+                        ? nombre
+                        : (!string.IsNullOrWhiteSpace(u.UserName) ? u.UserName : u.Email);
+                }
+                catch
+                {
+                    userCache[uid] = null;
+                }
+            }
+
+            var docsByAspirante = await _dbContext.AspiranteDocumento
+                .Where(d => aspiranteIds.Contains(d.IdAspirante))
+                .AsNoTracking()
+                .Select(d => new { d.IdAspirante, d.Estatus })
+                .ToListAsync(ct);
+
+            var docsGroup = docsByAspirante
+                .GroupBy(d => d.IdAspirante)
+                .ToDictionary(g => g.Key, g => g.Select(d => d.Estatus).ToList());
+
+            var recibosByAspirante = await _dbContext.Recibo
+                .Where(r => r.IdAspirante != null
+                            && aspiranteIds.Contains(r.IdAspirante.Value)
+                            && r.Status == Core.Enums.StatusEnum.Active)
+                .AsNoTracking()
+                .GroupBy(r => r.IdAspirante!.Value)
+                .Select(g => new
+                {
+                    IdAspirante = g.Key,
+                    TotalSaldo = g.Sum(r => r.Saldo),
+                    TotalGeneral = g.Sum(r => r.Total),
+                    Count = g.Count()
+                })
+                .ToDictionaryAsync(x => x.IdAspirante, ct);
 
             foreach (var aspiranteDto in aspirantesDtos)
             {
-                var uid = aspiranteDto.IdAtendidoPorUsuario;
-
-                if (!string.IsNullOrWhiteSpace(uid))
+                if (!string.IsNullOrWhiteSpace(aspiranteDto.IdAtendidoPorUsuario)
+                    && userCache.TryGetValue(aspiranteDto.IdAtendidoPorUsuario, out var atiende))
                 {
-                    try
-                    {
-                        var usuarioAtiende = await _authService.GetUserById(uid);
-
-                        if (usuarioAtiende != null)
-                        {
-                            var nombreCompleto = $"{usuarioAtiende.Nombres} {usuarioAtiende.Apellidos}".Trim();
-
-                            if (string.IsNullOrWhiteSpace(nombreCompleto))
-                            {
-                                aspiranteDto.UsuarioAtiendeNombre = !string.IsNullOrWhiteSpace(usuarioAtiende.UserName)
-                                    ? usuarioAtiende.UserName
-                                    : usuarioAtiende.Email;
-                            }
-                            else
-                            {
-                                aspiranteDto.UsuarioAtiendeNombre = nombreCompleto;
-                            }
-                        }
-                        else
-                        {
-                            aspiranteDto.UsuarioAtiendeNombre = null;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        aspiranteDto.UsuarioAtiendeNombre = null;
-                    }
+                    aspiranteDto.UsuarioAtiendeNombre = atiende;
                 }
 
-                var createdBy = aspiranteDto.CreatedBy;
-                if (!string.IsNullOrWhiteSpace(createdBy))
+                if (!string.IsNullOrWhiteSpace(aspiranteDto.CreatedBy)
+                    && userCache.TryGetValue(aspiranteDto.CreatedBy, out var registro))
                 {
-                    try
-                    {
-                        var usuarioRegistro = await _authService.GetUserById(createdBy);
-                        if (usuarioRegistro != null)
-                        {
-                            var nombreCompleto = $"{usuarioRegistro.Nombres} {usuarioRegistro.Apellidos}".Trim();
-
-                            if (string.IsNullOrWhiteSpace(nombreCompleto))
-                            {
-                                aspiranteDto.UsuarioRegistroNombre = !string.IsNullOrWhiteSpace(usuarioRegistro.UserName)
-                                    ? usuarioRegistro.UserName
-                                    : usuarioRegistro.Email;
-                            }
-                            else
-                            {
-                                aspiranteDto.UsuarioRegistroNombre = nombreCompleto;
-                            }
-                        }
-                        else
-                        {
-                            aspiranteDto.UsuarioRegistroNombre = null;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        aspiranteDto.UsuarioRegistroNombre = null;
-                    }
+                    aspiranteDto.UsuarioRegistroNombre = registro;
                 }
 
-                var documentos = await _docsSvc.ListarEstadoAsync(new ListarEstadoDocumentosRequest { IdAspirante = aspiranteDto.IdAspirante });
-                if (documentos.Count == 0)
+                if (docsGroup.TryGetValue(aspiranteDto.IdAspirante, out var estatuses) && estatuses.Count > 0)
+                {
+                    if (estatuses.All(e => e == EstatusDocumentoEnum.VALIDADO))
+                        aspiranteDto.EstatusDocumentos = "VALIDADO";
+                    else if (estatuses.All(e => e == EstatusDocumentoEnum.SUBIDO || e == EstatusDocumentoEnum.VALIDADO))
+                        aspiranteDto.EstatusDocumentos = "COMPLETO";
+                    else
+                        aspiranteDto.EstatusDocumentos = "INCOMPLETO";
+                }
+                else
                 {
                     aspiranteDto.EstatusDocumentos = "INCOMPLETO";
                 }
-                else
+
+                if (recibosByAspirante.TryGetValue(aspiranteDto.IdAspirante, out var totales) && totales.Count > 0)
                 {
-                    var todosValidados = documentos.All(d => d.Estatus == EstatusDocumentoEnum.VALIDADO);
-                    var todosSubidos = documentos.All(d => d.Estatus == EstatusDocumentoEnum.SUBIDO || d.Estatus == EstatusDocumentoEnum.VALIDADO);
-
-                    if (todosValidados)
-                    {
-                        aspiranteDto.EstatusDocumentos = "VALIDADO";
-                    }
-                    else if (todosSubidos)
-                    {
-                        aspiranteDto.EstatusDocumentos = "COMPLETO";
-                    }
+                    if (totales.TotalSaldo == 0)
+                        aspiranteDto.EstatusPago = "PAGADO";
+                    else if (totales.TotalSaldo < totales.TotalGeneral)
+                        aspiranteDto.EstatusPago = "PARCIAL";
                     else
-                    {
-                        aspiranteDto.EstatusDocumentos = "INCOMPLETO";
-                    }
+                        aspiranteDto.EstatusPago = "PENDIENTE";
                 }
-
-                var recibos = await _recibosSvc.ListarPorAspiranteAsync(aspiranteDto.IdAspirante, ct);
-                if (recibos.Count == 0)
+                else
                 {
                     aspiranteDto.EstatusPago = "SIN_RECIBO";
-                }
-                else
-                {
-                    var totalSaldo = recibos.Sum(r => r.Saldo);
-                    var totalGeneral = recibos.Sum(r => r.Total);
-
-                    Console.WriteLine($"[Aspirante {aspiranteDto.IdAspirante}] Calculando estatus de pago:");
-                    Console.WriteLine($"  - Total recibos: {recibos.Count}");
-                    Console.WriteLine($"  - Total general: {totalGeneral:C}");
-                    Console.WriteLine($"  - Total saldo: {totalSaldo:C}");
-
-                    if (totalSaldo == 0)
-                    {
-                        aspiranteDto.EstatusPago = "PAGADO";
-                    }
-                    else if (totalSaldo < totalGeneral)
-                    {
-                        aspiranteDto.EstatusPago = "PARCIAL";
-                    }
-                    else
-                    {
-                        aspiranteDto.EstatusPago = "PENDIENTE";
-                    }
-
-                    Console.WriteLine($"  - Estatus asignado: {aspiranteDto.EstatusPago}");
                 }
             }
 
             var response = new PagedResult<AspiranteDto>
             {
                 TotalItems = pagination.TotalItems,
-                Items = [.. aspirantesDtos],
+                Items = aspirantesDtos,
                 PageNumber = pagination.PageNumber,
                 PageSize = pagination.PageSize
             };
@@ -371,6 +381,9 @@ namespace WebApplication2.Controllers
         [HttpPost]
         public async Task<ActionResult<AspiranteDto>> Post([FromBody] AspiranteSignupRequest request)
         {
+            if (!request.IdPeriodoAcademico.HasValue || request.IdPeriodoAcademico.Value <= 0)
+                return BadRequest(new { Error = "El periodo académico es obligatorio para registrar al aspirante." });
+
             Direccion? direccion = null;
 
             if (request.Calle != null && request.NumeroExterior != null && request.CodigoPostalId != null)
@@ -385,7 +398,7 @@ namespace WebApplication2.Controllers
             }
 
             var estatusEnProceso = await _aspiranteService.ObtenerEstatusEnProcesoAsync();
-            var idEstatusEnProceso = estatusEnProceso?.IdAspiranteEstatus ?? 1; 
+            var idEstatusEnProceso = estatusEnProceso?.IdAspiranteEstatus ?? 2;
 
             var newAspirante = new Aspirante
             {
@@ -640,14 +653,16 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPatch("documentos/{idDocumento:long}/validar")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR}")]
         public async Task<ActionResult> ValidarDocumento(long idDocumento, [FromBody] ValidarDocumentoRequestDto request)
         {
             request.IdAspiranteDocumento = idDocumento;
 
-            var resultado = await _docsSvc.ValidarDocumentoAsync(request);
+            var usuarioId = User.FindFirst("userId")?.Value;
+            var (ok, error) = await _docsSvc.ValidarDocumentoAsync(request, usuarioId);
 
-            if (!resultado)
-                return NotFound("Documento no encontrado");
+            if (!ok)
+                return error == "Documento no encontrado" ? NotFound(error) : BadRequest(new { error });
 
             return NoContent();
         }
@@ -723,6 +738,26 @@ namespace WebApplication2.Controllers
                     return NotFound("Aspirante no encontrado");
 
                 return Ok(new { Mensaje = "Aspirante ocultado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPatch("{id:int}/mostrar")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.DIRECTOR}")]
+        public async Task<ActionResult> MostrarAspirante(int id)
+        {
+            try
+            {
+                var usuarioId = User?.Claims?.FirstOrDefault(c => c.Type == "userId")?.Value ?? "SYSTEM";
+                var resultado = await _aspiranteService.MostrarAspiranteAsync(id, usuarioId);
+
+                if (!resultado)
+                    return NotFound("Aspirante no encontrado");
+
+                return Ok(new { Mensaje = "Aspirante restaurado exitosamente" });
             }
             catch (Exception ex)
             {
@@ -845,6 +880,41 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpGet("{id:int}/comprobante-inscripcion/pdf")]
+        public async Task<IActionResult> GenerarComprobanteInscripcionPdf(int id, CancellationToken ct = default)
+        {
+            try
+            {
+                var aspirante = await _dbContext.Aspirante
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.IdAspirante == id, ct);
+
+                if (aspirante == null || !aspirante.IdPersona.HasValue)
+                    return NotFound(new { Error = $"No se encontró el aspirante con ID {id}" });
+
+                var estudiante = await _dbContext.Estudiante
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(e => e.IdPersona == aspirante.IdPersona.Value
+                        && e.IdPlanActual == aspirante.IdPlan
+                        && e.Status != Core.Enums.StatusEnum.Deleted, ct);
+
+                if (estudiante == null)
+                    return NotFound(new { Error = "El aspirante aún no ha sido inscrito como estudiante." });
+
+                var passwordTemporal = $"Usag{estudiante.FechaIngreso:yyyyMMdd}!";
+
+                var pdfBytes = await _comprobanteSvc.GenerarPdfAsync(estudiante.IdEstudiante, passwordTemporal, ct);
+
+                var fileName = $"ComprobanteInscripcion_{estudiante.Matricula}_{DateTime.Now:yyyyMMdd}.pdf";
+                return File(pdfBytes, "application/pdf", fileName);
+            }
+            catch (Exception ex)
+            {
+                var inner = ex.InnerException != null ? $" | Inner: {ex.InnerException.Message}" : "";
+                return StatusCode(500, new { Error = $"Error al generar PDF: {ex.Message}{inner}" });
+            }
+        }
+
         [HttpPost("{id:int}/generar-mensualidades-completas")]
         public async Task<IActionResult> GenerarMensualidadesCompletas(int id, CancellationToken ct = default)
         {
@@ -910,25 +980,17 @@ namespace WebApplication2.Controllers
         }
 
         [HttpPut("documentos/{id:long}/toggle-recibido")]
+        [Authorize(Roles = $"{Rol.ADMIN},{Rol.CONTROL_ESCOLAR},{Rol.ADMISIONES}")]
         public async Task<ActionResult> ToggleRecibido(long id)
         {
             try
             {
-                var doc = await _dbContext.AspiranteDocumento
-                    .FirstOrDefaultAsync(d => d.IdAspiranteDocumento == id);
+                var usuarioId = User.FindFirst("userId")?.Value;
+                var ok = await _docsSvc.ToggleEntregadoAsync(id, usuarioId);
+                if (!ok) return NotFound(new { error = "Documento no encontrado" });
 
-                if (doc == null) return NotFound(new { error = "Documento no encontrado" });
-
-                var nuevoEstatus = doc.Estatus == EstatusDocumentoEnum.VALIDADO
-                    ? EstatusDocumentoEnum.PENDIENTE
-                    : EstatusDocumentoEnum.VALIDADO;
-
-                await _docsSvc.CambiarEstatusDocumentoAsync(id, new Core.DTOs.CambiarEstatusDocumentoDto
-                {
-                    Estatus = nuevoEstatus
-                });
-
-                return Ok(new { estatus = nuevoEstatus.ToString(), recibido = nuevoEstatus == EstatusDocumentoEnum.VALIDADO });
+                var doc = await _dbContext.AspiranteDocumento.FirstOrDefaultAsync(d => d.IdAspiranteDocumento == id);
+                return Ok(new { entregado = doc?.Entregado ?? false, recibido = doc?.Entregado ?? false });
             }
             catch (Exception ex)
             {

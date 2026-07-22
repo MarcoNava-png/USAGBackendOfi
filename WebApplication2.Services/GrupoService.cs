@@ -7,6 +7,7 @@ using WebApplication2.Core.DTOs.Inscripcion;
 using WebApplication2.Core.Requests.GestionAcademica;
 using WebApplication2.Core.Requests.Grupo;
 using WebApplication2.Core.Responses.Grupo;
+using WebApplication2.Core.DTOs.AccesoAlumnoDocente;
 using WebApplication2.Core.Models;
 using WebApplication2.Data.DbContexts;
 using WebApplication2.Services.Interfaces;
@@ -23,19 +24,25 @@ namespace WebApplication2.Services
         private readonly IEstudianteService _estudianteService;
         private readonly IPeriodoAcademicoService _periodoAcademicoService;
         private readonly IMatriculaService _matriculaService;
+        private readonly IAccesoAlumnoDocenteService _accesoService;
+        private readonly IMicrosoftGraphService _graphService;
 
         public GrupoService(
             ApplicationDbContext dbContext,
             IInscripcionService inscripcionService,
             IEstudianteService estudianteService,
             IPeriodoAcademicoService periodoAcademicoService,
-            IMatriculaService matriculaService)
+            IMatriculaService matriculaService,
+            IAccesoAlumnoDocenteService accesoService,
+            IMicrosoftGraphService graphService)
         {
             _dbContext = dbContext;
             _inscripcionService = inscripcionService;
             _estudianteService = estudianteService;
             _periodoAcademicoService = periodoAcademicoService;
             _matriculaService = matriculaService;
+            _accesoService = accesoService;
+            _graphService = graphService;
         }
 
         public async Task<PagedResult<Grupo>> GetGrupos(int page, int pageSize, int? idPeriodoAcademico = null)
@@ -219,12 +226,14 @@ namespace WebApplication2.Services
             int? numeroCuatrimestre = null,
             int? idTurno = null,
             int? numeroGrupo = null,
-            int? idPlanEstudios = null)
+            int? idPlanEstudios = null,
+            int? idPeriodoAcademico = null)
         {
             var query = _dbContext.Grupo
                 .Include(g => g.IdPeriodoAcademicoNavigation)
                 .Include(g => g.IdTurnoNavigation)
                 .Include(g => g.IdPlanEstudiosNavigation)
+                    .ThenInclude(p => p.IdCampusNavigation)
                 .Include(g => g.GrupoMateria)
                     .ThenInclude(gm => gm.Inscripcion)
                 .Include(g => g.EstudianteGrupo)
@@ -241,6 +250,9 @@ namespace WebApplication2.Services
 
             if (idPlanEstudios.HasValue)
                 query = query.Where(g => g.IdPlanEstudios == idPlanEstudios.Value);
+
+            if (idPeriodoAcademico.HasValue)
+                query = query.Where(g => g.IdPeriodoAcademico == idPeriodoAcademico.Value);
 
             return await query.ToListAsync();
         }
@@ -328,6 +340,24 @@ namespace WebApplication2.Services
                 if (tienePendientes)
                     advertencias.Add($"{cantidadPendientes} recibo(s) pendiente(s): ${montoPendiente:N2} (inscripción forzada)");
 
+                // Vínculo estudiante-grupo (necesario para que el alumno aparezca en su grupo).
+                var yaEnGrupo = await _dbContext.EstudianteGrupo
+                    .AnyAsync(eg => eg.IdEstudiante == idEstudiante && eg.IdGrupo == idGrupo && eg.Status == StatusEnum.Active);
+                if (!yaEnGrupo)
+                {
+                    await _dbContext.EstudianteGrupo.AddAsync(new EstudianteGrupo
+                    {
+                        IdEstudiante = idEstudiante,
+                        IdGrupo = idGrupo,
+                        FechaInscripcion = DateTime.UtcNow,
+                        Estado = "Inscrito",
+                        Observaciones = observaciones,
+                        Status = StatusEnum.Active,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = "Sistema"
+                    });
+                }
+
                 var detalleInscripciones = new List<InscripcionMateriaDto>();
                 int exitosas = 0;
                 int fallidas = 0;
@@ -347,24 +377,26 @@ namespace WebApplication2.Services
 
                     try
                     {
-                        var yaInscrito = await _dbContext.Inscripcion
-                            .AnyAsync(i => i.IdEstudiante == idEstudiante
-                                && i.IdGrupoMateria == grupoMateria.IdGrupoMateria
-                                && i.Status == StatusEnum.Active);
+                        var existente = await _dbContext.Inscripcion
+                            .FirstOrDefaultAsync(i => i.IdEstudiante == idEstudiante
+                                && i.IdGrupoMateria == grupoMateria.IdGrupoMateria);
 
-                        if (yaInscrito && !forzarInscripcion)
+                        if (existente != null)
                         {
-                            detalle.Exitoso = false;
-                            detalle.MensajeError = "Ya está inscrito en esta materia";
-                            fallidas++;
-                            detalleInscripciones.Add(detalle);
-                            continue;
-                        }
-
-                        if (yaInscrito)
-                        {
-                            detalle.MensajeError = "Ya inscrito (se omitió)";
+                            if (existente.Status != StatusEnum.Active)
+                            {
+                                existente.Status = StatusEnum.Active;
+                                existente.Estado = EstadoInscripcionEnum.Inscrito.ToString();
+                                existente.UpdatedAt = DateTime.UtcNow;
+                                detalle.MensajeError = "Reactivada";
+                            }
+                            else
+                            {
+                                detalle.MensajeError = "Ya inscrito (se mantuvo)";
+                            }
+                            detalle.IdInscripcion = existente.IdInscripcion;
                             detalle.Exitoso = true;
+                            exitosas++;
                             detalleInscripciones.Add(detalle);
                             continue;
                         }
@@ -416,6 +448,25 @@ namespace WebApplication2.Services
                     throw new InvalidOperationException("No se pudo inscribir al estudiante en ninguna materia");
                 }
 
+                if (estudiante.IdPlanActual != grupo.IdPlanEstudios)
+                {
+                    estudiante.IdPlanActual = grupo.IdPlanEstudios;
+                    estudiante.UpdatedAt = DateTime.UtcNow;
+                }
+
+                var apartados = await _dbContext.PreInscripcion
+                    .Where(pi => pi.IdEstudiante == idEstudiante
+                        && pi.IdPeriodoAcademicoDestino == grupo.IdPeriodoAcademico
+                        && pi.Estado == "Pendiente"
+                        && pi.Status == StatusEnum.Active)
+                    .ToListAsync();
+                foreach (var ap in apartados)
+                {
+                    ap.Estado = "Completada";
+                    ap.Status = StatusEnum.Deleted;
+                    ap.UpdatedAt = DateTime.UtcNow;
+                }
+
                 await _dbContext.SaveChangesAsync();
 
                 await transaction.CommitAsync();
@@ -452,72 +503,119 @@ namespace WebApplication2.Services
         public async Task<EstudiantesGrupoDto> GetEstudiantesDelGrupoAsync(int idGrupo)
         {
             var grupo = await _dbContext.Grupo
-                .Include(g => g.GrupoMateria)
-                    .ThenInclude(gm => gm.Inscripcion)
-                        .ThenInclude(i => i.IdEstudianteNavigation)
-                            .ThenInclude(e => e.IdPersonaNavigation)
                 .FirstOrDefaultAsync(g => g.IdGrupo == idGrupo);
 
             if (grupo == null)
                 throw new InvalidOperationException($"No se encontró el grupo con ID {idGrupo}");
 
-            var estudiantesUnicos = grupo.GrupoMateria
-                .SelectMany(gm => gm.Inscripcion)
+            var asignados = await _dbContext.EstudianteGrupo
+                .Include(eg => eg.IdEstudianteNavigation)
+                    .ThenInclude(e => e.IdPersonaNavigation)
+                .Where(eg => eg.IdGrupo == idGrupo && eg.Status == StatusEnum.Active)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var materiasPorEstudiante = await _dbContext.GrupoMateria
+                .Where(gm => gm.IdGrupo == idGrupo)
+                .SelectMany(gm => gm.Inscripcion.Where(i => i.Status == StatusEnum.Active))
                 .GroupBy(i => i.IdEstudiante)
-                .Select(g => new
-                {
-                    IdEstudiante = g.Key,
-                    Estudiante = g.First().IdEstudianteNavigation,
-                    MateriasInscritas = g.Count(),
-                    FechaInscripcion = g.Min(i => i.FechaInscripcion)
-                })
-                .ToList();
+                .Select(g => new { IdEstudiante = g.Key, Materias = g.Count(), FechaInscripcion = g.Min(i => i.FechaInscripcion) })
+                .ToDictionaryAsync(x => x.IdEstudiante, x => new { x.Materias, x.FechaInscripcion });
 
-            if (estudiantesUnicos.Count == 0)
+            var dtoList = new List<EstudianteInscritoDto>();
+            var idsIncluidos = new HashSet<int>();
+
+            foreach (var eg in asignados)
             {
-                var egList = await _dbContext.EstudianteGrupo
-                    .Include(eg => eg.IdEstudianteNavigation)
-                        .ThenInclude(e => e.IdPersonaNavigation)
-                    .Where(eg => eg.IdGrupo == idGrupo && eg.Status == StatusEnum.Active)
-                    .OrderBy(eg => eg.IdEstudianteNavigation.Matricula)
-                    .ToListAsync();
-
-                return new EstudiantesGrupoDto
+                var e = eg.IdEstudianteNavigation;
+                if (e == null) continue;
+                materiasPorEstudiante.TryGetValue(eg.IdEstudiante, out var mat);
+                dtoList.Add(new EstudianteInscritoDto
                 {
-                    IdGrupo = grupo.IdGrupo,
-                    CodigoGrupo = grupo.CodigoGrupo ?? "N/A",
-                    NombreGrupo = grupo.NombreGrupo,
-                    TotalEstudiantes = egList.Count,
-                    Estudiantes = egList.Select(eg => new EstudianteInscritoDto
-                    {
-                        IdEstudiante = eg.IdEstudiante,
-                        Matricula = eg.IdEstudianteNavigation.Matricula ?? "",
-                        NombreCompleto = $"{eg.IdEstudianteNavigation.IdPersonaNavigation?.Nombre} {eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoPaterno} {eg.IdEstudianteNavigation.IdPersonaNavigation?.ApellidoMaterno}".Trim(),
-                        Email = eg.IdEstudianteNavigation.Email ?? "",
-                        MateriasInscritas = 0,
-                        FechaInscripcion = eg.FechaInscripcion
-                    }).ToList()
-                };
+                    IdEstudiante = eg.IdEstudiante,
+                    Matricula = e.Matricula ?? "",
+                    NombreCompleto = $"{e.IdPersonaNavigation?.Nombre} {e.IdPersonaNavigation?.ApellidoPaterno} {e.IdPersonaNavigation?.ApellidoMaterno}".Trim(),
+                    Email = e.Email ?? "",
+                    MateriasInscritas = mat?.Materias ?? 0,
+                    FechaInscripcion = eg.FechaInscripcion,
+                    Activo = e.Activo,
+                    EstatusAcademico = (int)e.EstatusAcademico,
+                    EstatusAcademicoTexto = e.EstatusAcademico.ToString()
+                });
+                idsIncluidos.Add(eg.IdEstudiante);
             }
 
-            var resultado = new EstudiantesGrupoDto
+            var faltantesIds = materiasPorEstudiante.Keys.Where(id => !idsIncluidos.Contains(id)).ToList();
+            if (faltantesIds.Count > 0)
+            {
+                var faltantes = await _dbContext.Estudiante
+                    .Include(e => e.IdPersonaNavigation)
+                    .Where(e => faltantesIds.Contains(e.IdEstudiante))
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                foreach (var e in faltantes)
+                {
+                    var mat = materiasPorEstudiante[e.IdEstudiante];
+                    dtoList.Add(new EstudianteInscritoDto
+                    {
+                        IdEstudiante = e.IdEstudiante,
+                        Matricula = e.Matricula ?? "",
+                        NombreCompleto = $"{e.IdPersonaNavigation?.Nombre} {e.IdPersonaNavigation?.ApellidoPaterno} {e.IdPersonaNavigation?.ApellidoMaterno}".Trim(),
+                        Email = e.Email ?? "",
+                        MateriasInscritas = mat.Materias,
+                        FechaInscripcion = mat.FechaInscripcion,
+                        Activo = e.Activo,
+                        EstatusAcademico = (int)e.EstatusAcademico,
+                        EstatusAcademicoTexto = e.EstatusAcademico.ToString()
+                    });
+                }
+            }
+
+            // Marcar alumnos ya promovidos: tienen grupo activo en un periodo posterior al de este grupo.
+            var fechaInicioGrupo = await _dbContext.PeriodoAcademico
+                .Where(p => p.IdPeriodoAcademico == grupo.IdPeriodoAcademico)
+                .Select(p => (DateOnly?)p.FechaInicio)
+                .FirstOrDefaultAsync();
+
+            if (fechaInicioGrupo.HasValue && dtoList.Count > 0)
+            {
+                var idsTodos = dtoList.Select(d => d.IdEstudiante).ToList();
+                var posteriores = await _dbContext.EstudianteGrupo
+                    .Where(eg => idsTodos.Contains(eg.IdEstudiante)
+                        && eg.Status == StatusEnum.Active
+                        && eg.IdGrupo != idGrupo
+                        && eg.IdGrupoNavigation.IdPeriodoAcademicoNavigation.FechaInicio > fechaInicioGrupo.Value)
+                    .Select(eg => new
+                    {
+                        eg.IdEstudiante,
+                        Nombre = eg.IdGrupoNavigation.IdPeriodoAcademicoNavigation.Nombre,
+                        Fecha = eg.IdGrupoNavigation.IdPeriodoAcademicoNavigation.FechaInicio
+                    })
+                    .ToListAsync();
+
+                var promDict = posteriores
+                    .GroupBy(x => x.IdEstudiante)
+                    .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Fecha).First().Nombre);
+
+                foreach (var d in dtoList)
+                {
+                    if (promDict.TryGetValue(d.IdEstudiante, out var destino))
+                    {
+                        d.Promovido = true;
+                        d.PromovidoA = destino?.Trim();
+                    }
+                }
+            }
+
+            return new EstudiantesGrupoDto
             {
                 IdGrupo = grupo.IdGrupo,
                 CodigoGrupo = grupo.CodigoGrupo ?? "N/A",
                 NombreGrupo = grupo.NombreGrupo,
-                TotalEstudiantes = estudiantesUnicos.Count,
-                Estudiantes = estudiantesUnicos.Select(e => new EstudianteInscritoDto
-                {
-                    IdEstudiante = e.IdEstudiante,
-                    Matricula = e.Estudiante.Matricula,
-                    NombreCompleto = $"{e.Estudiante.IdPersonaNavigation?.Nombre} {e.Estudiante.IdPersonaNavigation?.ApellidoPaterno} {e.Estudiante.IdPersonaNavigation?.ApellidoMaterno}".Trim(),
-                    Email = e.Estudiante.Email ?? "",
-                    MateriasInscritas = e.MateriasInscritas,
-                    FechaInscripcion = e.FechaInscripcion
-                }).ToList()
+                TotalEstudiantes = dtoList.Count,
+                Estudiantes = dtoList.OrderBy(x => x.NombreCompleto).ToList()
             };
-
-            return resultado;
         }
 
         public async Task<List<GrupoMateriaDisponibleDto>> GetGruposMateriasDisponiblesAsync(
@@ -1007,7 +1105,7 @@ namespace WebApplication2.Services
             return resultado;
         }
 
-        public async Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, bool forzar = false, CancellationToken ct = default)
+        public async Task<bool> QuitarMateriaDelGrupoAsync(int idGrupoMateria, bool forzar = false, bool conservarHistorial = false, CancellationToken ct = default)
         {
             var grupoMateria = await _dbContext.GrupoMateria
                 .FirstOrDefaultAsync(gm => gm.IdGrupoMateria == idGrupoMateria && gm.Status == StatusEnum.Active, ct);
@@ -1019,12 +1117,12 @@ namespace WebApplication2.Services
                 .Where(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active)
                 .ToListAsync(ct);
 
-            if (inscripciones.Any() && !forzar)
-                throw new InvalidOperationException($"No se puede quitar la materia porque tiene {inscripciones.Count} estudiante(s) inscrito(s). Use 'forzar' para cancelar las inscripciones automáticamente.");
+            if (inscripciones.Any() && !forzar && !conservarHistorial)
+                throw new InvalidOperationException($"No se puede quitar la materia porque tiene {inscripciones.Count} estudiante(s) inscrito(s). Use 'forzar' para cancelar las inscripciones o 'conservarHistorial' para quitarla manteniendo las calificaciones.");
 
             var ahora = DateTime.UtcNow;
 
-            if (inscripciones.Any())
+            if (inscripciones.Any() && !conservarHistorial)
             {
                 var inscripcionIds = inscripciones.Select(i => i.IdInscripcion).ToList();
 
@@ -1382,7 +1480,20 @@ namespace WebApplication2.Services
                 .ToListAsync(ct);
 
             if (!inscripciones.Any())
+            {
+                // Alumnos inscritos "directo al grupo" (sin materias, ej. equivalencias):
+                // no tienen inscripciones a materias; validar por su vínculo directo al grupo del cuatrimestre.
+                var inscritoDirecto = await _dbContext.EstudianteGrupo
+                    .AnyAsync(eg => eg.IdEstudiante == idEstudiante
+                        && eg.Status == StatusEnum.Active
+                        && eg.IdGrupoNavigation.NumeroCuatrimestre == cuatrimestreActual
+                        && eg.IdGrupoNavigation.Status == StatusEnum.Active, ct);
+
+                if (inscritoDirecto)
+                    return (true, "Inscripción directa (sin materias): elegible para promoción");
+
                 return (false, "No tiene inscripciones registradas en este cuatrimestre");
+            }
 
             return (true, "Cumple con todos los requisitos de promoción");
         }
@@ -1441,6 +1552,386 @@ namespace WebApplication2.Services
                     g.Status == StatusEnum.Active, ct);
 
             return grupoSiguiente;
+        }
+
+        public async Task<List<PeriodoConEstudiantesDto>> ObtenerPeriodosConEstudiantesAsync(CancellationToken ct = default)
+        {
+            var gruposActivos = await _dbContext.Grupo
+                .Where(g => g.Status == StatusEnum.Active)
+                .Select(g => new { g.IdGrupo, g.IdPeriodoAcademico })
+                .ToListAsync(ct);
+            var grupoPeriodo = gruposActivos
+                .GroupBy(g => g.IdGrupo)
+                .ToDictionary(g => g.Key, g => g.First().IdPeriodoAcademico);
+
+            var pares = await _dbContext.Inscripcion
+                .Where(i => i.Status == StatusEnum.Active)
+                .Select(i => new { i.IdEstudiante, IdGrupo = i.IdGrupoMateriaNavigation.IdGrupo })
+                .Distinct()
+                .ToListAsync(ct);
+
+            var conteo = new Dictionary<int, HashSet<int>>();
+            foreach (var par in pares)
+            {
+                if (!grupoPeriodo.TryGetValue(par.IdGrupo, out var idPeriodo)) continue;
+                if (!conteo.TryGetValue(idPeriodo, out var set))
+                {
+                    set = new HashSet<int>();
+                    conteo[idPeriodo] = set;
+                }
+                set.Add(par.IdEstudiante);
+            }
+
+            var periodoIds = conteo.Keys.ToList();
+            var periodos = await _dbContext.PeriodoAcademico
+                .Include(p => p.IdPeriodicidadNavigation)
+                .Where(p => periodoIds.Contains(p.IdPeriodoAcademico))
+                .ToListAsync(ct);
+
+            return periodos
+                .Select(p => new PeriodoConEstudiantesDto
+                {
+                    IdPeriodoAcademico = p.IdPeriodoAcademico,
+                    Nombre = p.Nombre,
+                    Clave = p.Clave,
+                    Periodicidad = p.IdPeriodicidadNavigation?.DescPeriodicidad ?? "",
+                    Anio = p.FechaInicio.Year,
+                    EsPeriodoActual = p.EsPeriodoActual,
+                    TotalEstudiantes = conteo[p.IdPeriodoAcademico].Count
+                })
+                .OrderByDescending(r => r.Anio)
+                .ThenBy(r => r.Nombre)
+                .ToList();
+        }
+
+        public async Task<PromocionMasivaPreviewDto> PromocionMasivaPreviewAsync(int idPeriodoOrigen, int idPeriodoDestino, CancellationToken ct = default)
+        {
+            var periodoOrigen = await _dbContext.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == idPeriodoOrigen, ct)
+                ?? throw new KeyNotFoundException($"Periodo origen {idPeriodoOrigen} no encontrado");
+            var periodoDestino = await _dbContext.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == idPeriodoDestino, ct)
+                ?? throw new KeyNotFoundException($"Periodo destino {idPeriodoDestino} no encontrado");
+
+            var grupos = await _dbContext.Grupo
+                .Include(g => g.IdPlanEstudiosNavigation).ThenInclude(p => p.IdCampusNavigation)
+                .Include(g => g.IdTurnoNavigation)
+                .Where(g => g.IdPeriodoAcademico == idPeriodoOrigen && g.Status == StatusEnum.Active)
+                .OrderBy(g => g.IdPlanEstudios).ThenBy(g => g.NumeroCuatrimestre)
+                .ToListAsync(ct);
+
+            var estudiantesEnDestino = await ObtenerEstudiantesEnPeriodoAsync(idPeriodoDestino, ct);
+
+            var maxCuatriPorPlan = new Dictionary<int, int>();
+            var dto = new PromocionMasivaPreviewDto
+            {
+                IdPeriodoOrigen = idPeriodoOrigen,
+                PeriodoOrigen = periodoOrigen.Nombre,
+                IdPeriodoDestino = idPeriodoDestino,
+                PeriodoDestino = periodoDestino.Nombre
+            };
+
+            var procesados = new HashSet<int>();
+
+            foreach (var grupo in grupos)
+            {
+                var maxCuatri = await ObtenerMaxCuatrimestreAsync(grupo.IdPlanEstudios, maxCuatriPorPlan, ct);
+                var esUltimo = maxCuatri > 0 && grupo.NumeroCuatrimestre >= maxCuatri;
+
+                var idsPorInscripcion = await _dbContext.Inscripcion
+                    .Where(i => i.IdGrupoMateriaNavigation.IdGrupo == grupo.IdGrupo && i.Status == StatusEnum.Active)
+                    .Select(i => i.IdEstudiante).Distinct().ToListAsync(ct);
+
+                // También incluir alumnos inscritos "directo al grupo" (sin materias, ej. equivalencias)
+                var idsPorGrupoDirecto = await _dbContext.EstudianteGrupo
+                    .Where(eg => eg.IdGrupo == grupo.IdGrupo && eg.Status == StatusEnum.Active)
+                    .Select(eg => eg.IdEstudiante).Distinct().ToListAsync(ct);
+
+                var estudiantesIds = idsPorInscripcion.Union(idsPorGrupoDirecto).Distinct().ToList();
+
+                var recibos = await ObtenerSaldosPorEstudianteAsync(estudiantesIds, ct);
+
+                var grupoDto = new PromocionMasivaGrupoDto
+                {
+                    IdGrupo = grupo.IdGrupo,
+                    Campus = grupo.IdPlanEstudiosNavigation?.IdCampusNavigation?.Nombre ?? "",
+                    PlanEstudios = grupo.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? "",
+                    CodigoGrupo = grupo.CodigoGrupo ?? "",
+                    NombreGrupo = grupo.NombreGrupo ?? "",
+                    Turno = grupo.IdTurnoNavigation?.Nombre ?? "",
+                    CuatrimestreOrigen = grupo.NumeroCuatrimestre,
+                    CuatrimestreDestino = esUltimo ? null : grupo.NumeroCuatrimestre + 1,
+                    EsUltimoCuatrimestre = esUltimo,
+                    TotalEstudiantes = estudiantesIds.Count
+                };
+
+                foreach (var idEst in estudiantesIds)
+                {
+                    if (procesados.Contains(idEst)) continue;
+                    procesados.Add(idEst);
+
+                    var saldo = recibos.TryGetValue(idEst, out var s) ? s : 0;
+                    if (saldo > 0) { grupoDto.ConAdeudo++; grupoDto.SaldoPendiente += saldo; }
+
+                    if (estudiantesEnDestino.Contains(idEst))
+                    {
+                        grupoDto.ExcluidosNuevoIngreso++;
+                        continue;
+                    }
+
+                    var (puede, _) = await ValidarPromocionEstudianteAsync(idEst, grupo.NumeroCuatrimestre, 70, ct);
+                    if (!puede)
+                    {
+                        grupoDto.ConError++;
+                        continue;
+                    }
+
+                    if (esUltimo) grupoDto.AEgresar++;
+                    else grupoDto.APromover++;
+                }
+
+                dto.Grupos.Add(grupoDto);
+            }
+
+            dto.TotalGrupos = dto.Grupos.Count;
+            dto.TotalEstudiantes = dto.Grupos.Sum(g => g.TotalEstudiantes);
+            dto.TotalAPromover = dto.Grupos.Sum(g => g.APromover);
+            dto.TotalAEgresar = dto.Grupos.Sum(g => g.AEgresar);
+            dto.TotalExcluidosNuevoIngreso = dto.Grupos.Sum(g => g.ExcluidosNuevoIngreso);
+            dto.TotalConAdeudo = dto.Grupos.Sum(g => g.ConAdeudo);
+            dto.TotalSaldoPendiente = dto.Grupos.Sum(g => g.SaldoPendiente);
+            dto.TotalConError = dto.Grupos.Sum(g => g.ConError);
+
+            return dto;
+        }
+
+        public async Task<PromocionMasivaResultDto> PromocionMasivaAsync(PromocionMasivaRequest request, CancellationToken ct = default)
+        {
+            var periodoOrigen = await _dbContext.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == request.IdPeriodoOrigen, ct)
+                ?? throw new KeyNotFoundException($"Periodo origen {request.IdPeriodoOrigen} no encontrado");
+            _ = await _dbContext.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == request.IdPeriodoDestino, ct)
+                ?? throw new KeyNotFoundException($"Periodo destino {request.IdPeriodoDestino} no encontrado");
+
+            var gruposExcluidos = request.GruposExcluidos != null ? new HashSet<int>(request.GruposExcluidos) : new HashSet<int>();
+            var estudiantesExcluidos = request.EstudiantesExcluidos != null ? new HashSet<int>(request.EstudiantesExcluidos) : new HashSet<int>();
+
+            var grupos = await _dbContext.Grupo
+                .Include(g => g.IdPlanEstudiosNavigation).ThenInclude(p => p.IdCampusNavigation)
+                .Where(g => g.IdPeriodoAcademico == request.IdPeriodoOrigen && g.Status == StatusEnum.Active)
+                .OrderBy(g => g.IdPlanEstudios).ThenBy(g => g.NumeroCuatrimestre)
+                .ToListAsync(ct);
+
+            var estudiantesEnDestino = await ObtenerEstudiantesEnPeriodoAsync(request.IdPeriodoDestino, ct);
+
+            var maxCuatriPorPlan = new Dictionary<int, int>();
+            var result = new PromocionMasivaResultDto();
+            var procesados = new HashSet<int>();
+            int gruposCreados = 0;
+
+            foreach (var grupo in grupos)
+            {
+                if (gruposExcluidos.Contains(grupo.IdGrupo)) continue;
+
+                var maxCuatri = await ObtenerMaxCuatrimestreAsync(grupo.IdPlanEstudios, maxCuatriPorPlan, ct);
+                var esUltimo = maxCuatri > 0 && grupo.NumeroCuatrimestre >= maxCuatri;
+
+                var campus = grupo.IdPlanEstudiosNavigation?.IdCampusNavigation?.Nombre ?? "";
+                var plan = grupo.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? "";
+                var nombreGrupo = grupo.NombreGrupo ?? grupo.CodigoGrupo ?? "";
+
+                var idsPorInscripcion = await _dbContext.Inscripcion
+                    .Where(i => i.IdGrupoMateriaNavigation.IdGrupo == grupo.IdGrupo && i.Status == StatusEnum.Active)
+                    .Select(i => i.IdEstudiante).Distinct().ToListAsync(ct);
+
+                // También incluir alumnos inscritos "directo al grupo" (sin materias, ej. equivalencias)
+                var idsPorGrupoDirecto = await _dbContext.EstudianteGrupo
+                    .Where(eg => eg.IdGrupo == grupo.IdGrupo && eg.Status == StatusEnum.Active)
+                    .Select(eg => eg.IdEstudiante).Distinct().ToListAsync(ct);
+
+                var estudiantesIds = idsPorInscripcion.Union(idsPorGrupoDirecto).Distinct().ToList();
+
+                var recibos = await ObtenerSaldosPorEstudianteAsync(estudiantesIds, ct);
+
+                var estudiantesData = await _dbContext.Estudiante
+                    .Include(e => e.IdPersonaNavigation)
+                    .Where(e => estudiantesIds.Contains(e.IdEstudiante))
+                    .ToListAsync(ct);
+                var estDict = estudiantesData.ToDictionary(e => e.IdEstudiante);
+
+                Grupo? grupoDestino = null;
+                bool grupoDestinoResuelto = false;
+
+                foreach (var idEst in estudiantesIds)
+                {
+                    if (procesados.Contains(idEst)) continue;
+                    if (estudiantesExcluidos.Contains(idEst)) continue;
+                    procesados.Add(idEst);
+
+                    estDict.TryGetValue(idEst, out var estudiante);
+                    var persona = estudiante?.IdPersonaNavigation;
+                    var nombre = persona != null
+                        ? $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim()
+                        : "";
+                    var saldo = recibos.TryGetValue(idEst, out var s) ? s : 0;
+
+                    var item = new PromocionMasivaItemDto
+                    {
+                        IdEstudiante = idEst,
+                        Matricula = estudiante?.Matricula ?? "",
+                        NombreCompleto = nombre,
+                        Campus = campus,
+                        PlanEstudios = plan,
+                        Grupo = nombreGrupo,
+                        Cuatrimestre = grupo.NumeroCuatrimestre,
+                        Periodo = periodoOrigen.Nombre,
+                        TieneAdeudo = saldo > 0,
+                        SaldoPendiente = saldo
+                    };
+
+                    if (estudiantesEnDestino.Contains(idEst))
+                    {
+                        item.Accion = "Error";
+                        item.Detalle = "Excluido: ya tiene grupo en el periodo destino (nuevo ingreso)";
+                        result.Errores.Add(item);
+                        continue;
+                    }
+
+                    var (puede, motivo) = await ValidarPromocionEstudianteAsync(idEst, grupo.NumeroCuatrimestre, 70, ct);
+                    if (!puede)
+                    {
+                        item.Accion = "Error";
+                        item.Detalle = motivo;
+                        result.Errores.Add(item);
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (esUltimo)
+                        {
+                            if (estudiante != null)
+                            {
+                                estudiante.EstatusAcademico = Core.Enums.EstudianteStatusAcademicoEnum.Egresado;
+                                await _dbContext.SaveChangesAsync(ct);
+                            }
+                            item.Accion = "Egresado";
+                            item.Detalle = "Egresado del último cuatrimestre";
+                            result.Egresados.Add(item);
+                        }
+                        else
+                        {
+                            if (!grupoDestinoResuelto)
+                            {
+                                var existiaAntes = await _dbContext.Grupo.AnyAsync(g =>
+                                    g.IdPlanEstudios == grupo.IdPlanEstudios
+                                    && g.NumeroCuatrimestre == grupo.NumeroCuatrimestre + 1
+                                    && g.NumeroGrupo == grupo.NumeroGrupo
+                                    && g.IdTurno == grupo.IdTurno
+                                    && g.IdPeriodoAcademico == request.IdPeriodoDestino
+                                    && g.Status == StatusEnum.Active, ct);
+                                grupoDestino = await ObtenerOCrearGrupoSiguienteAsync(grupo.IdGrupo, request.IdPeriodoDestino, true, ct);
+                                if (grupoDestino != null && !existiaAntes) gruposCreados++;
+                                grupoDestinoResuelto = true;
+                            }
+
+                            if (grupoDestino == null)
+                            {
+                                item.Accion = "Error";
+                                item.Detalle = "No se pudo crear/obtener el grupo destino";
+                                result.Errores.Add(item);
+                                continue;
+                            }
+
+                            await InscribirEstudianteGrupoAsync(grupoDestino.IdGrupo, idEst, false, "Promoción masiva");
+                            item.Accion = "Promovido";
+                            item.Detalle = $"Promovido a {grupoDestino.NombreGrupo ?? grupoDestino.CodigoGrupo}";
+                            result.Promovidos.Add(item);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        item.Accion = "Error";
+                        item.Detalle = ex.InnerException?.Message ?? ex.Message;
+                        result.Errores.Add(item);
+                    }
+                }
+            }
+
+            result.TotalPromovidos = result.Promovidos.Count;
+            result.TotalEgresados = result.Egresados.Count;
+            result.TotalErrores = result.Errores.Count;
+            result.GruposCreados = gruposCreados;
+            result.Mensaje = $"Promoción masiva completada: {result.TotalPromovidos} promovidos, {result.TotalEgresados} egresados, {result.TotalErrores} con error.";
+
+            return result;
+        }
+
+        private async Task<HashSet<int>> ObtenerEstudiantesEnPeriodoAsync(int idPeriodo, CancellationToken ct)
+        {
+            var gruposPeriodoIds = await _dbContext.Grupo
+                .Where(g => g.IdPeriodoAcademico == idPeriodo && g.Status == StatusEnum.Active)
+                .Select(g => g.IdGrupo).ToListAsync(ct);
+
+            if (gruposPeriodoIds.Count == 0) return new HashSet<int>();
+
+            var ids = await _dbContext.Inscripcion
+                .Where(i => i.Status == StatusEnum.Active && gruposPeriodoIds.Contains(i.IdGrupoMateriaNavigation.IdGrupo))
+                .Select(i => i.IdEstudiante).Distinct().ToListAsync(ct);
+
+            var idsDirecto = await _dbContext.EstudianteGrupo
+                .Where(eg => eg.Status == StatusEnum.Active && gruposPeriodoIds.Contains(eg.IdGrupo))
+                .Select(eg => eg.IdEstudiante).Distinct().ToListAsync(ct);
+
+            var set = new HashSet<int>(ids);
+            set.UnionWith(idsDirecto);
+            return set;
+        }
+
+        private async Task<int> ObtenerMaxCuatrimestreAsync(int idPlanEstudios, Dictionary<int, int> cache, CancellationToken ct)
+        {
+            if (cache.TryGetValue(idPlanEstudios, out var maxCuatri)) return maxCuatri;
+
+            maxCuatri = await _dbContext.MateriaPlan
+                .Where(mp => mp.IdPlanEstudios == idPlanEstudios && mp.Status == StatusEnum.Active)
+                .Select(mp => (int?)mp.Cuatrimestre).MaxAsync(ct) ?? 0;
+
+            if (maxCuatri == 0)
+            {
+                // Plan sin currículo cargado (MateriaPlan vacío, ej. equivalencias):
+                // estimar por la duración del plan (4 meses por cuatrimestre) y respetar
+                // el corrimiento de numeración tomando el cuatrimestre más alto de sus grupos activos.
+                var duracionMeses = await _dbContext.PlanEstudios
+                    .Where(p => p.IdPlanEstudios == idPlanEstudios)
+                    .Select(p => p.DuracionMeses)
+                    .FirstOrDefaultAsync(ct) ?? 0;
+                var porDuracion = duracionMeses > 0 ? (int)Math.Ceiling(duracionMeses / 4.0) : 0;
+
+                var maxCuatriGrupos = await _dbContext.Grupo
+                    .Where(g => g.IdPlanEstudios == idPlanEstudios && g.Status == StatusEnum.Active)
+                    .Select(g => (int?)g.NumeroCuatrimestre).MaxAsync(ct) ?? 0;
+
+                maxCuatri = Math.Max(porDuracion, maxCuatriGrupos);
+            }
+
+            cache[idPlanEstudios] = maxCuatri;
+            return maxCuatri;
+        }
+
+        private async Task<Dictionary<int, decimal>> ObtenerSaldosPorEstudianteAsync(List<int> estudiantesIds, CancellationToken ct)
+        {
+            if (estudiantesIds.Count == 0) return new Dictionary<int, decimal>();
+
+            return await _dbContext.Recibo
+                .Where(r => r.IdEstudiante.HasValue
+                    && estudiantesIds.Contains(r.IdEstudiante.Value)
+                    && r.Status == StatusEnum.Active
+                    && r.Estatus != Core.Enums.EstatusRecibo.PAGADO
+                    && r.Estatus != Core.Enums.EstatusRecibo.CANCELADO)
+                .GroupBy(r => r.IdEstudiante!.Value)
+                .Select(g => new { Id = g.Key, Saldo = g.Sum(x => x.Saldo) })
+                .ToDictionaryAsync(x => x.Id, x => x.Saldo, ct);
         }
 
         public async Task ActualizarHorariosGrupoMateriaAsync(int idGrupoMateria, List<HorarioDto> horarios, CancellationToken ct = default)
@@ -1570,23 +2061,34 @@ namespace WebApplication2.Services
 
                 var inscripcionesExistentes = await _dbContext.Inscripcion
                     .Where(i => i.IdEstudiante == idEstudiante
-                        && materiasGrupo.Contains(i.IdGrupoMateria)
-                        && i.Status == StatusEnum.Active)
-                    .Select(i => i.IdGrupoMateria)
+                        && materiasGrupo.Contains(i.IdGrupoMateria))
                     .ToListAsync(ct);
 
-                foreach (var idGrupoMateria in materiasGrupo.Except(inscripcionesExistentes))
+                foreach (var idGrupoMateria in materiasGrupo)
                 {
-                    _dbContext.Inscripcion.Add(new Inscripcion
+                    var existente = inscripcionesExistentes.FirstOrDefault(i => i.IdGrupoMateria == idGrupoMateria);
+                    if (existente != null)
                     {
-                        IdEstudiante = idEstudiante,
-                        IdGrupoMateria = idGrupoMateria,
-                        FechaInscripcion = DateTime.UtcNow,
-                        Estado = "Inscrito",
-                        Status = StatusEnum.Active,
-                        CreatedAt = DateTime.UtcNow,
-                        CreatedBy = estudianteGrupo.CreatedBy ?? string.Empty
-                    });
+                        if (existente.Status != StatusEnum.Active)
+                        {
+                            existente.Status = StatusEnum.Active;
+                            existente.Estado = "Inscrito";
+                            existente.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                    else
+                    {
+                        _dbContext.Inscripcion.Add(new Inscripcion
+                        {
+                            IdEstudiante = idEstudiante,
+                            IdGrupoMateria = idGrupoMateria,
+                            FechaInscripcion = DateTime.UtcNow,
+                            Estado = "Inscrito",
+                            Status = StatusEnum.Active,
+                            CreatedAt = DateTime.UtcNow,
+                            CreatedBy = estudianteGrupo.CreatedBy ?? string.Empty
+                        });
+                    }
                 }
 
                 await _dbContext.SaveChangesAsync(ct);
@@ -1794,14 +2296,14 @@ namespace WebApplication2.Services
                     if (curpValido)
                     {
                         personaExistente = await _dbContext.Persona
-                            .FirstOrDefaultAsync(p => p.Curp == curpLimpio && p.Status == StatusEnum.Active, ct);
+                            .FirstOrDefaultAsync(p => p.Curp!.ToUpper() == curpLimpio.ToUpper() && p.Status == StatusEnum.Active, ct);
                     }
 
                     if (personaExistente == null && !string.IsNullOrWhiteSpace(estudianteDto.Correo))
                     {
                         var correoLimpio = estudianteDto.Correo.Trim().ToLowerInvariant();
                         personaExistente = await _dbContext.Persona
-                            .FirstOrDefaultAsync(p => p.Correo == correoLimpio && p.Status == StatusEnum.Active, ct);
+                            .FirstOrDefaultAsync(p => p.Correo!.ToLower() == correoLimpio && p.Status == StatusEnum.Active, ct);
                     }
 
                     Persona persona;
@@ -1934,6 +2436,285 @@ namespace WebApplication2.Services
             return response;
         }
 
+        public async Task<AgregarEstudianteIrregularResponse> AgregarEstudianteIrregularAGrupoAsync(
+            AgregarEstudianteIrregularRequest request,
+            CancellationToken ct = default)
+        {
+            var response = new AgregarEstudianteIrregularResponse();
+            var datos = request.Datos;
+
+            var grupo = await _dbContext.Grupo
+                .Include(g => g.IdPlanEstudiosNavigation)
+                .FirstOrDefaultAsync(g => g.IdGrupo == request.IdGrupo && g.Status == StatusEnum.Active, ct);
+
+            if (grupo == null)
+            {
+                response.Exitoso = false;
+                response.Mensaje = "Grupo no encontrado";
+                return response;
+            }
+
+            if (string.IsNullOrWhiteSpace(datos.Nombre) || string.IsNullOrWhiteSpace(datos.ApellidoPaterno))
+            {
+                response.Exitoso = false;
+                response.Mensaje = "El nombre y el apellido paterno son obligatorios";
+                return response;
+            }
+
+            var nombrePlan = grupo.IdPlanEstudiosNavigation?.NombrePlanEstudios ?? "";
+            var idPlanEstudios = grupo.IdPlanEstudios;
+
+            int idEstudianteFinal;
+            string matriculaFinal;
+            string nombreCompleto = $"{datos.Nombre} {datos.ApellidoPaterno} {datos.ApellidoMaterno}".Trim();
+
+            using (var transaction = await _dbContext.Database.BeginTransactionAsync(ct))
+            {
+                try
+                {
+                    var curpLimpio = datos.Curp?.Trim().ToUpperInvariant();
+                    var curpValido = !string.IsNullOrWhiteSpace(curpLimpio)
+                        && curpLimpio.Length == 18
+                        && curpLimpio != "CURP"
+                        && !curpLimpio.StartsWith("CURP");
+
+                    Persona? personaExistente = null;
+                    if (curpValido)
+                    {
+                        personaExistente = await _dbContext.Persona
+                            .FirstOrDefaultAsync(p => p.Curp!.ToUpper() == curpLimpio.ToUpper() && p.Status == StatusEnum.Active, ct);
+                    }
+
+                    if (personaExistente == null && !string.IsNullOrWhiteSpace(datos.Correo))
+                    {
+                        var correoLimpio = datos.Correo.Trim().ToLowerInvariant();
+                        personaExistente = await _dbContext.Persona
+                            .FirstOrDefaultAsync(p => p.Correo!.ToLower() == correoLimpio && p.Status == StatusEnum.Active, ct);
+                    }
+
+                    Persona persona;
+                    if (personaExistente != null)
+                    {
+                        persona = personaExistente;
+                    }
+                    else
+                    {
+                        persona = new Persona
+                        {
+                            Nombre = datos.Nombre.Trim(),
+                            ApellidoPaterno = datos.ApellidoPaterno.Trim(),
+                            ApellidoMaterno = datos.ApellidoMaterno?.Trim(),
+                            Curp = curpValido ? curpLimpio : null,
+                            Correo = datos.Correo?.Trim().ToLowerInvariant(),
+                            Telefono = datos.Telefono?.Trim(),
+                            Celular = datos.Celular?.Trim(),
+                            FechaNacimiento = datos.GetFechaNacimientoAsDateOnly(),
+                            IdGenero = datos.IdGenero,
+                            Status = StatusEnum.Active,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _dbContext.Persona.Add(persona);
+                        await _dbContext.SaveChangesAsync(ct);
+                    }
+
+                    var estudianteExistente = await _dbContext.Estudiante
+                        .FirstOrDefaultAsync(e => e.IdPersona == persona.IdPersona && e.Status == StatusEnum.Active, ct);
+
+                    Estudiante estudiante;
+                    if (estudianteExistente != null)
+                    {
+                        estudiante = estudianteExistente;
+                    }
+                    else
+                    {
+                        var matricula = !string.IsNullOrWhiteSpace(datos.Matricula)
+                            ? datos.Matricula.Trim()
+                            : await _matriculaService.GenerarMatriculaAsync(nombrePlan);
+
+                        if (await _matriculaService.ExisteMatriculaAsync(matricula))
+                        {
+                            await transaction.RollbackAsync(ct);
+                            response.Exitoso = false;
+                            response.Mensaje = $"La matrícula {matricula} ya existe";
+                            return response;
+                        }
+
+                        estudiante = new Estudiante
+                        {
+                            Matricula = matricula,
+                            IdPersona = persona.IdPersona,
+                            Email = datos.Correo?.Trim().ToLowerInvariant(),
+                            FechaIngreso = DateOnly.FromDateTime(DateTime.Now),
+                            IdPlanActual = idPlanEstudios,
+                            Activo = true,
+                            Status = StatusEnum.Active,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _dbContext.Estudiante.Add(estudiante);
+                        await _dbContext.SaveChangesAsync(ct);
+                    }
+
+                    var vinculoExistente = await _dbContext.EstudianteGrupo
+                        .FirstOrDefaultAsync(eg => eg.IdEstudiante == estudiante.IdEstudiante
+                            && eg.IdGrupo == request.IdGrupo
+                            && eg.Status == StatusEnum.Active, ct);
+
+                    EstudianteGrupo estudianteGrupo;
+                    if (vinculoExistente != null)
+                    {
+                        estudianteGrupo = vinculoExistente;
+                    }
+                    else
+                    {
+                        estudianteGrupo = new EstudianteGrupo
+                        {
+                            IdEstudiante = estudiante.IdEstudiante,
+                            IdGrupo = request.IdGrupo,
+                            FechaInscripcion = DateTime.UtcNow,
+                            Estado = "Inscrito",
+                            Observaciones = request.Observaciones,
+                            Status = StatusEnum.Active,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _dbContext.EstudianteGrupo.Add(estudianteGrupo);
+                        await _dbContext.SaveChangesAsync(ct);
+                    }
+
+                    var materiasGrupo = await _dbContext.GrupoMateria
+                        .Where(gm => gm.IdGrupo == request.IdGrupo && gm.Status == StatusEnum.Active)
+                        .Select(gm => gm.IdGrupoMateria)
+                        .ToListAsync(ct);
+
+                    var inscripcionesActivas = await _dbContext.Inscripcion
+                        .Where(i => i.IdEstudiante == estudiante.IdEstudiante
+                            && materiasGrupo.Contains(i.IdGrupoMateria)
+                            && i.Status == StatusEnum.Active)
+                        .Select(i => i.IdGrupoMateria)
+                        .ToListAsync(ct);
+
+                    var inscripcionesEliminadas = await _dbContext.Inscripcion
+                        .Where(i => i.IdEstudiante == estudiante.IdEstudiante
+                            && materiasGrupo.Contains(i.IdGrupoMateria)
+                            && i.Status == StatusEnum.Deleted)
+                        .ToListAsync(ct);
+
+                    int materiasInscritas = 0;
+                    foreach (var idGrupoMateria in materiasGrupo.Except(inscripcionesActivas))
+                    {
+                        var reactivar = inscripcionesEliminadas.FirstOrDefault(i => i.IdGrupoMateria == idGrupoMateria);
+                        if (reactivar != null)
+                        {
+                            reactivar.Status = StatusEnum.Active;
+                            reactivar.Estado = "Inscrito";
+                            reactivar.UpdatedAt = DateTime.UtcNow;
+                        }
+                        else
+                        {
+                            _dbContext.Inscripcion.Add(new Inscripcion
+                            {
+                                IdEstudiante = estudiante.IdEstudiante,
+                                IdGrupoMateria = idGrupoMateria,
+                                FechaInscripcion = DateTime.UtcNow,
+                                Estado = "Inscrito",
+                                Status = StatusEnum.Active,
+                                CreatedAt = DateTime.UtcNow,
+                                CreatedBy = estudianteGrupo.CreatedBy ?? string.Empty
+                            });
+                        }
+                        materiasInscritas++;
+                    }
+
+                    await _dbContext.SaveChangesAsync(ct);
+                    await transaction.CommitAsync(ct);
+
+                    idEstudianteFinal = estudiante.IdEstudiante;
+                    matriculaFinal = estudiante.Matricula;
+
+                    response.IdEstudiante = estudiante.IdEstudiante;
+                    response.Matricula = estudiante.Matricula;
+                    response.IdEstudianteGrupo = estudianteGrupo.IdEstudianteGrupo;
+                    response.MateriasInscritas = materiasInscritas;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync(ct);
+                    response.Exitoso = false;
+                    response.Mensaje = $"Error al crear el estudiante: {ex.Message}";
+                    return response;
+                }
+            }
+
+            response.Exitoso = true;
+            response.Mensaje = "Estudiante agregado al grupo correctamente";
+
+            var crearAcceso = request.CrearAcceso || request.CrearCorreoM365;
+            if (crearAcceso)
+            {
+                var dominio = string.IsNullOrWhiteSpace(request.Dominio)
+                    ? "usaguanajuato.edu.mx"
+                    : request.Dominio.Trim().TrimStart('@').ToLowerInvariant();
+                var usuarioCorreo = string.IsNullOrWhiteSpace(request.UsuarioCorreo)
+                    ? matriculaFinal
+                    : request.UsuarioCorreo.Trim();
+
+                var emailInstitucional = !string.IsNullOrWhiteSpace(request.EmailInstitucional)
+                    ? request.EmailInstitucional.Trim().ToLowerInvariant()
+                    : $"{usuarioCorreo.ToLowerInvariant()}@{dominio}";
+
+                var accesoResult = await _accesoService.CrearAccesoAsync(new CrearAccesoRequest
+                {
+                    Tipo = "alumno",
+                    EntidadId = idEstudianteFinal,
+                    EmailPersonalizado = emailInstitucional,
+                    PasswordPersonalizada = request.PasswordPersonalizada
+                }, ct);
+
+                if (accesoResult.Exito)
+                {
+                    response.AccesoCreado = true;
+                    response.EmailAcceso = emailInstitucional;
+                    response.PasswordTemporal = accesoResult.PasswordTemporal;
+
+                    if (request.CrearCorreoM365)
+                    {
+                        try
+                        {
+                            var mailNickname = emailInstitucional.Split('@')[0];
+                            var graphResult = await _graphService.CreateUserAsync(new WebApplication2.Core.Requests.MicrosoftGraph.CreateUserRequest
+                            {
+                                DisplayName = nombreCompleto,
+                                UserPrincipalName = emailInstitucional,
+                                MailNickname = mailNickname,
+                                Password = accesoResult.PasswordTemporal ?? request.PasswordPersonalizada ?? string.Empty,
+                                ForceChangePasswordNextSignIn = true,
+                                GivenName = datos.Nombre.Trim(),
+                                Surname = $"{datos.ApellidoPaterno} {datos.ApellidoMaterno}".Trim(),
+                                JobTitle = "Estudiante",
+                                Department = nombrePlan
+                            }, ct);
+
+                            response.CorreoM365Creado = graphResult.Success;
+                            response.MensajeM365 = graphResult.Message;
+                        }
+                        catch (Exception ex)
+                        {
+                            response.CorreoM365Creado = false;
+                            response.MensajeM365 = $"No se pudo crear el buzón en Microsoft 365: {ex.Message}";
+                        }
+                    }
+                }
+                else
+                {
+                    response.AccesoCreado = false;
+                    response.Mensaje += $" (No se creó la cuenta de acceso: {accesoResult.Mensaje})";
+                }
+            }
+
+            return response;
+        }
+
         public async Task<CambioGrupoResultDto> CambiarEstudianteDeGrupoAsync(CambioGrupoRequestDto request, CancellationToken ct = default)
         {
             var estudianteGrupo = await _dbContext.EstudianteGrupo
@@ -1958,18 +2739,21 @@ namespace WebApplication2.Services
             if (grupoDestino == null)
                 return new CambioGrupoResultDto { Exitoso = false, Mensaje = "Grupo destino no encontrado" };
 
-            if (grupoOrigen.IdPlanEstudios != grupoDestino.IdPlanEstudios)
-                return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El grupo destino pertenece a un plan de estudios diferente" };
-
             if (grupoOrigen.IdPeriodoAcademico != grupoDestino.IdPeriodoAcademico)
                 return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El grupo destino pertenece a un período académico diferente" };
 
-            if (grupoOrigen.NumeroCuatrimestre != grupoDestino.NumeroCuatrimestre)
-                return new CambioGrupoResultDto
-                {
-                    Exitoso = false,
-                    Mensaje = "No se puede transferir a un grupo de diferente cuatrimestre. Debe dar de baja al estudiante y reinscribirlo manualmente."
-                };
+            if (!request.Avanzado)
+            {
+                if (grupoOrigen.IdPlanEstudios != grupoDestino.IdPlanEstudios)
+                    return new CambioGrupoResultDto { Exitoso = false, Mensaje = "El grupo destino pertenece a un plan de estudios diferente" };
+
+                if (grupoOrigen.NumeroCuatrimestre != grupoDestino.NumeroCuatrimestre)
+                    return new CambioGrupoResultDto
+                    {
+                        Exitoso = false,
+                        Mensaje = "No se puede transferir a un grupo de diferente cuatrimestre. Debe dar de baja al estudiante y reinscribirlo manualmente."
+                    };
+            }
 
             var estudiantesActivos = grupoDestino.EstudianteGrupo.Count;
             if (estudiantesActivos >= grupoDestino.CapacidadMaxima)
@@ -2002,6 +2786,71 @@ namespace WebApplication2.Services
                 };
 
                 _dbContext.EstudianteGrupo.Add(nuevoEstudianteGrupo);
+
+                int materiasReinscritas = 0;
+                bool planCambiado = grupoOrigen.IdPlanEstudios != grupoDestino.IdPlanEstudios;
+                bool rehacerMaterias = grupoOrigen.IdGrupo != grupoDestino.IdGrupo;
+
+                if (rehacerMaterias)
+                {
+                    var materiasOrigen = await _dbContext.GrupoMateria
+                        .Where(gm => gm.IdGrupo == grupoOrigen.IdGrupo && gm.Status == StatusEnum.Active)
+                        .Select(gm => gm.IdGrupoMateria)
+                        .ToListAsync(ct);
+
+                    var inscOrigen = await _dbContext.Inscripcion
+                        .Where(i => i.IdEstudiante == estudiante.IdEstudiante
+                            && materiasOrigen.Contains(i.IdGrupoMateria)
+                            && i.Status == StatusEnum.Active)
+                        .ToListAsync(ct);
+                    foreach (var insc in inscOrigen)
+                    {
+                        insc.Status = StatusEnum.Deleted;
+                        insc.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    var materiasDestino = await _dbContext.GrupoMateria
+                        .Where(gm => gm.IdGrupo == grupoDestino.IdGrupo && gm.Status == StatusEnum.Active)
+                        .Select(gm => gm.IdGrupoMateria)
+                        .ToListAsync(ct);
+
+                    var inscDestinoExistentes = await _dbContext.Inscripcion
+                        .Where(i => i.IdEstudiante == estudiante.IdEstudiante
+                            && materiasDestino.Contains(i.IdGrupoMateria))
+                        .ToListAsync(ct);
+
+                    foreach (var idGrupoMateria in materiasDestino)
+                    {
+                        var existente = inscDestinoExistentes.FirstOrDefault(i => i.IdGrupoMateria == idGrupoMateria);
+                        if (existente != null)
+                        {
+                            existente.Status = StatusEnum.Active;
+                            existente.Estado = "Inscrito";
+                            existente.UpdatedAt = DateTime.UtcNow;
+                        }
+                        else
+                        {
+                            _dbContext.Inscripcion.Add(new Inscripcion
+                            {
+                                IdEstudiante = estudiante.IdEstudiante,
+                                IdGrupoMateria = idGrupoMateria,
+                                FechaInscripcion = DateTime.UtcNow,
+                                Estado = "Inscrito",
+                                Status = StatusEnum.Active,
+                                CreatedAt = DateTime.UtcNow,
+                                CreatedBy = "cambio-grupo-avanzado"
+                            });
+                        }
+                        materiasReinscritas++;
+                    }
+
+                    if (planCambiado)
+                    {
+                        estudiante.IdPlanActual = grupoDestino.IdPlanEstudios;
+                        estudiante.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+
                 await _dbContext.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
 
@@ -2012,7 +2861,11 @@ namespace WebApplication2.Services
                     GrupoOrigen = grupoOrigen.NombreGrupo,
                     GrupoDestino = grupoDestino.NombreGrupo,
                     NombreEstudiante = nombreEstudiante,
-                    Matricula = matricula
+                    Matricula = matricula,
+                    CuatrimestreOrigen = grupoOrigen.NumeroCuatrimestre,
+                    CuatrimestreDestino = grupoDestino.NumeroCuatrimestre,
+                    PlanCambiado = planCambiado,
+                    MateriasReinscritas = materiasReinscritas
                 };
             }
             catch (Exception ex)
@@ -2020,6 +2873,272 @@ namespace WebApplication2.Services
                 await transaction.RollbackAsync(ct);
                 return new CambioGrupoResultDto { Exitoso = false, Mensaje = $"Error al realizar el cambio: {ex.Message}" };
             }
+        }
+
+        public async Task<CuatrimestresAnterioresPreviewDto> ObtenerPreviewCuatrimestresAnterioresAsync(int idGrupoOrigen, CancellationToken ct = default)
+        {
+            var grupo = await _dbContext.Grupo
+                .Include(g => g.IdPlanEstudiosNavigation)
+                .Include(g => g.IdTurnoNavigation)
+                .Include(g => g.IdPeriodoAcademicoNavigation)
+                .FirstOrDefaultAsync(g => g.IdGrupo == idGrupoOrigen && g.Status == StatusEnum.Active, ct)
+                ?? throw new InvalidOperationException($"Grupo {idGrupoOrigen} no encontrado");
+
+            var cohorteIds = await _dbContext.EstudianteGrupo
+                .Where(eg => eg.IdGrupo == idGrupoOrigen && eg.Status == StatusEnum.Active)
+                .Select(eg => eg.IdEstudiante)
+                .ToListAsync(ct);
+            var totalEstudiantes = cohorteIds.Count;
+
+            var periodicidad = grupo.IdPeriodoAcademicoNavigation.IdPeriodicidad;
+            var periodos = await _dbContext.PeriodoAcademico
+                .Where(p => p.Status == StatusEnum.Active && p.IdPeriodicidad == periodicidad)
+                .OrderBy(p => p.FechaInicio)
+                .ToListAsync(ct);
+            var idxActual = periodos.FindIndex(p => p.IdPeriodoAcademico == grupo.IdPeriodoAcademico);
+
+            var previos = new List<CuatrimestrePrevioDto>();
+            for (int c = 1; c < grupo.NumeroCuatrimestre; c++)
+            {
+                var totalMaterias = await _dbContext.MateriaPlan
+                    .CountAsync(mp => mp.IdPlanEstudios == grupo.IdPlanEstudios
+                        && mp.Cuatrimestre == c
+                        && mp.Status == StatusEnum.Active, ct);
+
+                PeriodoAcademico? sugerido = null;
+                if (idxActual >= 0)
+                {
+                    var idx = idxActual - (grupo.NumeroCuatrimestre - c);
+                    if (idx >= 0 && idx < periodos.Count)
+                        sugerido = periodos[idx];
+                }
+
+                var mejor = cohorteIds.Count == 0 ? null : (await _dbContext.EstudianteGrupo
+                    .Where(eg => eg.Status == StatusEnum.Active
+                        && cohorteIds.Contains(eg.IdEstudiante)
+                        && eg.IdGrupoNavigation.IdPlanEstudios == grupo.IdPlanEstudios
+                        && eg.IdGrupoNavigation.NumeroCuatrimestre == c
+                        && eg.IdGrupoNavigation.Status == StatusEnum.Active)
+                    .GroupBy(eg => new
+                    {
+                        eg.IdGrupo,
+                        eg.IdGrupoNavigation.CodigoGrupo,
+                        eg.IdGrupoNavigation.IdPeriodoAcademico,
+                        Periodo = eg.IdGrupoNavigation.IdPeriodoAcademicoNavigation.Nombre
+                    })
+                    .Select(g => new
+                    {
+                        g.Key.IdGrupo,
+                        g.Key.CodigoGrupo,
+                        g.Key.IdPeriodoAcademico,
+                        g.Key.Periodo,
+                        Count = g.Count()
+                    })
+                    .ToListAsync(ct))
+                    .OrderByDescending(x => x.Count)
+                    .FirstOrDefault();
+
+                previos.Add(new CuatrimestrePrevioDto
+                {
+                    NumeroCuatrimestre = c,
+                    TotalMateriasEnPlan = totalMaterias,
+                    IdGrupoExistente = mejor?.IdGrupo,
+                    GrupoExistenteInfo = mejor != null ? $"{mejor.CodigoGrupo} · {mejor.Periodo}" : null,
+                    AlumnosCohorteInscritos = mejor?.Count,
+                    IdPeriodoSugerido = mejor?.IdPeriodoAcademico ?? sugerido?.IdPeriodoAcademico,
+                    PeriodoSugerido = mejor?.Periodo ?? sugerido?.Nombre
+                });
+            }
+
+            return new CuatrimestresAnterioresPreviewDto
+            {
+                IdGrupoOrigen = grupo.IdGrupo,
+                NombreGrupo = grupo.NombreGrupo,
+                CodigoGrupo = grupo.CodigoGrupo,
+                IdPlanEstudios = grupo.IdPlanEstudios,
+                PlanEstudios = grupo.IdPlanEstudiosNavigation?.NombrePlanEstudios
+                    ?? grupo.IdPlanEstudiosNavigation?.ClavePlanEstudios ?? "",
+                NumeroCuatrimestreActual = grupo.NumeroCuatrimestre,
+                NumeroGrupo = grupo.NumeroGrupo,
+                IdTurno = grupo.IdTurno,
+                Turno = grupo.IdTurnoNavigation?.Nombre ?? "",
+                IdPeriodoActual = grupo.IdPeriodoAcademico,
+                PeriodoActual = grupo.IdPeriodoAcademicoNavigation?.Nombre ?? "",
+                TotalEstudiantes = totalEstudiantes,
+                CuatrimestresPrevios = previos
+            };
+        }
+
+        public async Task<GenerarCuatrimestresAnterioresResultado> GenerarCuatrimestresAnterioresAsync(
+            GenerarCuatrimestresAnterioresRequest request,
+            CancellationToken ct = default)
+        {
+            var grupoOrigen = await _dbContext.Grupo
+                .FirstOrDefaultAsync(g => g.IdGrupo == request.IdGrupoOrigen && g.Status == StatusEnum.Active, ct)
+                ?? throw new InvalidOperationException($"Grupo origen {request.IdGrupoOrigen} no encontrado");
+
+            var periodicidadOrigen = (await _dbContext.PeriodoAcademico
+                .FirstOrDefaultAsync(p => p.IdPeriodoAcademico == grupoOrigen.IdPeriodoAcademico, ct))?.IdPeriodicidad ?? 1;
+
+            var cohorteIds = await _dbContext.EstudianteGrupo
+                .Where(eg => eg.IdGrupo == request.IdGrupoOrigen && eg.Status == StatusEnum.Active)
+                .Select(eg => eg.IdEstudiante)
+                .ToListAsync(ct);
+
+            var estudiantes = new List<EstudianteEnGrupoDto>();
+            if (request.CopiarEstudiantes)
+            {
+                var resp = await GetEstudiantesDelGrupoDirectoAsync(request.IdGrupoOrigen, ct);
+                estudiantes = resp.Estudiantes;
+            }
+
+            var resultado = new GenerarCuatrimestresAnterioresResultado { IdGrupoOrigen = grupoOrigen.IdGrupo };
+
+            foreach (var item in request.Cuatrimestres.OrderBy(c => c.NumeroCuatrimestre))
+            {
+                if (item.NumeroCuatrimestre < 1 || item.NumeroCuatrimestre >= grupoOrigen.NumeroCuatrimestre)
+                    continue;
+
+                var gen = new CuatrimestreGeneradoDto { NumeroCuatrimestre = item.NumeroCuatrimestre };
+
+                int? grupoCohorteId = null;
+                if (cohorteIds.Count > 0)
+                {
+                    var candidatos = await _dbContext.EstudianteGrupo
+                        .Where(eg => eg.Status == StatusEnum.Active
+                            && cohorteIds.Contains(eg.IdEstudiante)
+                            && eg.IdGrupoNavigation.IdPlanEstudios == grupoOrigen.IdPlanEstudios
+                            && eg.IdGrupoNavigation.NumeroCuatrimestre == item.NumeroCuatrimestre
+                            && eg.IdGrupoNavigation.Status == StatusEnum.Active)
+                        .GroupBy(eg => eg.IdGrupo)
+                        .Select(g => new { IdGrupo = g.Key, Count = g.Count() })
+                        .ToListAsync(ct);
+                    grupoCohorteId = candidatos.OrderByDescending(x => x.Count).Select(x => (int?)x.IdGrupo).FirstOrDefault();
+                }
+
+                int idGrupo;
+                int idPeriodo;
+
+                if (grupoCohorteId != null)
+                {
+                    var g = await _dbContext.Grupo.FirstAsync(x => x.IdGrupo == grupoCohorteId.Value, ct);
+                    idGrupo = g.IdGrupo;
+                    idPeriodo = g.IdPeriodoAcademico;
+                    gen.GrupoYaExistia = true;
+                    gen.NombreGrupo = g.NombreGrupo;
+                    gen.CodigoGrupo = g.CodigoGrupo;
+                    gen.TotalMaterias = await _dbContext.GrupoMateria
+                        .CountAsync(gm => gm.IdGrupo == idGrupo && gm.Status == StatusEnum.Active, ct);
+                    resultado.TotalGruposReutilizados++;
+                }
+                else
+                {
+                    if (item.NuevoPeriodo != null)
+                    {
+                        var clave = string.IsNullOrWhiteSpace(item.NuevoPeriodo.Clave)
+                            ? $"HIST-{item.NuevoPeriodo.FechaInicio:yyyyMMdd}"
+                            : item.NuevoPeriodo.Clave!.Trim();
+
+                        var periodoExistente = await _dbContext.PeriodoAcademico
+                            .FirstOrDefaultAsync(p => p.Clave == clave && p.Status == StatusEnum.Active, ct);
+
+                        if (periodoExistente != null)
+                        {
+                            idPeriodo = periodoExistente.IdPeriodoAcademico;
+                        }
+                        else
+                        {
+                            var nuevo = new PeriodoAcademico
+                            {
+                                Clave = clave,
+                                Nombre = item.NuevoPeriodo.Nombre.Trim(),
+                                IdPeriodicidad = periodicidadOrigen,
+                                FechaInicio = item.NuevoPeriodo.FechaInicio,
+                                FechaFin = item.NuevoPeriodo.FechaFin,
+                                EsPeriodoActual = false,
+                                Status = StatusEnum.Active,
+                                CreatedAt = DateTime.UtcNow,
+                                CreatedBy = "Sistema"
+                            };
+                            _dbContext.PeriodoAcademico.Add(nuevo);
+                            await _dbContext.SaveChangesAsync(ct);
+                            idPeriodo = nuevo.IdPeriodoAcademico;
+                            gen.PeriodoCreado = true;
+                            resultado.TotalPeriodosCreados++;
+                        }
+                    }
+                    else if (item.IdPeriodoAcademico.HasValue)
+                    {
+                        idPeriodo = item.IdPeriodoAcademico.Value;
+                    }
+                    else
+                    {
+                        gen.Advertencias.Add("Sin periodo asignado; se omitió este cuatrimestre.");
+                        resultado.Cuatrimestres.Add(gen);
+                        continue;
+                    }
+
+                    var ocupados = await _dbContext.Grupo
+                        .Where(g => g.IdPlanEstudios == grupoOrigen.IdPlanEstudios
+                            && g.NumeroCuatrimestre == item.NumeroCuatrimestre
+                            && g.IdTurno == grupoOrigen.IdTurno
+                            && g.IdPeriodoAcademico == idPeriodo
+                            && g.Status == StatusEnum.Active)
+                        .Select(g => g.NumeroGrupo)
+                        .ToListAsync(ct);
+                    int numeroGrupo = grupoOrigen.NumeroGrupo;
+                    while (ocupados.Contains((byte)numeroGrupo))
+                        numeroGrupo++;
+
+                    var creado = await CrearGrupoConMateriasAsync(new Core.Requests.GestionAcademica.CrearGrupoAcademicoRequest
+                    {
+                        IdPlanEstudios = grupoOrigen.IdPlanEstudios,
+                        IdPeriodoAcademico = idPeriodo,
+                        NumeroCuatrimestre = item.NumeroCuatrimestre,
+                        NumeroGrupo = numeroGrupo,
+                        IdTurno = grupoOrigen.IdTurno,
+                        CapacidadMaxima = grupoOrigen.CapacidadMaxima,
+                        CargarMateriasAutomaticamente = true
+                    }, ct);
+                    idGrupo = creado.IdGrupo;
+                    gen.NombreGrupo = creado.NombreGrupo;
+                    gen.CodigoGrupo = creado.CodigoGrupo;
+                    gen.TotalMaterias = creado.TotalMaterias;
+                    resultado.TotalGruposCreados++;
+                }
+
+                gen.IdGrupo = idGrupo;
+                gen.IdPeriodoAcademico = idPeriodo;
+                gen.PeriodoAcademico = (await _dbContext.PeriodoAcademico.FindAsync(new object[] { idPeriodo }, ct))?.Nombre ?? "";
+
+                foreach (var est in estudiantes)
+                {
+                    try
+                    {
+                        var r = await InscribirEstudianteGrupoAsync(idGrupo, est.IdEstudiante, forzarInscripcion: true,
+                            observaciones: "Generación retroactiva de cuatrimestre anterior");
+                        if (r.MateriasInscritas > 0 && r.MateriasFallidas == 0)
+                        {
+                            gen.EstudiantesInscritos++;
+                        }
+                        else
+                        {
+                            gen.EstudiantesConAdvertencia++;
+                            if (r.MateriasFallidas > 0)
+                                gen.Advertencias.Add($"{est.Matricula}: {r.MateriasFallidas} materia(s) no inscritas");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        gen.EstudiantesConAdvertencia++;
+                        gen.Advertencias.Add($"{est.Matricula}: {ex.Message}");
+                    }
+                }
+
+                resultado.Cuatrimestres.Add(gen);
+            }
+
+            return resultado;
         }
     }
 }

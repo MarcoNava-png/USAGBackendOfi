@@ -31,7 +31,7 @@ public class PagoServiceTests : IDisposable
         _context = new ApplicationDbContext(options, httpContextAccessorMock.Object, loggerMock.Object);
         _mapperMock = new Mock<IMapper>();
         var pagoLoggerMock = new Mock<ILogger<PagoService>>();
-        _service = new PagoService(_context, _mapperMock.Object, pagoLoggerMock.Object);
+        _service = new PagoService(_context, _mapperMock.Object, pagoLoggerMock.Object, new WebApplication2.Services.InstitucionProvider(new WebApplication2.Services.MultiTenant.TenantContextAccessor(), null!));
     }
 
     public void Dispose()

@@ -16,17 +16,20 @@ namespace WebApplication2.Services
         private readonly IConfiguration _config;
         private readonly IPdfService _pdfService;
         private readonly IBitacoraAccionService _bitacora;
+        private readonly WebApplication2.Services.MultiTenant.ITenantContextAccessor _tenantContextAccessor;
 
         public DocumentoEstudianteService(
             ApplicationDbContext db,
             IConfiguration config,
             IPdfService pdfService,
-            IBitacoraAccionService bitacora)
+            IBitacoraAccionService bitacora,
+            WebApplication2.Services.MultiTenant.ITenantContextAccessor tenantContextAccessor)
         {
             _db = db;
             _config = config;
             _pdfService = pdfService;
             _bitacora = bitacora;
+            _tenantContextAccessor = tenantContextAccessor;
         }
 
         #region Tipos de Documento
@@ -654,10 +657,55 @@ namespace WebApplication2.Services
                 }
             }
 
-            var periodoNombre = (await _db.PeriodoAcademico
+            var periodoAct = await _db.PeriodoAcademico
                 .Where(p => p.EsPeriodoActual)
                 .OrderByDescending(p => p.FechaInicio)
-                .FirstOrDefaultAsync())?.Nombre ?? "N/A";
+                .FirstOrDefaultAsync();
+
+            var culturaEs = new System.Globalization.CultureInfo("es-MX");
+            string periodoTexto;
+            if (periodoAct != null)
+            {
+                var ini = periodoAct.FechaInicio.ToDateTime(TimeOnly.MinValue);
+                var fin = periodoAct.FechaFin.ToDateTime(TimeOnly.MinValue);
+                periodoTexto = $"del {ini.ToString("dd 'de' MMMM", culturaEs)} al {fin.ToString("dd 'de' MMMM 'de' yyyy", culturaEs)}";
+            }
+            else
+            {
+                periodoTexto = periodoAct?.Nombre ?? "N/A";
+            }
+
+            byte cuatriActual = 0;
+            if (periodoAct != null)
+            {
+                cuatriActual = await _db.EstudianteGrupo
+                    .Where(eg => eg.IdEstudiante == estudiante.IdEstudiante && eg.Status != StatusEnum.Deleted
+                        && eg.IdGrupoNavigation.IdPeriodoAcademico == periodoAct.IdPeriodoAcademico)
+                    .OrderByDescending(eg => eg.IdEstudianteGrupo)
+                    .Select(eg => eg.IdGrupoNavigation.NumeroCuatrimestre)
+                    .FirstOrDefaultAsync();
+            }
+            if (cuatriActual == 0)
+            {
+                cuatriActual = await _db.EstudianteGrupo
+                    .Where(eg => eg.IdEstudiante == estudiante.IdEstudiante && eg.Status != StatusEnum.Deleted)
+                    .OrderByDescending(eg => eg.IdEstudianteGrupo)
+                    .Select(eg => eg.IdGrupoNavigation.NumeroCuatrimestre)
+                    .FirstOrDefaultAsync();
+            }
+
+            int totalCuatri = 0;
+            if (plan != null)
+            {
+                totalCuatri = await _db.MateriaPlan
+                    .Where(mp => mp.IdPlanEstudios == plan.IdPlanEstudios)
+                    .MaxAsync(mp => (int?)mp.Cuatrimestre) ?? 0;
+            }
+            if (totalCuatri == 0 && plan?.DuracionMeses is int dm && dm > 0) totalCuatri = dm / 4;
+
+            string gradoTexto = cuatriActual > 0
+                ? $"cursando el {OrdinalEspanol(cuatriActual)} cuatrimestre" + (totalCuatri > 0 ? $" de {NumeroEspanol(totalCuatri)}" : "")
+                : "inscrito(a)";
 
             return new ConstanciaEstudiosDto
             {
@@ -667,8 +715,8 @@ namespace WebApplication2.Services
                 Carrera = plan?.NombrePlanEstudios ?? "",
                 PlanEstudios = plan?.NombrePlanEstudios ?? "",
                 RVOE = plan?.RVOE,
-                PeriodoActual = periodoNombre,
-                Grado = "N/A",
+                PeriodoActual = periodoTexto,
+                Grado = gradoTexto,
                 Turno = "Matutino",
                 Campus = plan?.IdCampusNavigation?.Nombre ?? "",
                 FechaIngreso = estudiante.FechaIngreso.ToDateTime(TimeOnly.MinValue),
@@ -704,6 +752,12 @@ namespace WebApplication2.Services
             return await _pdfService.GenerarConstanciaPdf(constancia);
         }
 
+        private static readonly string[] _ordinales = { "", "primer", "segundo", "tercer", "cuarto", "quinto", "sexto", "séptimo", "octavo", "noveno", "décimo", "décimo primer", "décimo segundo", "décimo tercer", "décimo cuarto", "décimo quinto", "décimo sexto" };
+        private static readonly string[] _numeros = { "", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis" };
+
+        private static string OrdinalEspanol(int n) => n > 0 && n < _ordinales.Length ? _ordinales[n] : n.ToString();
+        private static string NumeroEspanol(int n) => n > 0 && n < _numeros.Length ? _numeros[n] : n.ToString();
+
         #endregion
 
         #region Utilidades
@@ -732,8 +786,21 @@ namespace WebApplication2.Services
 
         public string GenerarUrlVerificacion(Guid codigoVerificacion)
         {
-            var baseUrl = _config["App:UrlVerificacionDocumentos"]
-                ?? "https://usag.edu.mx/verificar";
+            var ctx = _tenantContextAccessor.TenantContext;
+            string baseUrl;
+
+            if (ctx != null && !string.IsNullOrWhiteSpace(ctx.Subdominio)
+                && !string.Equals(ctx.Codigo, "USAG", StringComparison.OrdinalIgnoreCase))
+            {
+                var baseDomain = _config["BaseDomain"] ?? "saciusag.com.mx";
+                baseUrl = $"https://{ctx.Subdominio}.{baseDomain}/verificar";
+            }
+            else
+            {
+                baseUrl = _config["App:UrlVerificacionDocumentos"]
+                    ?? "https://saciusag.com.mx/verificar";
+            }
+
             return $"{baseUrl}/{codigoVerificacion}";
         }
 

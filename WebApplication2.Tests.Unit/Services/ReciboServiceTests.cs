@@ -35,7 +35,7 @@ public class ReciboServiceTests : IDisposable
         _convenioServiceMock = new Mock<IConvenioService>();
         _becaServiceMock = new Mock<IBecaService>();
 
-        _service = new ReciboService(_context, _mapperMock.Object, _convenioServiceMock.Object, _becaServiceMock.Object);
+        _service = new ReciboService(_context, _mapperMock.Object, _convenioServiceMock.Object, _becaServiceMock.Object, new WebApplication2.Services.InstitucionProvider(new WebApplication2.Services.MultiTenant.TenantContextAccessor(), null!));
     }
 
     public void Dispose()

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebApplication2.Configuration.Constants;
+using WebApplication2.Core.Requests.Formatos;
 using WebApplication2.Data.DbContexts;
 using WebApplication2.Services.Interfaces;
 
@@ -14,12 +15,62 @@ namespace WebApplication2.Controllers
     public class PlantillaReporteController : ControllerBase
     {
         private readonly IPlantillaReporteService _service;
+        private readonly IFormatoDatosService _formatoDatos;
         private readonly ApplicationDbContext _db;
 
-        public PlantillaReporteController(IPlantillaReporteService service, ApplicationDbContext db)
+        public PlantillaReporteController(IPlantillaReporteService service, IFormatoDatosService formatoDatos, ApplicationDbContext db)
         {
             _service = service;
+            _formatoDatos = formatoDatos;
             _db = db;
+        }
+
+        [HttpGet("origenes")]
+        public ActionResult ListarOrigenes() => Ok(_formatoDatos.ListarOrigenes());
+
+        [HttpGet("origenes/{origen}/variables")]
+        public ActionResult CatalogoVariables(string origen) => Ok(_formatoDatos.CatalogoVariables(origen));
+
+        [HttpPost("{codigo}/generar-entidad/{idEntidad:int}")]
+        public async Task<IActionResult> GenerarPorEntidad(string codigo, int idEntidad, [FromQuery] bool pdf = true, CancellationToken ct = default)
+        {
+            try
+            {
+                var bytes = await _service.GenerarPorEntidadAsync(codigo, idEntidad, pdf, ct);
+                return pdf
+                    ? File(bytes, "application/pdf", $"{codigo}_{idEntidad}.pdf")
+                    : File(bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", $"{codigo}_{idEntidad}.docx");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("{id:int}/origen")]
+        public async Task<ActionResult> ActualizarOrigen(int id, [FromBody] ActualizarOrigenRequest request, CancellationToken ct)
+        {
+            try
+            {
+                return Ok(await _service.ActualizarOrigenAsync(id, request.Origen, ct));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+        }
+
+        [HttpPut("{id:int}/roles")]
+        public async Task<ActionResult> ActualizarRoles(int id, [FromBody] ActualizarRolesRequest request, CancellationToken ct)
+        {
+            try
+            {
+                return Ok(await _service.ActualizarRolesAsync(id, request.RolesGenera, ct));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -41,6 +92,8 @@ namespace WebApplication2.Controllers
             [FromForm] string categoria,
             [FromForm] string? descripcion,
             [FromForm] string? variables,
+            [FromForm] string? origen,
+            [FromForm] string? rolesGenera,
             IFormFile archivo,
             CancellationToken ct)
         {
@@ -53,7 +106,7 @@ namespace WebApplication2.Controllers
 
             try
             {
-                var result = await _service.CrearAsync(nombre, codigo, categoria, descripcion, archivo.OpenReadStream(), archivo.FileName, variables ?? "[]", ct);
+                var result = await _service.CrearAsync(nombre, codigo, categoria, descripcion, archivo.OpenReadStream(), archivo.FileName, variables ?? "[]", origen, rolesGenera, ct);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -171,8 +224,10 @@ namespace WebApplication2.Controllers
 
             try
             {
+                var plantilla = await _service.ObtenerPorCodigoAsync(codigo, ct);
+                var ext = plantilla != null ? System.IO.Path.GetExtension(plantilla.RutaArchivo) : ".docx";
                 var docBytes = await _service.GenerarDocumentoAsync(codigo, sampleVars, sampleTablas, ct);
-                var pdfBytes = await WebApplication2.Services.DocxToPdfConverter.ConvertAsync(docBytes, ct);
+                var pdfBytes = await WebApplication2.Services.DocxToPdfConverter.ConvertAsync(docBytes, ext, ct);
                 return File(pdfBytes, "application/pdf");
             }
             catch (InvalidOperationException ex)
@@ -188,7 +243,8 @@ namespace WebApplication2.Controllers
             if (plantilla == null) return NotFound(new { error = "Plantilla no encontrada" });
 
             var bytes = await System.IO.File.ReadAllBytesAsync(plantilla.RutaArchivo, ct);
-            var pdfBytes = await WebApplication2.Services.DocxToPdfConverter.ConvertAsync(bytes, ct);
+            var ext = System.IO.Path.GetExtension(plantilla.RutaArchivo);
+            var pdfBytes = await WebApplication2.Services.DocxToPdfConverter.ConvertAsync(bytes, ext, ct);
             return File(pdfBytes, "application/pdf");
         }
 

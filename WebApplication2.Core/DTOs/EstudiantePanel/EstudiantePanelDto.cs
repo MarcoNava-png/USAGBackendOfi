@@ -22,6 +22,8 @@ namespace WebApplication2.Core.DTOs.EstudiantePanel
         public bool Activo { get; set; }
         public int EstatusAcademico { get; set; }
         public string? EstatusAcademicoTexto { get; set; }
+        public bool TienePreinscripcionPendiente { get; set; }
+        public string? PeriodoPreinscripcion { get; set; }
         public int? TipoBaja { get; set; }
         public int? EstadoBaja { get; set; }
         public string? MotivoBaja { get; set; }

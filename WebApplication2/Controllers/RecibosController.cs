@@ -74,6 +74,7 @@ namespace WebApplication2.Controllers
             [FromQuery] bool soloVencidos = false,
             [FromQuery] bool soloPagados = false,
             [FromQuery] bool soloPendientes = false,
+            [FromQuery] bool soloSinPeriodo = false,
             [FromQuery] int pagina = 1,
             [FromQuery] int tamanioPagina = 50,
             CancellationToken ct = default)
@@ -83,6 +84,7 @@ namespace WebApplication2.Controllers
                 Folio = folio,
                 Matricula = matricula,
                 IdPeriodoAcademico = idPeriodoAcademico,
+                SoloSinPeriodo = soloSinPeriodo,
                 SoloVencidos = soloVencidos,
                 SoloPagados = soloPagados,
                 SoloPendientes = soloPendientes,
@@ -96,6 +98,12 @@ namespace WebApplication2.Controllers
             }
 
             return Ok(await _svc.BuscarRecibosAsync(filtros, ct));
+        }
+
+        [HttpGet("periodos-resumen")]
+        public async Task<ActionResult<PeriodosConRecibosDto>> PeriodosResumen(CancellationToken ct = default)
+        {
+            return Ok(await _svc.GetPeriodosConRecibosAsync(ct));
         }
 
         [HttpGet("buscar")]

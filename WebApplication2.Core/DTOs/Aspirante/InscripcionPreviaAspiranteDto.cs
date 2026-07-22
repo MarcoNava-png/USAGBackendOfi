@@ -9,6 +9,7 @@ public class InscripcionPreviaAspiranteDto
     public int? IdPlanEstudios { get; set; }
     public string? NombrePlanEstudios { get; set; }
     public string? ClavePlanEstudios { get; set; }
+    public string? Campus { get; set; }
     public int? IdPeriodoAcademico { get; set; }
     public string? NombrePeriodoAcademico { get; set; }
     public string? TurnoAspirante { get; set; }

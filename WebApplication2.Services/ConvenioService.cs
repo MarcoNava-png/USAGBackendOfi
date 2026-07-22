@@ -71,7 +71,7 @@ namespace WebApplication2.Services
         public async Task<ConvenioDto> CrearConvenioAsync(CrearConvenioDto dto, string usuarioCreador, CancellationToken ct = default)
         {
             var claveExiste = await _dbContext.Convenio
-                .AnyAsync(c => c.ClaveConvenio == dto.ClaveConvenio && c.Status == StatusEnum.Active, ct);
+                .AnyAsync(c => c.ClaveConvenio!.ToLower() == dto.ClaveConvenio!.ToLower() && c.Status == StatusEnum.Active, ct);
 
             if (claveExiste)
             {
@@ -139,7 +139,7 @@ namespace WebApplication2.Services
             if (convenio.ClaveConvenio != dto.ClaveConvenio)
             {
                 var claveExiste = await _dbContext.Convenio
-                    .AnyAsync(c => c.ClaveConvenio == dto.ClaveConvenio && c.IdConvenio != idConvenio && c.Status == StatusEnum.Active, ct);
+                    .AnyAsync(c => c.ClaveConvenio!.ToLower() == dto.ClaveConvenio!.ToLower() && c.IdConvenio != idConvenio && c.Status == StatusEnum.Active, ct);
 
                 if (claveExiste)
                 {

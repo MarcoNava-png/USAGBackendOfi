@@ -29,7 +29,7 @@ namespace WebApplication2.Services
             {
                 Rol.SUPER_ADMIN => await GetAdminDashboardAsync(),
                 Rol.ADMIN => await GetAdminDashboardAsync(),
-                Rol.DIRECTOR => await GetDirectorDashboardAsync(),
+                Rol.DIRECTOR => await GetDirectorDashboardAsync(userId),
                 Rol.FINANZAS => await GetFinanzasDashboardAsync(),
                 Rol.CONTROL_ESCOLAR => await GetControlEscolarDashboardAsync(),
                 Rol.ADMISIONES => await GetAdmisionesDashboardAsync(),
@@ -41,6 +41,75 @@ namespace WebApplication2.Services
             };
 
             return response;
+        }
+
+        private async Task<CarteraVencidaDto> GetCarteraVencidaAsync(int? idCampus = null)
+        {
+            var inicioMes = new DateTime(AhoraMexico.Year, AhoraMexico.Month, 1);
+            var hoy = DateOnly.FromDateTime(AhoraMexico);
+
+            var baseVencidos = from r in _context.Recibo
+                               where r.Estatus == EstatusRecibo.VENCIDO && r.Saldo > 0 && r.IdEstudiante != null
+                               join e in _context.Estudiante on r.IdEstudiante equals e.IdEstudiante
+                               join p in _context.PlanEstudios on e.IdPlanActual equals p.IdPlanEstudios
+                               where !idCampus.HasValue || p.IdCampus == idCampus.Value
+                               select new { r, e, p };
+
+            var porCampus = await (from x in baseVencidos
+                                   join c in _context.Campus on x.p.IdCampus equals c.IdCampus
+                                   group new { x.r, x.e } by c.Nombre into g
+                                   select new CarteraCampusDto
+                                   {
+                                       Campus = g.Key,
+                                       Deuda = g.Sum(z => z.r.Saldo),
+                                       Alumnos = g.Select(z => z.e.IdEstudiante).Distinct().Count()
+                                   }).OrderByDescending(x => x.Deuda).ToListAsync();
+
+            var vencidosRaw = await baseVencidos.Select(x => new { x.r.Saldo, x.r.FechaVencimiento }).ToListAsync();
+
+            string RangoAnt(int dias) => dias <= 30 ? "1-30 días" : dias <= 60 ? "31-60 días" : dias <= 90 ? "61-90 días" : "90+ días";
+            var orden = new[] { "1-30 días", "31-60 días", "61-90 días", "90+ días" };
+            var porAntiguedad = vencidosRaw
+                .GroupBy(x => RangoAnt(hoy.DayNumber - x.FechaVencimiento.DayNumber))
+                .Select(g => new CarteraAntiguedadDto { Rango = g.Key, Deuda = g.Sum(z => z.Saldo), Recibos = g.Count() })
+                .OrderBy(x => Array.IndexOf(orden, x.Rango))
+                .ToList();
+
+            var porConcepto = await (from rd in _context.ReciboDetalle
+                                     join r in _context.Recibo on rd.IdRecibo equals r.IdRecibo
+                                     where r.Estatus == EstatusRecibo.VENCIDO && r.Saldo > 0 && r.IdEstudiante != null
+                                     join e in _context.Estudiante on r.IdEstudiante equals e.IdEstudiante
+                                     join p in _context.PlanEstudios on e.IdPlanActual equals p.IdPlanEstudios
+                                     where !idCampus.HasValue || p.IdCampus == idCampus.Value
+                                     join cp in _context.ConceptoPago on rd.IdConceptoPago equals cp.IdConceptoPago
+                                     group rd by cp.Nombre into g
+                                     select new CarteraConceptoDto { Concepto = g.Key, Importe = g.Sum(z => z.Cantidad * z.PrecioUnitario) })
+                                     .OrderByDescending(x => x.Importe).Take(8).ToListAsync();
+
+            var recaudado = await (from pa in _context.PagoAplicacion
+                                   join pg in _context.Pago on pa.IdPago equals pg.IdPago
+                                   where pg.FechaPagoUtc >= inicioMes && pg.Estatus == EstatusPago.CONFIRMADO
+                                   join rd in _context.ReciboDetalle on pa.IdReciboDetalle equals rd.IdReciboDetalle
+                                   join r in _context.Recibo on rd.IdRecibo equals r.IdRecibo
+                                   where r.IdEstudiante != null
+                                   join e in _context.Estudiante on r.IdEstudiante equals e.IdEstudiante
+                                   join p in _context.PlanEstudios on e.IdPlanActual equals p.IdPlanEstudios
+                                   where !idCampus.HasValue || p.IdCampus == idCampus.Value
+                                   join c in _context.Campus on p.IdCampus equals c.IdCampus
+                                   group pa by c.Nombre into g
+                                   select new CarteraCampusDto { Campus = g.Key, Deuda = g.Sum(z => z.MontoAplicado) })
+                                   .OrderByDescending(x => x.Deuda).ToListAsync();
+
+            return new CarteraVencidaDto
+            {
+                TotalVencida = vencidosRaw.Sum(x => x.Saldo),
+                TotalAlumnos = porCampus.Sum(x => x.Alumnos),
+                RecaudadoMesTotal = recaudado.Sum(x => x.Deuda),
+                PorCampus = porCampus,
+                PorAntiguedad = porAntiguedad,
+                PorConcepto = porConcepto,
+                RecaudadoMesPorCampus = recaudado
+            };
         }
 
         public async Task<AdminDashboardDto> GetAdminDashboardAsync()
@@ -126,56 +195,88 @@ namespace WebApplication2.Services
                 GruposActivos = gruposActivos,
                 ProfesoresActivos = profesoresActivos,
                 Alertas = alertas,
-                AccionesRapidas = GetAccionesRapidasAdmin()
+                AccionesRapidas = GetAccionesRapidasAdmin(),
+                CarteraVencida = await GetCarteraVencidaAsync(null)
             };
         }
 
-        public async Task<DirectorDashboardDto> GetDirectorDashboardAsync()
+        public async Task<DirectorDashboardDto> GetDirectorDashboardAsync(string? userId = null)
         {
             var ahora = AhoraMexico;
             var hoy = DateOnly.FromDateTime(ahora);
             var inicioMes = new DateOnly(hoy.Year, hoy.Month, 1);
             var inicioMesDateTime = new DateTime(hoy.Year, hoy.Month, 1);
 
-            var estudiantesActivos = await _context.Estudiante
-                .Where(e => e.Activo)
-                .CountAsync();
+            int? idCampus = string.IsNullOrEmpty(userId)
+                ? null
+                : await _context.Users.Where(u => u.Id == userId).Select(u => u.IdCampusAsignado).FirstOrDefaultAsync();
 
-            var estudiantesMesAnterior = await _context.Estudiante
-                .Where(e => e.Activo && e.FechaIngreso < inicioMes)
-                .CountAsync();
+            // Subconsultas de IDs del campus (solo se usan cuando idCampus tiene valor)
+            var planesCampus = _context.PlanEstudios.Where(p => p.IdCampus == idCampus).Select(p => p.IdPlanEstudios);
+            var gmCampus = _context.GrupoMateria
+                .Where(gm => gm.IdGrupoNavigation.IdPlanEstudiosNavigation!.IdCampus == idCampus)
+                .Select(gm => gm.IdGrupoMateria);
+            var estCampus = _context.Estudiante
+                .Where(e => e.IdPlanActual != null && e.IdPlanActualNavigation!.IdCampus == idCampus)
+                .Select(e => e.IdEstudiante);
+            var recCampus = _context.Recibo
+                .Where(r => r.IdEstudiante != null && estCampus.Contains(r.IdEstudiante.Value))
+                .Select(r => r.IdRecibo);
+
+            var estudiantesActivosQ = _context.Estudiante.Where(e => e.Activo);
+            if (idCampus.HasValue)
+                estudiantesActivosQ = estudiantesActivosQ.Where(e => e.IdPlanActual != null && e.IdPlanActualNavigation!.IdCampus == idCampus);
+            var estudiantesActivos = await estudiantesActivosQ.CountAsync();
+
+            var estudiantesMesAnteriorQ = _context.Estudiante.Where(e => e.Activo && e.FechaIngreso < inicioMes);
+            if (idCampus.HasValue)
+                estudiantesMesAnteriorQ = estudiantesMesAnteriorQ.Where(e => e.IdPlanActual != null && e.IdPlanActualNavigation!.IdCampus == idCampus);
+            var estudiantesMesAnterior = await estudiantesMesAnteriorQ.CountAsync();
 
             var tendencia = estudiantesMesAnterior > 0
                 ? Math.Round(((decimal)estudiantesActivos - estudiantesMesAnterior) / estudiantesMesAnterior * 100, 1)
                 : 0;
 
-            var inscripcionesMes = await _context.Inscripcion
-                .Where(i => i.FechaInscripcion >= inicioMesDateTime && i.Estado == "Inscrito")
-                .CountAsync();
+            var inscripcionesMesQ = _context.Inscripcion.Where(i => i.FechaInscripcion >= inicioMesDateTime && i.Estado == "Inscrito");
+            if (idCampus.HasValue)
+                inscripcionesMesQ = inscripcionesMesQ.Where(i => gmCampus.Contains(i.IdGrupoMateria));
+            var inscripcionesMes = await inscripcionesMesQ.CountAsync();
 
-            var bajasMes = await _context.Inscripcion
-                .Where(i => i.FechaInscripcion >= inicioMesDateTime && i.Estado == "Baja")
-                .CountAsync();
+            var bajasMesQ = _context.SolicitudesBaja
+                .Where(s => s.FechaSolicitud >= inicioMesDateTime && s.Status != Core.Enums.StatusEnum.Deleted);
+            if (idCampus.HasValue)
+                bajasMesQ = bajasMesQ.Where(s => estCampus.Contains(s.IdEstudiante));
+            var bajasMes = await bajasMesQ.CountAsync();
 
-            var estudiantesConDeuda = await _context.Recibo
-                .Where(r => r.Estatus == EstatusRecibo.VENCIDO)
-                .Select(r => r.IdEstudiante)
-                .Distinct()
-                .CountAsync();
+            var deudaQ = _context.Recibo.Where(r => r.Estatus == EstatusRecibo.VENCIDO);
+            if (idCampus.HasValue)
+                deudaQ = deudaQ.Where(r => r.IdEstudiante != null && estCampus.Contains(r.IdEstudiante.Value));
+            var estudiantesConDeuda = await deudaQ.Select(r => r.IdEstudiante).Distinct().CountAsync();
 
             var porcentajeMorosidad = estudiantesActivos > 0
                 ? Math.Round((decimal)estudiantesConDeuda / estudiantesActivos * 100, 1)
                 : 0;
 
-            var ingresosMensuales = await _context.Pago
-                .Where(p => p.FechaPagoUtc >= inicioMesDateTime && p.Estatus == 0)
-                .SumAsync(p => (decimal?)p.Monto) ?? 0;
+            decimal ingresosMensuales;
+            if (idCampus.HasValue)
+            {
+                ingresosMensuales = await _context.PagoAplicacion
+                    .Where(pa => pa.Pago.FechaPagoUtc >= inicioMesDateTime && pa.Pago.Estatus == 0
+                        && recCampus.Contains(pa.ReciboDetalle.IdRecibo))
+                    .SumAsync(pa => (decimal?)pa.MontoAplicado) ?? 0;
+            }
+            else
+            {
+                ingresosMensuales = await _context.Pago
+                    .Where(p => p.FechaPagoUtc >= inicioMesDateTime && p.Estatus == 0)
+                    .SumAsync(p => (decimal?)p.Monto) ?? 0;
+            }
 
-            var promedioGeneral = await CalcularPromedioGeneralAsync();
-            var tasaReprobacion = await CalcularTasaReprobacionAsync();
-            var asistenciaGlobal = await CalcularAsistenciaGlobalAsync();
+            var promedioGeneral = await CalcularPromedioGeneralAsync(idCampus);
+            var tasaReprobacion = await CalcularTasaReprobacionAsync(idCampus);
+            var asistenciaGlobal = await CalcularAsistenciaGlobalAsync(idCampus);
 
-            var programasResumen = await GetProgramasResumenAsync();
+            var programasResumen = await GetProgramasResumenAsync(idCampus);
 
             var alertas = await GenerarAlertasDirectorAsync();
 
@@ -191,7 +292,8 @@ namespace WebApplication2.Services
                 TasaReprobacion = tasaReprobacion,
                 AsistenciaGlobal = asistenciaGlobal,
                 ProgramasResumen = programasResumen,
-                Alertas = alertas
+                Alertas = alertas,
+                CarteraVencida = await GetCarteraVencidaAsync(idCampus)
             };
         }
 
@@ -922,22 +1024,34 @@ namespace WebApplication2.Services
             };
         }
 
-        private async Task<decimal> CalcularAsistenciaGlobalAsync()
+        private async Task<decimal> CalcularAsistenciaGlobalAsync(int? idCampus = null)
         {
-            var totalAsistencias = await _context.Asistencia.CountAsync();
+            var baseQ = _context.Asistencia.AsQueryable();
+            if (idCampus.HasValue)
+            {
+                var gmCampus = _context.GrupoMateria
+                    .Where(gm => gm.IdGrupoNavigation.IdPlanEstudiosNavigation!.IdCampus == idCampus)
+                    .Select(gm => gm.IdGrupoMateria);
+                baseQ = baseQ.Where(a => gmCampus.Contains(a.GrupoMateriaId));
+            }
+
+            var totalAsistencias = await baseQ.CountAsync();
             if (totalAsistencias == 0) return 100;
 
-            var presentes = await _context.Asistencia
+            var presentes = await baseQ
                 .Where(a => a.EstadoAsistencia == EstadoAsistenciaEnum.Presente)
                 .CountAsync();
 
             return Math.Round((decimal)presentes / totalAsistencias * 100, 1);
         }
 
-        private async Task<decimal> CalcularPromedioGeneralAsync()
+        private async Task<decimal> CalcularPromedioGeneralAsync(int? idCampus = null)
         {
-            var inscripcionesConCalificacion = await _context.Inscripcion
-                .Where(i => i.CalificacionFinal != null && i.CalificacionFinal > 0)
+            var q = _context.Inscripcion.Where(i => i.CalificacionFinal != null && i.CalificacionFinal > 0);
+            if (idCampus.HasValue)
+                q = q.Where(i => i.IdGrupoMateriaNavigation.IdGrupoNavigation.IdPlanEstudiosNavigation!.IdCampus == idCampus);
+
+            var inscripcionesConCalificacion = await q
                 .Select(i => i.CalificacionFinal)
                 .ToListAsync();
 
@@ -946,24 +1060,29 @@ namespace WebApplication2.Services
             return Math.Round(inscripcionesConCalificacion.Average() ?? 0, 1);
         }
 
-        private async Task<decimal> CalcularTasaReprobacionAsync()
+        private async Task<decimal> CalcularTasaReprobacionAsync(int? idCampus = null)
         {
-            var totalConCalificacion = await _context.Inscripcion
-                .Where(i => i.CalificacionFinal != null)
-                .CountAsync();
+            var baseQ = _context.Inscripcion.Where(i => i.CalificacionFinal != null);
+            if (idCampus.HasValue)
+                baseQ = baseQ.Where(i => i.IdGrupoMateriaNavigation.IdGrupoNavigation.IdPlanEstudiosNavigation!.IdCampus == idCampus);
 
+            var totalConCalificacion = await baseQ.CountAsync();
             if (totalConCalificacion == 0) return 0;
 
-            var reprobados = await _context.Inscripcion
-                .Where(i => i.CalificacionFinal != null && i.CalificacionFinal < 70)
+            var reprobados = await baseQ
+                .Where(i => i.CalificacionFinal < 70)
                 .CountAsync();
 
             return Math.Round((decimal)reprobados / totalConCalificacion * 100, 1);
         }
 
-        private async Task<List<ProgramaResumenDto>> GetProgramasResumenAsync()
+        private async Task<List<ProgramaResumenDto>> GetProgramasResumenAsync(int? idCampus = null)
         {
-            return await _context.PlanEstudios
+            var q = _context.PlanEstudios.AsQueryable();
+            if (idCampus.HasValue)
+                q = q.Where(p => p.IdCampus == idCampus);
+
+            return await q
                 .Select(p => new ProgramaResumenDto
                 {
                     IdPlanEstudios = p.IdPlanEstudios,

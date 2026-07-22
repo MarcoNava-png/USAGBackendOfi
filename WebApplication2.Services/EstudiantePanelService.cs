@@ -30,6 +30,7 @@ namespace WebApplication2.Services
         private readonly IMicrosoftGraphService _graphService;
         private readonly IMatriculaService _matriculaService;
         private readonly IWebHostEnvironment _env;
+        private readonly IInstitucionProvider _institucionProvider;
 
         public EstudiantePanelService(
             ApplicationDbContext db,
@@ -41,7 +42,8 @@ namespace WebApplication2.Services
             IAuthService authService,
             IMicrosoftGraphService graphService,
             IMatriculaService matriculaService,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            IInstitucionProvider institucionProvider)
         {
             _db = db;
             _documentoService = documentoService;
@@ -53,6 +55,7 @@ namespace WebApplication2.Services
             _graphService = graphService;
             _matriculaService = matriculaService;
             _env = env;
+            _institucionProvider = institucionProvider;
         }
 
         #region Consultas de Panel
@@ -80,6 +83,14 @@ namespace WebApplication2.Services
             var persona = estudiante.IdPersonaNavigation;
             var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
 
+            var preinscripcionPendiente = await _db.PreInscripcion
+                .Include(p => p.IdPeriodoAcademicoDestinoNavigation)
+                .Where(p => p.IdEstudiante == idEstudiante
+                    && p.Estado == "Pendiente"
+                    && p.Status == Core.Enums.StatusEnum.Active)
+                .OrderByDescending(p => p.FechaApartado)
+                .FirstOrDefaultAsync(ct);
+
             var panel = new EstudiantePanelDto
             {
                 IdEstudiante = estudiante.IdEstudiante,
@@ -104,6 +115,10 @@ namespace WebApplication2.Services
                 Activo = estudiante.Activo,
                 EstatusAcademico = (int)estudiante.EstatusAcademico,
                 EstatusAcademicoTexto = estudiante.EstatusAcademico.ToString(),
+                TienePreinscripcionPendiente = preinscripcionPendiente != null,
+                PeriodoPreinscripcion = preinscripcionPendiente != null && preinscripcionPendiente.IdPeriodoAcademicoDestinoNavigation != null
+                    ? $"{preinscripcionPendiente.IdPeriodoAcademicoDestinoNavigation.Clave} · {preinscripcionPendiente.IdPeriodoAcademicoDestinoNavigation.Nombre}"
+                    : null,
                 TipoBaja = (int?)estudiante.TipoBaja,
                 EstadoBaja = (int?)estudiante.EstadoBaja,
                 MotivoBaja = estudiante.MotivoBaja,
@@ -160,7 +175,7 @@ namespace WebApplication2.Services
 
             if (request.IdGrupo.HasValue)
             {
-                query = query.Where(e => e.EstudianteGrupo.Any(eg => eg.IdGrupo == request.IdGrupo.Value));
+                query = query.Where(e => e.EstudianteGrupo.Any(eg => eg.IdGrupo == request.IdGrupo.Value && eg.Status == StatusEnum.Active));
             }
 
             if (!string.IsNullOrWhiteSpace(request.Busqueda))
@@ -222,7 +237,9 @@ namespace WebApplication2.Services
                     Adeudo = adeudos.TryGetValue(e.IdEstudiante, out var adeudo) ? adeudo : 0,
                     TieneBeca = estudiantesConBeca.Contains(e.IdEstudiante),
                     Activo = e.Activo,
-                    Fotografia = null
+                    Fotografia = null,
+                    EstatusAcademico = (int)e.EstatusAcademico,
+                    EstatusAcademicoTexto = e.EstatusAcademico.ToString()
                 };
             }).ToList();
 
@@ -769,13 +786,31 @@ namespace WebApplication2.Services
 
         #region Recibos y Pagos
 
+        private async Task<List<int>> ObtenerIdsAspiranteVinculadosAsync(int idEstudiante, CancellationToken ct)
+        {
+            var idPersona = await _db.Estudiante
+                .Where(e => e.IdEstudiante == idEstudiante)
+                .Select(e => (int?)e.IdPersona)
+                .FirstOrDefaultAsync(ct);
+
+            if (idPersona == null) return new List<int>();
+
+            return await _db.Aspirante
+                .Where(a => a.IdPersona == idPersona)
+                .Select(a => a.IdAspirante)
+                .ToListAsync(ct);
+        }
+
         public async Task<ResumenRecibosDto> ObtenerResumenRecibosAsync(int idEstudiante, CancellationToken ct = default)
         {
             var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
 
+            var idsAspirante = await ObtenerIdsAspiranteVinculadosAsync(idEstudiante, ct);
+
             var recibos = await _db.Recibo
                 .Include(r => r.Detalles)
-                .Where(r => r.IdEstudiante == idEstudiante)
+                .Where(r => r.IdEstudiante == idEstudiante
+                    || (r.IdAspirante != null && idsAspirante.Contains(r.IdAspirante.Value)))
                 .ToListAsync(ct);
 
             var pendientes = recibos.Where(r => r.Estatus == EstatusRecibo.PENDIENTE || r.Estatus == EstatusRecibo.PARCIAL).ToList();
@@ -814,9 +849,12 @@ namespace WebApplication2.Services
         {
             var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
 
+            var idsAspirante = await ObtenerIdsAspiranteVinculadosAsync(idEstudiante, ct);
+
             var query = _db.Recibo
                 .Include(r => r.Detalles)
-                .Where(r => r.IdEstudiante == idEstudiante);
+                .Where(r => r.IdEstudiante == idEstudiante
+                    || (r.IdAspirante != null && idsAspirante.Contains(r.IdAspirante.Value)));
 
             if (!string.IsNullOrEmpty(estatus) && Enum.TryParse<EstatusRecibo>(estatus, true, out var estatusEnum))
             {
@@ -980,6 +1018,7 @@ namespace WebApplication2.Services
                     FechaRegistro = DateTime.UtcNow,
                     IdPlan = estudiante.IdPlanActual ?? 0,
                     IdMedioContacto = medio.IdMedioContacto,
+                    EsAlumnoAutoCreado = true,
                     Observaciones = "Creado automáticamente desde panel de estudiante"
                 };
 
@@ -1316,6 +1355,9 @@ namespace WebApplication2.Services
                 estudiante.EstadoBaja = estadoBaja.HasValue ? (EstadoBajaEnum)estadoBaja.Value : null;
                 estudiante.MotivoBaja = motivo;
                 estudiante.FechaBaja = DateTime.UtcNow;
+                estudiante.EstatusAcademico = estudiante.EstadoBaja == EstadoBajaEnum.Definitiva
+                    ? Core.Enums.EstudianteStatusAcademicoEnum.BajaDefinitiva
+                    : Core.Enums.EstudianteStatusAcademicoEnum.BajaTemporal;
 
                 var gruposActivos = await _db.EstudianteGrupo
                     .Where(eg => eg.IdEstudiante == idEstudiante && eg.Status == StatusEnum.Active)
@@ -1326,6 +1368,16 @@ namespace WebApplication2.Services
                     eg.Status = StatusEnum.Deleted;
                     eg.UpdatedAt = DateTime.UtcNow;
                     eg.Observaciones = "Baja automática: " + (motivo ?? "Estudiante desactivado");
+                }
+
+                var inscripcionesActivas = await _db.Inscripcion
+                    .Where(i => i.IdEstudiante == idEstudiante && i.Status == StatusEnum.Active)
+                    .ToListAsync(ct);
+
+                foreach (var insc in inscripcionesActivas)
+                {
+                    insc.Status = StatusEnum.Deleted;
+                    insc.UpdatedAt = DateTime.UtcNow;
                 }
             }
             else
@@ -1399,7 +1451,7 @@ namespace WebApplication2.Services
                 throw new InvalidOperationException("Estudiante no encontrado");
 
             var documentos = await ObtenerDocumentosPersonalesAsync(idEstudiante, ct);
-            var headerLogoPath = ResolveAssetPath("header_logo.png");
+            var headerLogoPath = _institucionProvider.ResolverLogoTenant() ?? ResolveAssetPath("header_logo.png");
 
             const string AzulOscuro = "#14356F";
             const string AzulClaro = "#D9E2F3";

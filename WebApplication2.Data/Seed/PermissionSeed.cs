@@ -78,6 +78,7 @@ namespace WebApplication2.Data.Seed
                 new Permission { Code = "calificaciones.manage", Name = "Gestionar Calificaciones", Description = "Registrar y editar calificaciones", Module = "Academico" },
                 new Permission { Code = "asistencia.view", Name = "Ver Asistencia", Description = "Ver registros de asistencia", Module = "Academico" },
                 new Permission { Code = "asistencia.manage", Name = "Gestionar Asistencia", Description = "Registrar asistencia", Module = "Academico" },
+                new Permission { Code = "cambio-grupo.avanzado", Name = "Cambio de Grupo Avanzado", Description = "Cambiar de grupo a otro cuatrimestre o plan (reinscribe materias)", Module = "Academico" },
 
                 // Finanzas
                 new Permission { Code = "caja.view", Name = "Ver Caja", Description = "Ver cortes de caja", Module = "Finanzas" },
@@ -284,6 +285,11 @@ namespace WebApplication2.Data.Seed
                     }
                     break;
             }
+
+            // El cambio de grupo avanzado solo lo tienen Admin / Control Escolar / SuperAdmin
+            var rolesCambioAvanzado = new[] { Rol.SUPER_ADMIN, Rol.ADMIN, Rol.CONTROL_ESCOLAR };
+            if (!rolesCambioAvanzado.Contains(roleName.ToLower()))
+                result.RemoveAll(x => x.Item1.Code == "cambio-grupo.avanzado");
 
             return result;
         }

@@ -10,5 +10,7 @@ public class PlantillaReporte : BaseEntity
     public string RutaArchivo { get; set; } = null!;
     public string NombreArchivoOriginal { get; set; } = null!;
     public string VariablesDisponibles { get; set; } = "[]";
+    public string? Origen { get; set; }
+    public string? RolesGenera { get; set; }
     public bool Activa { get; set; } = true;
 }

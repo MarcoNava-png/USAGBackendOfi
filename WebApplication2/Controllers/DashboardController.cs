@@ -83,7 +83,8 @@ namespace WebApplication2.Controllers
         {
             try
             {
-                var dashboard = await _dashboardService.GetDirectorDashboardAsync();
+                var userId = User.FindFirst("userId")?.Value;
+                var dashboard = await _dashboardService.GetDirectorDashboardAsync(userId);
                 var response = new Response<DirectorDashboardDto> { Data = dashboard };
                 return Ok(response);
             }

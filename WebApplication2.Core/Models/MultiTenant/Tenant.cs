@@ -70,6 +70,8 @@ public class Tenant
 
     public int MaximoUsuarios { get; set; } = 20;
 
+    public int MaximoCampus { get; set; } = 1;
+
     public TenantStatus Status { get; set; } = TenantStatus.Pending;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

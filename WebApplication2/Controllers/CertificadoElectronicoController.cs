@@ -16,12 +16,14 @@ namespace WebApplication2.Controllers
     {
         private readonly ICertificadoElectronicoService _service;
         private readonly ICertificadoXmlService _xmlService;
+        private readonly ITitulosElectronicosSepService _sepService;
         private readonly ApplicationDbContext _db;
 
-        public CertificadoElectronicoController(ICertificadoElectronicoService service, ICertificadoXmlService xmlService, ApplicationDbContext db)
+        public CertificadoElectronicoController(ICertificadoElectronicoService service, ICertificadoXmlService xmlService, ITitulosElectronicosSepService sepService, ApplicationDbContext db)
         {
             _service = service;
             _xmlService = xmlService;
+            _sepService = sepService;
             _db = db;
         }
 
@@ -97,6 +99,60 @@ namespace WebApplication2.Controllers
 
             var bytes = System.Text.Encoding.UTF8.GetBytes(cert.XmlGenerado);
             return File(bytes, "application/xml", $"DEC_{cert.NumeroControl}_{cert.FolioControl}.xml");
+        }
+
+        [HttpPost("{id:int}/enviar-sep")]
+        public async Task<ActionResult> EnviarSep(int id, [FromQuery] string? cveInstitucion, CancellationToken ct)
+        {
+            try
+            {
+                var r = await _sepService.EnviarAsync(id, cveInstitucion, ct);
+                return Ok(r);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (HttpRequestException ex)
+            {
+                return StatusCode(502, new { error = $"No se pudo conectar con el web service de la SEP: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("{id:int}/consultar-sep")]
+        public async Task<ActionResult> ConsultarSep(int id, CancellationToken ct)
+        {
+            try
+            {
+                var r = await _sepService.ConsultarAsync(id, ct);
+                return Ok(r);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (HttpRequestException ex)
+            {
+                return StatusCode(502, new { error = $"No se pudo conectar con el web service de la SEP: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("{id:int}/descargar-sep")]
+        public async Task<ActionResult> DescargarSep(int id, CancellationToken ct)
+        {
+            try
+            {
+                var r = await _sepService.DescargarAsync(id, ct);
+                return Ok(r);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (HttpRequestException ex)
+            {
+                return StatusCode(502, new { error = $"No se pudo conectar con el web service de la SEP: {ex.Message}" });
+            }
         }
 
         [HttpGet("catalogos/carreras-sep")]

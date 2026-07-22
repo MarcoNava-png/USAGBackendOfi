@@ -11,6 +11,7 @@ namespace WebApplication2.Core.Responses.Recibo
         public decimal MontoTotal { get; set; }
         public decimal TotalDescuentosBecas { get; set; }
         public int EstudiantesOmitidos { get; set; }
+        public int RecibosReemplazados { get; set; }
         public List<string>? Errores { get; set; }
         public List<ReciboEstudianteResumen>? DetalleEstudiantes { get; set; }
     }

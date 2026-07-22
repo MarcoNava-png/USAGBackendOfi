@@ -23,11 +23,24 @@ namespace WebApplication2.Controllers
     {
         private readonly IGrupoService _grupoService;
         private readonly IMapper _mapper;
+        private readonly IPermissionService _permissionService;
+        private readonly IAuthService _authService;
 
-        public GrupoController(IGrupoService grupoService, IMapper mapper)
+        public GrupoController(IGrupoService grupoService, IMapper mapper, IPermissionService permissionService, IAuthService authService)
         {
             _grupoService = grupoService;
             _mapper = mapper;
+            _permissionService = permissionService;
+            _authService = authService;
+        }
+
+        private async Task<int?> CampusRestringidoActualAsync()
+        {
+            var userId = User.FindFirst("userId")?.Value;
+            if (string.IsNullOrEmpty(userId)) return null;
+            if (!User.IsInRole(Rol.DIRECTOR) && !User.IsInRole(Rol.COORDINADOR)) return null;
+            var currentUser = await _authService.GetUserById(userId);
+            return currentUser?.IdCampusAsignado;
         }
 
         [HttpGet]
@@ -160,14 +173,20 @@ namespace WebApplication2.Controllers
             [FromQuery] int? numeroCuatrimestre = null,
             [FromQuery] int? idTurno = null,
             [FromQuery] int? numeroGrupo = null,
-            [FromQuery] int? idPlanEstudios = null)
+            [FromQuery] int? idPlanEstudios = null,
+            [FromQuery] int? idPeriodoAcademico = null)
         {
             try
             {
                 var grupos = await _grupoService.BuscarGruposPorCriteriosAsync(
-                    numeroCuatrimestre, idTurno, numeroGrupo, idPlanEstudios);
+                    numeroCuatrimestre, idTurno, numeroGrupo, idPlanEstudios, idPeriodoAcademico);
 
                 var gruposDto = _mapper.Map<List<GrupoDto>>(grupos);
+
+                var campusRestringido = await CampusRestringidoActualAsync();
+                if (campusRestringido != null)
+                    gruposDto = gruposDto.Where(g => g.IdCampus == campusRestringido.Value).ToList();
+
                 return Ok(gruposDto);
             }
             catch (Exception ex)
@@ -354,11 +373,11 @@ namespace WebApplication2.Controllers
         }
 
         [HttpDelete("materias/{idGrupoMateria:int}")]
-        public async Task<ActionResult> QuitarMateriaDelGrupo(int idGrupoMateria, [FromQuery] bool forzar = false, CancellationToken ct = default)
+        public async Task<ActionResult> QuitarMateriaDelGrupo(int idGrupoMateria, [FromQuery] bool forzar = false, [FromQuery] bool conservarHistorial = false, CancellationToken ct = default)
         {
             try
             {
-                var resultado = await _grupoService.QuitarMateriaDelGrupoAsync(idGrupoMateria, forzar, ct);
+                var resultado = await _grupoService.QuitarMateriaDelGrupoAsync(idGrupoMateria, forzar, conservarHistorial, ct);
 
                 if (!resultado)
                     return NotFound(new { mensaje = "Materia no encontrada en el grupo" });
@@ -485,6 +504,68 @@ namespace WebApplication2.Controllers
                     motivo,
                     promedioMinimoRequerido = promedioMinimo
                 });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpGet("periodos-con-estudiantes")]
+        public async Task<ActionResult<List<PeriodoConEstudiantesDto>>> ObtenerPeriodosConEstudiantes(CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _grupoService.ObtenerPeriodosConEstudiantesAsync(ct);
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPost("promocion-masiva/preview")]
+        public async Task<ActionResult<PromocionMasivaPreviewDto>> PromocionMasivaPreview(
+            [FromBody] PromocionMasivaRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _grupoService.PromocionMasivaPreviewAsync(request.IdPeriodoOrigen, request.IdPeriodoDestino, ct);
+                return Ok(resultado);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPost("promocion-masiva")]
+        public async Task<ActionResult<PromocionMasivaResultDto>> PromocionMasiva(
+            [FromBody] PromocionMasivaRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _grupoService.PromocionMasivaAsync(request, ct);
+                return Ok(resultado);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { Error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Error = ex.Message });
             }
             catch (Exception ex)
             {
@@ -662,6 +743,16 @@ namespace WebApplication2.Controllers
         {
             try
             {
+                if (request.Avanzado)
+                {
+                    var userId = User.FindFirst("userId")?.Value;
+                    if (string.IsNullOrEmpty(userId) ||
+                        !await _permissionService.HasPermissionAsync(userId, "cambio-grupo.avanzado", "edit"))
+                    {
+                        return StatusCode(403, new CambioGrupoResultDto { Exitoso = false, Mensaje = "No tienes permiso para realizar un cambio de grupo avanzado." });
+                    }
+                }
+
                 var resultado = await _grupoService.CambiarEstudianteDeGrupoAsync(request, ct);
 
                 if (!resultado.Exitoso)
@@ -686,6 +777,67 @@ namespace WebApplication2.Controllers
                 request.IdGrupo = idGrupo;
                 var resultado = await _grupoService.ImportarEstudiantesCompletoAsync(request, ct);
                 return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPost("{idGrupo:int}/estudiante-irregular")]
+        public async Task<ActionResult<AgregarEstudianteIrregularResponse>> AgregarEstudianteIrregular(
+            int idGrupo,
+            [FromBody] AgregarEstudianteIrregularRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                request.IdGrupo = idGrupo;
+                var resultado = await _grupoService.AgregarEstudianteIrregularAGrupoAsync(request, ct);
+                if (!resultado.Exitoso)
+                    return BadRequest(resultado);
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpGet("{idGrupo:int}/cuatrimestres-anteriores/preview")]
+        public async Task<ActionResult<CuatrimestresAnterioresPreviewDto>> PreviewCuatrimestresAnteriores(
+            int idGrupo,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var preview = await _grupoService.ObtenerPreviewCuatrimestresAnterioresAsync(idGrupo, ct);
+                return Ok(preview);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { Error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Error = ex.Message });
+            }
+        }
+
+        [HttpPost("cuatrimestres-anteriores/generar")]
+        [Authorize(Roles = $"{Rol.SUPER_ADMIN},{Rol.ADMIN},{Rol.CONTROL_ESCOLAR}")]
+        public async Task<ActionResult<GenerarCuatrimestresAnterioresResultado>> GenerarCuatrimestresAnteriores(
+            [FromBody] GenerarCuatrimestresAnterioresRequest request,
+            CancellationToken ct = default)
+        {
+            try
+            {
+                var resultado = await _grupoService.GenerarCuatrimestresAnterioresAsync(request, ct);
+                return Ok(resultado);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { Error = ex.Message });
             }
             catch (Exception ex)
             {

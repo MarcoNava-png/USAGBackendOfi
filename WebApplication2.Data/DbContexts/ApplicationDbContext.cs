@@ -43,6 +43,8 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<Convenio> Convenio { get; set; }
         public virtual DbSet<ConvenioAlcance> ConvenioAlcance { get; set; }
         public virtual DbSet<DiaSemana> DiaSemana { get; set; }
+        public virtual DbSet<ReporteDefinicion> ReporteDefinicion { get; set; }
+        public virtual DbSet<ConfiguracionCalificaciones> ConfiguracionCalificaciones { get; set; }
         public virtual DbSet<Direccion> Direccion { get; set; }
         public virtual DbSet<EstadoCivil> EstadoCivil { get; set; }
         public virtual DbSet<Estudiante> Estudiante { get; set; }
@@ -100,6 +102,11 @@ namespace WebApplication2.Data.DbContexts
 
         public virtual DbSet<EstudianteGrupo> EstudianteGrupo { get; set; }
 
+        public virtual DbSet<PreInscripcion> PreInscripcion { get; set; }
+
+        public virtual DbSet<VentanaCaptura> VentanasCaptura { get; set; }
+        public virtual DbSet<SolicitudProrrogaCaptura> SolicitudesProrrogaCaptura { get; set; }
+
         public virtual DbSet<BitacoraAccion> BitacoraAcciones { get; set; }
         public virtual DbSet<NotificacionUsuario> NotificacionesUsuario { get; set; }
 
@@ -141,9 +148,38 @@ namespace WebApplication2.Data.DbContexts
         public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoTipoAsignaturaSEP> CatalogoTipoAsignaturaSEP { get; set; }
         public virtual DbSet<WebApplication2.Core.Models.Titulacion.CatalogoEntidadFederativaSEP> CatalogoEntidadFederativaSEP { get; set; }
 
+        public virtual DbSet<CatParentescoVivienda> CatParentescoVivienda { get; set; }
+        public virtual DbSet<CatServicioVivienda> CatServicioVivienda { get; set; }
+        public virtual DbSet<CatServicioMedico> CatServicioMedico { get; set; }
+        public virtual DbSet<CatRecursoTecnologico> CatRecursoTecnologico { get; set; }
+        public virtual DbSet<EstudioSocioeconomico> EstudioSocioeconomico { get; set; }
+        public virtual DbSet<EstudioServicioVivienda> EstudioServicioVivienda { get; set; }
+        public virtual DbSet<EstudioRecursoTecnologico> EstudioRecursoTecnologico { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<VentanaCaptura>().HasKey(x => x.IdVentanaCaptura);
+            modelBuilder.Entity<VentanaCaptura>()
+                .HasOne(x => x.IdPeriodoAcademicoNavigation)
+                .WithMany()
+                .HasForeignKey(x => x.IdPeriodoAcademico)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+            modelBuilder.Entity<VentanaCaptura>()
+                .HasIndex(x => new { x.IdPeriodoAcademico, x.NumeroParcial });
+
+            modelBuilder.Entity<SolicitudProrrogaCaptura>().HasKey(x => x.IdSolicitudProrroga);
+            modelBuilder.Entity<SolicitudProrrogaCaptura>()
+                .HasOne(x => x.IdProfesorNavigation)
+                .WithMany()
+                .HasForeignKey(x => x.IdProfesor)
+                .OnDelete(DeleteBehavior.ClientSetNull);
+            modelBuilder.Entity<SolicitudProrrogaCaptura>()
+                .HasOne(x => x.IdGrupoMateriaNavigation)
+                .WithMany()
+                .HasForeignKey(x => x.IdGrupoMateria)
+                .OnDelete(DeleteBehavior.ClientSetNull);
 
             modelBuilder.Entity<SolicitudBaja>().HasKey(x => x.IdSolicitudBaja);
             modelBuilder.Entity<SolicitudBaja>()
@@ -216,6 +252,9 @@ namespace WebApplication2.Data.DbContexts
             modelBuilder.Entity<Aspirante>(entity =>
             {
                 entity.HasKey(e => e.IdAspirante).HasName("PK__Aspirant__09EE6349C82C95C4");
+
+                entity.HasIndex(e => e.Status, "IX_Aspirante_Status");
+                entity.HasIndex(e => e.CreatedBy, "IX_Aspirante_CreatedBy");
 
                 entity.Property(e => e.FechaRegistro).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
                 entity.Property(e => e.Observaciones).HasMaxLength(250);
@@ -338,6 +377,23 @@ namespace WebApplication2.Data.DbContexts
                 entity.HasOne(d => d.IdPlanEstudiosNavigation).WithMany(p => p.ConvenioAlcance)
                     .HasForeignKey(d => d.IdPlanEstudios)
                     .HasConstraintName("FK_ConvAlc_Plan");
+            });
+
+            modelBuilder.Entity<ReporteDefinicion>(entity =>
+            {
+                entity.ToTable("ReporteDefinicion");
+                entity.HasKey(e => e.IdReporteDefinicion);
+                entity.Property(e => e.Nombre).HasMaxLength(150);
+                entity.Property(e => e.Fuente).HasMaxLength(50);
+                entity.Property(e => e.AgruparPor).HasMaxLength(50);
+            });
+
+            modelBuilder.Entity<ConfiguracionCalificaciones>(entity =>
+            {
+                entity.ToTable("ConfiguracionCalificaciones");
+                entity.HasKey(e => e.IdConfiguracionCalificaciones);
+                entity.Property(e => e.EscalaMaxima).HasPrecision(5, 2);
+                entity.Property(e => e.CalificacionMinimaAprobatoria).HasPrecision(5, 2);
             });
 
             modelBuilder.Entity<DiaSemana>(entity =>
@@ -583,7 +639,7 @@ namespace WebApplication2.Data.DbContexts
 
                 entity.HasIndex(e => e.Curp, "UQ_Persona_CURP").IsUnique();
 
-                entity.HasIndex(e => e.Correo, "UQ_Persona_Email").IsUnique();
+                entity.HasIndex(e => e.Correo, "IX_Persona_Correo");
 
                 entity.HasIndex(e => e.Rfc, "UQ_Persona_RFC").IsUnique();
 
@@ -852,6 +908,11 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(p => p.Total)
                     .HasPrecision(12, 2)
                     .HasComputedColumnSql("ROUND(\"Subtotal\"-\"Descuento\"+\"Recargos\",2)", stored: true);
+
+                e.HasIndex(p => p.IdAspirante, "IX_Recibo_IdAspirante");
+                e.HasIndex(p => p.IdEstudiante, "IX_Recibo_IdEstudiante");
+                e.HasIndex(p => p.IdPeriodoAcademico, "IX_Recibo_IdPeriodoAcademico");
+                e.HasIndex(p => p.Status, "IX_Recibo_Status");
             });
 
             modelBuilder.Entity<ConceptoPago>()
@@ -898,7 +959,7 @@ namespace WebApplication2.Data.DbContexts
                  .HasForeignKey(x => x.IdDocumentoRequisito)
                  .OnDelete(DeleteBehavior.Restrict);
 
-                e.HasIndex(x => new { x.IdAspirante, x.IdDocumentoRequisito }).IsUnique();
+                e.HasIndex(x => new { x.IdAspirante, x.IdDocumentoRequisito }).IsUnique().HasFilter("\"Status\" <> 0");
 
                 e.Property(x => x.UrlArchivo).HasMaxLength(500);
                 e.Property(x => x.Notas).HasMaxLength(500);
@@ -1026,7 +1087,7 @@ namespace WebApplication2.Data.DbContexts
                 e.Property(x => x.Observaciones).HasMaxLength(500);
                 e.Property(x => x.FechaInscripcion).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
 
-                e.HasIndex(x => new { x.IdEstudiante, x.IdGrupo }).IsUnique();
+                e.HasIndex(x => new { x.IdEstudiante, x.IdGrupo }).IsUnique().HasFilter("\"Status\" <> 0");
 
                 e.HasOne(x => x.IdEstudianteNavigation)
                     .WithMany(est => est.EstudianteGrupo)
@@ -1036,6 +1097,33 @@ namespace WebApplication2.Data.DbContexts
                 e.HasOne(x => x.IdGrupoNavigation)
                     .WithMany(g => g.EstudianteGrupo)
                     .HasForeignKey(x => x.IdGrupo)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<PreInscripcion>(e =>
+            {
+                e.HasKey(x => x.IdPreInscripcion);
+                e.Property(x => x.Estado).HasMaxLength(20).HasDefaultValue("Pendiente");
+                e.Property(x => x.Nota).HasMaxLength(500);
+                e.Property(x => x.FechaApartado).HasDefaultValueSql("(NOW() AT TIME ZONE 'UTC')");
+
+                e.HasIndex(x => new { x.IdEstudiante, x.IdPeriodoAcademicoDestino })
+                    .IsUnique()
+                    .HasFilter("\"Status\" <> 0 AND \"Estado\" = 'Pendiente'");
+
+                e.HasOne(x => x.IdEstudianteNavigation)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdEstudiante)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasOne(x => x.IdPlanEstudiosNavigation)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdPlanEstudios)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                e.HasOne(x => x.IdPeriodoAcademicoDestinoNavigation)
+                    .WithMany()
+                    .HasForeignKey(x => x.IdPeriodoAcademicoDestino)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
@@ -1088,7 +1176,7 @@ namespace WebApplication2.Data.DbContexts
                     .HasForeignKey(x => x.IdDocumentoRequisito)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                e.HasIndex(x => new { x.IdPlanEstudios, x.IdDocumentoRequisito }).IsUnique();
+                e.HasIndex(x => new { x.IdPlanEstudios, x.IdDocumentoRequisito }).IsUnique().HasFilter("\"Status\" <> 0");
             });
 
             modelBuilder.Entity<SolicitudDocumento>(e =>
@@ -1262,7 +1350,7 @@ namespace WebApplication2.Data.DbContexts
                 e.HasKey(x => x.IdComentario);
                 e.Property(x => x.UsuarioId).HasMaxLength(450).IsRequired();
                 e.Property(x => x.NombreUsuario).HasMaxLength(200).IsRequired();
-                e.Property(x => x.Contenido).HasMaxLength(2000).IsRequired();
+                e.Property(x => x.Contenido).IsRequired();
                 e.Property(x => x.ArchivoAdjuntoUrl).HasMaxLength(500);
                 e.Property(x => x.ArchivoAdjuntoNombre).HasMaxLength(200);
 
@@ -1333,6 +1421,93 @@ namespace WebApplication2.Data.DbContexts
             {
                 e.HasOne(pd => pd.PlanPago).WithMany(pp => pp.Detalles).HasForeignKey(pd => pd.IdPlanPago);
                 e.HasOne(pd => pd.ConceptoPago).WithMany().HasForeignKey(pd => pd.IdConceptoPago);
+            });
+
+            modelBuilder.Entity<CatParentescoVivienda>(e =>
+            {
+                e.HasKey(x => x.IdParentescoVivienda);
+                e.Property(x => x.Nombre).HasMaxLength(80).IsRequired();
+            });
+
+            modelBuilder.Entity<CatServicioVivienda>(e =>
+            {
+                e.HasKey(x => x.IdServicioVivienda);
+                e.Property(x => x.Nombre).HasMaxLength(80).IsRequired();
+            });
+
+            modelBuilder.Entity<CatServicioMedico>(e =>
+            {
+                e.HasKey(x => x.IdServicioMedico);
+                e.Property(x => x.Nombre).HasMaxLength(80).IsRequired();
+            });
+
+            modelBuilder.Entity<CatRecursoTecnologico>(e =>
+            {
+                e.HasKey(x => x.IdRecursoTecnologico);
+                e.Property(x => x.Nombre).HasMaxLength(120).IsRequired();
+            });
+
+            modelBuilder.Entity<EstudioSocioeconomico>(e =>
+            {
+                e.HasKey(x => x.IdEstudioSocioeconomico);
+                e.HasIndex(x => x.IdAspirante, "UQ_EstudioSocioeconomico_Aspirante").IsUnique();
+                e.HasIndex(x => x.Token, "IX_EstudioSocioeconomico_Token");
+
+                e.Property(x => x.PrincipalSostenEconomico).HasMaxLength(200);
+                e.Property(x => x.ConQuienViveOtro).HasMaxLength(120);
+                e.Property(x => x.EmpresaActividad).HasMaxLength(200);
+                e.Property(x => x.HorarioLaboral).HasMaxLength(120);
+                e.Property(x => x.QuienCubreGastos).HasMaxLength(200);
+                e.Property(x => x.PadeceEnfermedadDetalle).HasMaxLength(300);
+                e.Property(x => x.TieneDiscapacidadDetalle).HasMaxLength(300);
+                e.Property(x => x.EscuelaProcedencia).HasMaxLength(200);
+                e.Property(x => x.PromedioNivelAnterior).HasColumnType("numeric(5,2)");
+                e.Property(x => x.Token).HasMaxLength(64);
+
+                e.HasOne(x => x.IdAspiranteNavigation).WithMany()
+                    .HasForeignKey(x => x.IdAspirante)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_EstudioSocioeconomico_Aspirante");
+
+                e.HasOne(x => x.IdParentescoViviendaNavigation).WithMany(p => p.EstudiosSocioeconomicos)
+                    .HasForeignKey(x => x.IdParentescoVivienda)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("FK_EstudioSocioeconomico_Parentesco");
+
+                e.HasOne(x => x.IdServicioMedicoNavigation).WithMany(p => p.EstudiosSocioeconomicos)
+                    .HasForeignKey(x => x.IdServicioMedico)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("FK_EstudioSocioeconomico_ServicioMedico");
+            });
+
+            modelBuilder.Entity<EstudioServicioVivienda>(e =>
+            {
+                e.HasKey(x => new { x.IdEstudioSocioeconomico, x.IdServicioVivienda });
+
+                e.HasOne(x => x.IdEstudioSocioeconomicoNavigation).WithMany(p => p.EstudioServicioVivienda)
+                    .HasForeignKey(x => x.IdEstudioSocioeconomico)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_EstudioServicioVivienda_Estudio");
+
+                e.HasOne(x => x.IdServicioViviendaNavigation).WithMany(p => p.EstudioServicioVivienda)
+                    .HasForeignKey(x => x.IdServicioVivienda)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_EstudioServicioVivienda_Servicio");
+            });
+
+            modelBuilder.Entity<EstudioRecursoTecnologico>(e =>
+            {
+                e.HasKey(x => new { x.IdEstudioSocioeconomico, x.IdRecursoTecnologico });
+
+                e.HasOne(x => x.IdEstudioSocioeconomicoNavigation).WithMany(p => p.EstudioRecursoTecnologico)
+                    .HasForeignKey(x => x.IdEstudioSocioeconomico)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_EstudioRecursoTecnologico_Estudio");
+
+                e.HasOne(x => x.IdRecursoTecnologicoNavigation).WithMany(p => p.EstudioRecursoTecnologico)
+                    .HasForeignKey(x => x.IdRecursoTecnologico)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_EstudioRecursoTecnologico_Recurso");
             });
 
 

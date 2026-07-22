@@ -148,6 +148,22 @@ namespace WebApplication2.Controllers
             }
         }
 
+        [HttpDelete("{idProfesor:int}")]
+        public async Task<IActionResult> Delete(int idProfesor)
+        {
+            try
+            {
+                var eliminado = await _profesorService.EliminarProfesorAsync(idProfesor);
+                if (!eliminado)
+                    return NotFound(new { message = "Docente no encontrado" });
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+
         [HttpPost("{idProfesor:int}/validar-horario")]
         public async Task<ActionResult<ValidarHorarioProfesorResponse>> ValidarHorario(
             int idProfesor,

@@ -30,8 +30,43 @@ namespace WebApplication2.Services
             var config = cert.ConfiguracionIPESNavigation
                 ?? throw new InvalidOperationException("Configuración IPES no encontrada para este certificado");
 
-            var responsable = cert.ResponsableFirmaNavigation
-                ?? throw new InvalidOperationException("Responsable de firma no asignado al certificado");
+            var responsable = cert.ResponsableFirmaNavigation;
+            if (responsable == null)
+            {
+                responsable = await _db.ResponsableFirma
+                    .Where(r => r.Activo && r.Status == StatusEnum.Active
+                        && r.RutaCertificadoCer != null && r.RutaLlavePrivadaKey != null && r.PasswordLlavePrivada != null)
+                    .OrderByDescending(r => r.IdConfiguracionIPES == cert.IdConfiguracionIPES)
+                    .ThenByDescending(r => r.Id)
+                    .FirstOrDefaultAsync(ct);
+
+                if (responsable == null)
+                    throw new InvalidOperationException("No hay un responsable de firma con e.firma (.cer/.key + contraseña) cargada. Sube la e.firma del responsable en Configuración de Titulación.");
+
+                cert.IdResponsableFirma = responsable.Id;
+            }
+
+            var certificadoResponsableB64 = "";
+            var noCertificado = responsable.NoCertificadoResponsable ?? "";
+            if (!string.IsNullOrWhiteSpace(responsable.RutaCertificadoCer) && System.IO.File.Exists(responsable.RutaCertificadoCer))
+            {
+                var cerBytes = await System.IO.File.ReadAllBytesAsync(responsable.RutaCertificadoCer, ct);
+                certificadoResponsableB64 = Convert.ToBase64String(cerBytes);
+                if (string.IsNullOrWhiteSpace(noCertificado))
+                {
+                    try
+                    {
+                        using var x509 = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadCertificate(cerBytes);
+                        var serial = x509.GetSerialNumber();
+                        Array.Reverse(serial);
+                        var ascii = Encoding.ASCII.GetString(serial);
+                        noCertificado = ascii.Length > 0 && ascii.All(char.IsDigit) ? ascii : x509.SerialNumber;
+                    }
+                    catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(noCertificado) && string.IsNullOrWhiteSpace(responsable.NoCertificadoResponsable))
+                    responsable.NoCertificadoResponsable = noCertificado;
+            }
 
             if (!cert.Asignaturas.Any())
                 throw new InvalidOperationException("El certificado no tiene asignaturas registradas");
@@ -55,14 +90,37 @@ namespace WebApplication2.Services
             using (var writer = XmlWriter.Create(ms, settings))
             {
                 writer.WriteStartDocument();
-                WriteDecElement(writer, cert, config, responsable, carrera, nivelEstudios);
+                WriteDecElement(writer, cert, config, responsable, carrera, nivelEstudios, certificadoResponsableB64, noCertificado);
                 writer.WriteEndDocument();
             }
 
             var xml = Encoding.UTF8.GetString(ms.ToArray());
 
-            cert.XmlGenerado = xml;
             cert.CadenaOriginal = GenerarCadenaOriginal(idCertificado, xml);
+
+            if (!string.IsNullOrWhiteSpace(responsable.RutaLlavePrivadaKey)
+                && System.IO.File.Exists(responsable.RutaLlavePrivadaKey)
+                && !string.IsNullOrEmpty(responsable.PasswordLlavePrivada))
+            {
+                var llaveBytes = await System.IO.File.ReadAllBytesAsync(responsable.RutaLlavePrivadaKey, ct);
+                cert.SelloDigital = FirmaDigitalSep.GenerarSello(cert.CadenaOriginal, llaveBytes, responsable.PasswordLlavePrivada);
+
+                var docFirmado = new XmlDocument { PreserveWhitespace = true };
+                docFirmado.LoadXml(xml);
+                var ns = new XmlNamespaceManager(docFirmado.NameTable);
+                ns.AddNamespace("dec", Namespace);
+                if (docFirmado.SelectSingleNode("/dec:Dec", ns) is XmlElement decEl)
+                    decEl.SetAttribute("sello", cert.SelloDigital);
+
+                using var msOut = new MemoryStream();
+                using (var w2 = XmlWriter.Create(msOut, settings))
+                {
+                    docFirmado.Save(w2);
+                }
+                xml = Encoding.UTF8.GetString(msOut.ToArray());
+            }
+
+            cert.XmlGenerado = xml;
             cert.Estatus = EstatusCertificadoEnum.XMLGenerado;
             cert.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
@@ -76,16 +134,19 @@ namespace WebApplication2.Services
             ConfiguracionIPES config,
             ResponsableFirma responsable,
             CatalogoCarreraSEP? carrera,
-            NivelEstudioResult? nivelEstudios)
+            NivelEstudioResult? nivelEstudios,
+            string certificadoResponsableB64,
+            string noCertificado)
         {
             w.WriteStartElement("Dec", Namespace);
+            w.WriteAttributeString("xsi", "schemaLocation", "http://www.w3.org/2001/XMLSchema-instance", $"{Namespace} {Namespace}IPESCertificado1_0.xsd");
             w.WriteAttributeString("version", "3.0");
             w.WriteAttributeString("tipoCertificado", "5");
             if (!string.IsNullOrEmpty(cert.FolioControl))
                 w.WriteAttributeString("folioControl", cert.FolioControl);
             w.WriteAttributeString("sello", cert.SelloDigital ?? "");
-            w.WriteAttributeString("certificadoResponsable", "");
-            w.WriteAttributeString("noCertificadoResponsable", responsable.NoCertificadoResponsable ?? "");
+            w.WriteAttributeString("certificadoResponsable", certificadoResponsableB64);
+            w.WriteAttributeString("noCertificadoResponsable", noCertificado);
 
             WriteServicioFirmante(w, config);
             WriteIpes(w, config, responsable);

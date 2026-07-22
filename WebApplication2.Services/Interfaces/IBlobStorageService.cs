@@ -6,5 +6,6 @@ namespace WebApplication2.Services.Interfaces
     {
         Task<string> UploadFile(IFormFile formFile,  string blobName, string containerName);
         Task DeleteFile(string blobName, string containerName);
+        string? ResolverRutaLocal(string? url);
     }
 }

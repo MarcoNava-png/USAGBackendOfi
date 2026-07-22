@@ -310,7 +310,7 @@ namespace WebApplication2.Services
             var inscripciones = await _dbContext.Inscripcion
                 .Include(i => i.IdEstudianteNavigation)
                     .ThenInclude(e => e.IdPersonaNavigation)
-                .Where(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active)
+                .Where(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active && i.IdEstudianteNavigation.Activo)
                 .ToListAsync();
 
             var asistenciasRegistradas = await _dbContext.Asistencia
@@ -385,7 +385,7 @@ namespace WebApplication2.Services
             var inscripciones = await _dbContext.Inscripcion
                 .Include(i => i.IdEstudianteNavigation)
                     .ThenInclude(e => e.IdPersonaNavigation)
-                .Where(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active)
+                .Where(i => i.IdGrupoMateria == idGrupoMateria && i.Status == StatusEnum.Active && i.IdEstudianteNavigation.Activo)
                 .ToListAsync();
 
             var asistencias = await _dbContext.Asistencia

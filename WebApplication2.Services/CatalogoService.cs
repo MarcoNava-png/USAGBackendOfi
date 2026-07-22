@@ -21,6 +21,7 @@ namespace WebApplication2
         public async Task<IEnumerable<AspiranteEstatus>> GetEstatusAspirante()
         {
             var aspiranteEstatus = await _dbContext.AspiranteEstatus
+                .Where(e => e.Status == Core.Enums.StatusEnum.Active)
                 .ToListAsync();
 
             if (aspiranteEstatus == null)

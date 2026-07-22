@@ -42,5 +42,9 @@ namespace WebApplication2.Core.DTOs.Documentos
         public bool ProrrogaVencida { get; set; }
         public string? UrlArchivo { get; set; }
         public string? Notas { get; set; }
+        public bool Entregado { get; set; }
+        public DateTime? FechaEntrega { get; set; }
+        public DateTime? FechaValidacion { get; set; }
+        public string? ValidadoPor { get; set; }
     }
 }

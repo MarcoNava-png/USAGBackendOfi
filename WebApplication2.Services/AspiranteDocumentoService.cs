@@ -161,13 +161,31 @@ namespace WebApplication2.Services
             return doc.IdAspiranteDocumento;
         }
 
-        public async Task<bool> ValidarDocumentoAsync(ValidarDocumentoRequestDto req)
+        public async Task<(bool ok, string? error)> ValidarDocumentoAsync(ValidarDocumentoRequestDto req, string? usuarioId)
         {
             var doc = await _db.AspiranteDocumento.FirstOrDefaultAsync(x => x.IdAspiranteDocumento == req.IdAspiranteDocumento);
-            if (doc == null) return false;
+            if (doc == null) return (false, "Documento no encontrado");
+
+            if (req.Validar && string.IsNullOrWhiteSpace(doc.UrlArchivo))
+                return (false, "No se puede validar un documento sin archivo. Súbelo primero.");
 
             doc.Estatus = req.Validar ? EstatusDocumentoEnum.VALIDADO : EstatusDocumentoEnum.RECHAZADO;
+            doc.FechaValidacion = DateTime.UtcNow;
+            doc.UsuarioValidacion = usuarioId;
             if (!string.IsNullOrWhiteSpace(req.Notas)) doc.Notas = req.Notas;
+
+            await _db.SaveChangesAsync();
+            return (true, null);
+        }
+
+        public async Task<bool> ToggleEntregadoAsync(long idDocumento, string? usuarioId)
+        {
+            var doc = await _db.AspiranteDocumento.FirstOrDefaultAsync(x => x.IdAspiranteDocumento == idDocumento);
+            if (doc == null) return false;
+
+            doc.Entregado = !doc.Entregado;
+            doc.FechaEntrega = doc.Entregado ? DateTime.UtcNow : null;
+            doc.UsuarioEntrega = doc.Entregado ? usuarioId : null;
 
             await _db.SaveChangesAsync();
             return true;
@@ -284,20 +302,29 @@ namespace WebApplication2.Services
                 .Include(a => a.IdPlanNavigation)
                 .Include(a => a.Documentos)
                     .ThenInclude(d => d.Requisito)
+                .AsSplitQuery()
                 .AsNoTracking()
                 .ToListAsync(ct);
 
             var ahora = DateTime.UtcNow;
 
+            var validadorIds = aspirantes.SelectMany(a => a.Documentos)
+                .Where(d => !string.IsNullOrEmpty(d.UsuarioValidacion))
+                .Select(d => d.UsuarioValidacion!).Distinct().ToList();
+            var nombresValidadores = validadorIds.Count > 0
+                ? await _db.Users.Where(u => validadorIds.Contains(u.Id))
+                    .ToDictionaryAsync(u => u.Id, u => $"{u.Nombres} {u.Apellidos}".Trim(), ct)
+                : new Dictionary<string, string>();
+
             var resultado = new List<DocumentacionAspiranteResumenDto>();
 
-            // Pre-cargar documentos por plan para filtrar correctamente
             var planIds = aspirantes.Where(a => a.IdPlan > 0).Select(a => a.IdPlan).Distinct().ToList();
             var planDocsMap = new Dictionary<int, HashSet<int>>();
             if (planIds.Count > 0)
             {
                 var allPlanDocs = await _db.PlanDocumentoRequisito
                     .Where(pd => planIds.Contains(pd.IdPlanEstudios))
+                    .AsNoTracking()
                     .ToListAsync(ct);
                 foreach (var pd in allPlanDocs)
                 {
@@ -307,6 +334,19 @@ namespace WebApplication2.Services
                 }
             }
 
+            var personaIds = aspirantes
+                .Where(a => a.IdPersona.HasValue)
+                .Select(a => a.IdPersona!.Value)
+                .Distinct()
+                .ToList();
+
+            var matriculasMap = await _db.Set<Estudiante>()
+                .Where(e => personaIds.Contains(e.IdPersona))
+                .AsNoTracking()
+                .GroupBy(e => e.IdPersona)
+                .Select(g => new { IdPersona = g.Key, Matricula = g.Select(e => e.Matricula).FirstOrDefault() })
+                .ToDictionaryAsync(x => x.IdPersona, x => x.Matricula, ct);
+
             foreach (var asp in aspirantes)
             {
                 var persona = asp.IdPersonaNavigation;
@@ -314,14 +354,10 @@ namespace WebApplication2.Services
 
                 var nombreCompleto = $"{persona.Nombre} {persona.ApellidoPaterno} {persona.ApellidoMaterno}".Trim();
 
-                // Check if aspirant has been enrolled as student (same IdPersona)
                 string? matricula = null;
                 if (asp.IdPersona.HasValue)
                 {
-                    matricula = await _db.Set<Estudiante>()
-                        .Where(e => e.IdPersona == asp.IdPersona.Value)
-                        .Select(e => e.Matricula)
-                        .FirstOrDefaultAsync(ct);
+                    matriculasMap.TryGetValue(asp.IdPersona.Value, out matricula);
                 }
 
                 // Filtrar documentos por plan si tiene configuración
@@ -389,7 +425,11 @@ namespace WebApplication2.Services
                         MotivoProrroga = d.MotivoProrroga,
                         ProrrogaVencida = d.FechaProrroga.HasValue && d.FechaProrroga.Value <= ahora && d.Estatus == EstatusDocumentoEnum.PENDIENTE,
                         UrlArchivo = d.UrlArchivo,
-                        Notas = d.Notas
+                        Notas = d.Notas,
+                        Entregado = d.Entregado,
+                        FechaEntrega = d.FechaEntrega,
+                        FechaValidacion = d.FechaValidacion,
+                        ValidadoPor = !string.IsNullOrEmpty(d.UsuarioValidacion) && nombresValidadores.TryGetValue(d.UsuarioValidacion, out var nv) ? nv : d.UsuarioValidacion
                     }).ToList()
                 });
             }

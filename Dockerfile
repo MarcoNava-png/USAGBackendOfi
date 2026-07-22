@@ -8,7 +8,7 @@ RUN dotnet publish ./WebApplication2/WebApplication2.csproj -c Release -o /app/p
 # ===== run =====
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 
-# Instalar dependencias nativas para SkiaSharp/QuestPDF + LibreOffice para conversión docx->pdf
+# Instalar dependencias nativas para SkiaSharp/QuestPDF + LibreOffice para conversión docx/xlsx->pdf
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libfontconfig1 \
     libfreetype6 \
@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fontconfig \
     libreoffice-writer-nogui \
+    libreoffice-calc-nogui \
     && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,7 +33,7 @@ COPY --from=build --chown=appuser:appuser /app/publish .
 COPY --chown=appuser:appuser logo_usag.png header_logo.png watermark_listado.png ./
 
 # Crear directorios con permisos para appuser
-RUN mkdir -p /app/uploads /app/tmp && chown -R appuser:appuser /app/uploads /app/tmp /home/appuser
+RUN mkdir -p /app/uploads /app/tmp /app/logs /app/dpkeys && chown -R appuser:appuser /app/uploads /app/tmp /app/logs /app/dpkeys /home/appuser
 
 # Cambiar a usuario no-root
 USER appuser

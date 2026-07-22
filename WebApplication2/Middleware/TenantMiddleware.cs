@@ -107,7 +107,16 @@ public class TenantMiddleware
                 ColorSecundario = tenant.ColorSecundario,
                 Timezone = tenant.Timezone,
                 MaxEstudiantes = tenant.MaximoEstudiantes,
-                MaxUsuarios = tenant.MaximoUsuarios
+                MaxUsuarios = tenant.MaximoUsuarios,
+                MaxCampus = tenant.MaximoCampus,
+                Direccion = tenant.DireccionFiscal,
+                Telefono = tenant.TelefonoContacto,
+                Email = tenant.EmailContacto,
+                RFC = tenant.RFC,
+                IncluyeReportes = tenant.PlanLicencia?.IncluyeReportes ?? true,
+                IncluyeApi = tenant.PlanLicencia?.IncluyeAPI ?? true,
+                IncluyeFacturacion = tenant.PlanLicencia?.IncluyeFacturacion ?? true,
+                IncluyeSoporte = tenant.PlanLicencia?.IncluyeSoporte ?? true
             }
         });
 

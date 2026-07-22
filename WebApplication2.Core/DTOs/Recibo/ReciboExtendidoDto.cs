@@ -29,5 +29,7 @@ namespace WebApplication2.Core.DTOs.Recibo
         public string TipoPersona { get; set; } = "Estudiante";
         public List<ReciboLineaDto> Detalles { get; set; } = new List<ReciboLineaDto>();
         public string? ConceptoResumen { get; set; }
+        public DateTime? FechaPago { get; set; }
+        public string? CobradoPor { get; set; }
     }
 }
